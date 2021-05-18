@@ -6,6 +6,8 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::Duration;
 
+use futures::FutureExt;
+
 use clap::{self, value_t};
 
 use cairo;
@@ -18,19 +20,18 @@ use pango;
 use pango::FontDescription;
 use pangocairo;
 
-use neovim_lib::neovim_api::Tabpage;
-use neovim_lib::{Neovim, NeovimApi, NeovimApiAsync, Value};
+use nvim_rs::Value;
 
 use crate::color::{Color, COLOR_BLACK, COLOR_WHITE};
 use crate::grid::GridMap;
 use crate::highlight::HighlightMap;
 use crate::misc::{decode_uri, escape_filename, split_at_comma};
 use crate::nvim::{
-    self, CompleteItem, ErrorReport, NeovimClient, NeovimClientAsync, NeovimRef, NvimHandler,
-    RepaintMode,
+    self, CompleteItem, ErrorReport, NeovimClient, NvimHandler, RepaintMode, NvimSession, Tabpage,
 };
 use crate::settings::{FontSource, Settings};
 use crate::ui_model::ModelRect;
+use crate::spawn_timeout;
 
 use crate::cmd_line::{CmdLine, CmdLineContext};
 use crate::cursor::{BlinkCursor, Cursor, CursorRedrawCb};
@@ -142,7 +143,8 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(settings: Rc<RefCell<Settings>>, options: ShellOptions) -> State {
+    pub fn new(settings: Rc<RefCell<Settings>>, options: ShellOptions)
+        -> State {
         let drawing_area = gtk::DrawingArea::new();
 
         let pango_context = drawing_area.create_pango_context().unwrap();
@@ -189,20 +191,8 @@ impl State {
         }
     }
 
-    /// Return NeovimRef only if vim in non blocking state
-    ///
-    /// Note that this call also do neovim api call get_mode
-    #[allow(dead_code)]
-    pub fn nvim_non_blocked(&self) -> Option<NeovimRef> {
-        self.nvim().and_then(NeovimRef::non_blocked)
-    }
-
-    pub fn nvim(&self) -> Option<NeovimRef> {
+    pub fn nvim(&self) -> Option<NvimSession> {
         self.nvim.nvim()
-    }
-
-    pub fn try_nvim(&self) -> Option<NeovimRef> {
-        self.nvim.try_nvim()
     }
 
     pub fn nvim_clone(&self) -> Rc<NeovimClient> {
@@ -324,18 +314,16 @@ impl State {
     }
 
     pub fn open_file(&self, path: &str) {
-        if let Some(mut nvim) = self.nvim() {
-            nvim.command_async(&format!("e {}", path))
-                .cb(|r| r.report_err())
-                .call();
+        if let Some(nvim) = self.nvim() {
+            let path = format!("e {}", path);
+            spawn_timeout!(nvim.command(path.as_str()));
         }
     }
 
     pub fn cd(&self, path: &str) {
-        if let Some(mut nvim) = self.nvim() {
-            nvim.command_async(&format!("cd {}", path))
-                .cb(|r| r.report_err())
-                .call();
+        if let Some(nvim) = self.nvim() {
+            let path = format!("cd {}", path);
+            spawn_timeout!(nvim.command(&path));
         }
     }
 
@@ -349,8 +337,8 @@ impl State {
 
     fn close_popup_menu(&self) {
         if self.popup_menu.is_open() {
-            if let Some(mut nvim) = self.nvim() {
-                nvim.input("<Esc>").report_err();
+            if let Some(nvim) = self.nvim() {
+                nvim.block_timeout(nvim.input("<Esc>")).report_err();
             }
         }
     }
@@ -451,13 +439,11 @@ impl State {
         let resize_timer = self.resize_timer.clone();
 
         let resize_id = gtk::timeout_add(200, move || {
-            if let Some(mut nvim) = nvim.try_nvim() {
+            if let Some(nvim) = nvim.nvim() {
                 debug!("ui_try_resize {}/{}", columns, rows);
                 resize_timer.set(None);
 
-                nvim.ui_try_resize_async(columns as i64, rows as i64)
-                    .cb(|r| r.report_err())
-                    .call();
+                spawn_timeout!(nvim.ui_try_resize(columns as i64, rows as i64));
 
                 return Continue(false);
             }
@@ -468,31 +454,23 @@ impl State {
         self.resize_timer.set(Some(resize_id));
     }
 
-    fn edit_paste(&self, clipboard: &str) {
+    fn edit_paste(&self, clipboard: &'static str) {
         let nvim = self.nvim();
-        if let Some(mut nvim) = nvim {
+        if let Some(nvim) = nvim {
             let render_state = self.render_state.borrow();
             if render_state.mode.is(&mode::NvimMode::Insert)
                 || render_state.mode.is(&mode::NvimMode::Normal)
             {
-                let paste_code = format!("normal! \"{}P", clipboard);
-                nvim.command_async(&paste_code)
-                    .cb(|r| r.report_err())
-                    .call();
+                spawn_timeout!(nvim.command(&format!("normal! \"{}P", clipboard)));
             } else {
-                let paste_code = format!("<C-r>{}", clipboard);
-                nvim.input_async(&paste_code).cb(|r| r.report_err()).call();
+                spawn_timeout!(nvim.input(&format!("<C-r>{}", clipboard)));
             };
         }
     }
 
-    fn edit_copy(&self, clipboard: &str) {
-        let nvim = self.nvim();
-        if let Some(mut nvim) = nvim {
-            let paste_code = format!("normal! \"{}y", clipboard);
-            nvim.command_async(&paste_code)
-                .cb(|r| r.report_err())
-                .call();
+    fn edit_copy(&self, clipboard: &'static str) {
+        if let Some(nvim) = self.nvim() {
+            spawn_timeout!(nvim.command(&format!("normal! \"{}y", clipboard)));
         }
     }
 
@@ -510,7 +488,7 @@ impl State {
     pub fn set_autocmds(&self) {
         self.subscriptions
             .borrow()
-            .set_autocmds(&mut self.nvim().unwrap());
+            .set_autocmds(&self.nvim().unwrap());
     }
 
     pub fn notify(&self, params: Vec<Value>) -> Result<(), String> {
@@ -737,7 +715,7 @@ impl Shell {
                 Inhibit(true)
             } else {
                 let state = ref_state.borrow();
-                let nvim = state.try_nvim();
+                let nvim = state.nvim();
                 if let Some(mut nvim) = nvim {
                     input::gtk_key_press(&mut nvim, ev)
                 } else {
@@ -826,9 +804,8 @@ impl Shell {
                         command + " " + &filename
                     },
                 );
-                let state = ref_state.borrow_mut();
-                let mut nvim = state.nvim().unwrap();
-                nvim.command_async(&command).cb(|r| r.report_err()).call()
+                let nvim = ref_state.borrow_mut().nvim().unwrap();
+                spawn_timeout!(nvim.command(&command));
             });
 
         let ui_state_ref = self.ui_state.clone();
@@ -886,9 +863,8 @@ impl Shell {
     pub fn detach_ui(&mut self) {
         let state = self.state.borrow();
 
-        let nvim = state.nvim();
-        if let Some(mut nvim) = nvim {
-            nvim.ui_detach().expect("Error in ui_detach");
+        if let Some(nvim) = state.nvim() {
+            nvim.block_timeout(nvim.ui_detach()).expect("Error in ui_detach");
         }
     }
 
@@ -897,20 +873,14 @@ impl Shell {
     }
 
     pub fn edit_save_all(&self) {
-        let state = self.state.borrow();
-
-        let nvim = state.nvim();
-        if let Some(mut nvim) = nvim {
-            nvim.command_async(":wa").cb(|r| r.report_err()).call();
+        if let Some(nvim) = self.state.borrow().nvim() {
+            spawn_timeout!(nvim.command(":wa"));
         }
     }
 
     pub fn new_tab(&self) {
-        let state = self.state.borrow();
-
-        let nvim = state.nvim();
-        if let Some(mut nvim) = nvim {
-            nvim.command_async(":tabe").cb(|r| r.report_err()).call();
+        if let Some(nvim) = self.state.borrow().nvim() {
+            spawn_timeout!(nvim.command(":tabe"));
         }
     }
 
@@ -955,10 +925,8 @@ impl Deref for Shell {
 }
 
 fn gtk_focus_in(state: &mut State) -> Inhibit {
-    if let Some(mut nvim) = state.try_nvim() {
-        nvim.command_async("if exists('#FocusGained') | doautocmd FocusGained | endif")
-            .cb(|r| r.report_err())
-            .call();
+    if let Some(nvim) = state.nvim() {
+        spawn_timeout!(nvim.command("if exists('#FocusGained') | doautocmd FocusGained | endif"));
     }
 
     state.im_context.focus_in();
@@ -969,10 +937,8 @@ fn gtk_focus_in(state: &mut State) -> Inhibit {
 }
 
 fn gtk_focus_out(state: &mut State) -> Inhibit {
-    if let Some(mut nvim) = state.try_nvim() {
-        nvim.command_async("if exists('#FocusLost') | doautocmd FocusLost | endif")
-            .cb(|r| r.report_err())
-            .call();
+    if let Some(nvim) = state.nvim() {
+        spawn_timeout!(nvim.command("if exists('#FocusLost') | doautocmd FocusLost | endif"));
     }
 
     state.im_context.focus_out();
@@ -1056,11 +1022,12 @@ fn gtk_button_press(
 }
 
 fn mouse_input(shell: &mut State, input: &str, state: ModifierType, position: (f64, f64)) {
-    if let Some(mut nvim) = shell.try_nvim() {
+    if let Some(nvim) = shell.nvim() {
         let (col, row) = mouse_coordinates_to_nvim(shell, position);
         let input_str = format!("{}<{},{}>", keyval_to_input_string(input, state), col, row);
 
-        nvim.input(&input_str)
+        nvim.block_timeout(nvim.input(&input_str))
+            .ok_and_report()
             .expect("Can't send mouse input event");
     }
 }
@@ -1180,56 +1147,63 @@ fn init_nvim_async(
     rows: usize,
 ) {
     // execute nvim
-    let nvim = match nvim::start(
+    let (session, io_future) = match nvim::start(
         nvim_handler,
-        options.nvim_bin_path.as_ref(),
+        options.nvim_bin_path.clone(),
         options.timeout,
         options.args_for_neovim,
     ) {
-        Ok(nvim) => nvim,
+        Ok(session) => session,
         Err(err) => {
             show_nvim_start_error(&err, state_arc);
             return;
         }
     };
 
-    let nvim = set_nvim_to_state(state_arc.clone(), nvim);
+    set_nvim_to_state(state_arc.clone(), &session);
 
     // add callback on session end
-    let guard = nvim.borrow().unwrap().session.take_dispatch_guard();
-    let state_ref = state_arc.clone();
-    thread::spawn(move || {
-        guard.join().expect("Can't join dispatch thread");
+    let cb_state_arc = state_arc.clone();
+    session.spawn(io_future.map(|r| {
+        if let Err(e) = r {
+            if !e.is_reader_error() {
+                error!("{}", e);
+            }
+        }
 
         glib::idle_add(move || {
-            state_ref.borrow().nvim.clear();
-            if let Some(ref cb) = state_ref.borrow().detach_cb {
+            cb_state_arc.borrow().nvim.clear();
+            if let Some(ref cb) = cb_state_arc.borrow().detach_cb {
                 (&mut *cb.borrow_mut())();
             }
 
             glib::Continue(false)
         });
-    });
+    }));
 
     // attach ui
-    if let Err(err) = nvim::post_start_init(nvim, cols as i64, rows as i64, options.input_data) {
-        show_nvim_init_error(&err, state_arc.clone());
-    } else {
-        set_nvim_initialized(state_arc);
-    }
+    let input_data = options.input_data;
+    session.clone().spawn(async move {
+        if let Err(ref err) = nvim::post_start_init(session, cols as i64, rows as i64,
+                                                    input_data).await {
+            show_nvim_init_error(err, state_arc);
+        } else {
+            set_nvim_initialized(state_arc);
+        }
+    });
 }
 
-fn set_nvim_to_state(state_arc: Arc<UiMutex<State>>, nvim: Neovim) -> NeovimClientAsync {
+fn set_nvim_to_state(state_arc: Arc<UiMutex<State>>, nvim: &NvimSession) {
     let pair = Arc::new((Mutex::new(None), Condvar::new()));
     let pair2 = pair.clone();
-    let mut nvim = Some(nvim);
+    let nvim = Some(nvim.clone());
 
     glib::idle_add(move || {
-        let nvim_aync = state_arc.borrow().nvim.set_nvim_async(nvim.take().unwrap());
+        state_arc.borrow().nvim.set(nvim.clone().unwrap());
 
         let &(ref lock, ref cvar) = &*pair2;
         let mut started = lock.lock().unwrap();
-        *started = Some(nvim_aync);
+        *started = Some(nvim.clone());
         cvar.notify_one();
 
         Continue(false)
@@ -1241,14 +1215,11 @@ fn set_nvim_to_state(state_arc: Arc<UiMutex<State>>, nvim: Neovim) -> NeovimClie
     while started.is_none() {
         started = cvar.wait(started).unwrap();
     }
-
-    started.take().unwrap()
 }
 
 fn set_nvim_initialized(state_arc: Arc<UiMutex<State>>) {
     glib::idle_add(clone!(state_arc => move || {
         let mut state = state_arc.borrow_mut();
-        state.nvim.async_to_sync();
         state.nvim.set_initialized();
         // in some case resize can happens while initilization in progress
         // so force resize here

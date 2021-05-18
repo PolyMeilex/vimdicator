@@ -9,11 +9,9 @@ use gtk;
 use gtk::prelude::*;
 use pango;
 
-use neovim_lib::{Neovim, NeovimApi};
-
 use crate::highlight::HighlightMap;
 use crate::input;
-use crate::nvim::{self, ErrorReport, NeovimClient};
+use crate::nvim::{self, NvimSession, ErrorReport, NeovimClient};
 use crate::render;
 
 const MAX_VISIBLE_ROWS: i32 = 10;
@@ -249,8 +247,8 @@ impl PopupMenu {
             .connect_button_press_event(move |tree, ev| {
                 let state = state_ref.borrow();
                 let nvim = state.nvim.as_ref().unwrap().nvim();
-                if let Some(mut nvim) = nvim {
-                    tree_button_press(tree, ev, &mut *nvim, "<C-y>");
+                if let Some(nvim) = nvim {
+                    tree_button_press(tree, ev, &nvim, "<C-y>");
                 }
                 Inhibit(false)
             });
@@ -259,8 +257,8 @@ impl PopupMenu {
         popover.connect_key_press_event(move |_, ev| {
             let state = state_ref.borrow();
             let nvim = state.nvim.as_ref().unwrap().nvim();
-            if let Some(mut nvim) = nvim {
-                input::gtk_key_press(&mut *nvim, ev)
+            if let Some(nvim) = nvim {
+                input::gtk_key_press(&nvim, ev)
             } else {
                 Inhibit(false)
             }
@@ -323,7 +321,7 @@ pub struct PopupMenuContext<'a> {
 pub fn tree_button_press(
     tree: &gtk::TreeView,
     ev: &EventButton,
-    nvim: &mut Neovim,
+    nvim: &NvimSession,
     last_command: &str,
 ) {
     if ev.get_event_type() != EventType::ButtonPress {
@@ -360,7 +358,7 @@ pub fn tree_button_press(
                 .collect()
         };
 
-        nvim.input(&apply_command).report_err();
+        nvim.block_timeout(nvim.input(&apply_command)).report_err();
     }
 }
 

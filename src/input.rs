@@ -3,7 +3,7 @@ use gtk::prelude::*;
 use gdk;
 use gdk::EventKey;
 use phf;
-use neovim_lib::{Neovim, NeovimApi};
+use crate::nvim::{NvimSession, ErrorReport};
 
 include!(concat!(env!("OUT_DIR"), "/key_map_table.rs"));
 
@@ -76,7 +76,7 @@ pub fn convert_key(ev: &EventKey) -> Option<String> {
     }
 }
 
-pub fn im_input(nvim: &mut Neovim, input: &str) {
+pub fn im_input(nvim: &NvimSession, input: &str) {
     debug!("nvim_input -> {}", input);
 
     let input: String = input
@@ -85,13 +85,20 @@ pub fn im_input(nvim: &mut Neovim, input: &str) {
             keyval_to_input_string(&ch.to_string(), gdk::ModifierType::empty())
         })
         .collect();
-    nvim.input(&input).expect("Error run input command to nvim");
+    nvim
+        .block_timeout(nvim.input(&input))
+        .ok_and_report()
+        .expect("Failed to send input command to nvim");
 }
 
-pub fn gtk_key_press(nvim: &mut Neovim, ev: &EventKey) -> Inhibit {
+pub fn gtk_key_press(nvim: &NvimSession, ev: &EventKey)
+    -> Inhibit {
     if let Some(input) = convert_key(ev) {
         debug!("nvim_input -> {}", input);
-        nvim.input(&input).expect("Error run input command to nvim");
+        nvim
+            .block_timeout(nvim.input(&input))
+            .ok_and_report()
+            .expect("Failed to send input command to nvim");
         Inhibit(true)
     } else {
         Inhibit(false)

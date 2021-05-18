@@ -343,7 +343,7 @@ impl CmdLine {
             let state = state.borrow();
             let nvim = state.nvim.as_ref().unwrap().nvim();
             if let Some(mut nvim) = nvim {
-                popup_menu::tree_button_press(tree, ev, &mut *nvim, "");
+                popup_menu::tree_button_press(tree, ev, &mut nvim, "");
             }
             Inhibit(false)
         }));

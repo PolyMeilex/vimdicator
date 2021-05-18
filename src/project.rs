@@ -11,8 +11,8 @@ use gtk::{
 };
 use pango;
 
-use neovim_lib::{Neovim, NeovimApi, Value};
-use crate::nvim::ErrorReport;
+use nvim_rs::Value;
+use crate::nvim::{NvimSession, ErrorReport};
 use crate::shell::Shell;
 use crate::ui::UiMutex;
 
@@ -277,7 +277,7 @@ impl Projects {
         let shell_borrow = self.shell.borrow();
         let shell_state = shell_borrow.state.borrow_mut();
 
-        let nvim = shell_state.try_nvim();
+        let nvim = shell_state.nvim();
         if let Some(mut nvim) = nvim {
             let store = EntryStore::load(&mut nvim);
             store.populate(&self.get_list_store(), None);
@@ -387,8 +387,8 @@ fn on_treeview_allocate(projects: Arc<UiMutex<Projects>>) {
     });
 }
 
-fn list_old_files(nvim: &mut Neovim) -> Vec<String> {
-    let oldfiles_var = nvim.get_vvar("oldfiles");
+fn list_old_files(nvim: &mut NvimSession) -> Vec<String> {
+    let oldfiles_var = nvim.block_timeout(nvim.get_vvar("oldfiles"));
 
     match oldfiles_var {
         Ok(files) => {
@@ -421,14 +421,14 @@ impl EntryStore {
         self.entries.iter_mut().find(|e| e.project && e.uri == uri)
     }
 
-    pub fn load(nvim: &mut Neovim) -> EntryStore {
+    pub fn load(nvim: &NvimSession) -> EntryStore {
         let mut entries = Vec::new();
 
         for project in ProjectSettings::load().projects {
             entries.push(project.to_entry());
         }
 
-        match nvim.call_function("getcwd", vec![]) {
+        match nvim.block_timeout(nvim.call_function("getcwd", vec![])) {
             Ok(pwd) => {
                 if let Some(pwd) = pwd.as_str() {
                     if entries.iter().find(|e| e.project && e.uri == pwd).is_none() {

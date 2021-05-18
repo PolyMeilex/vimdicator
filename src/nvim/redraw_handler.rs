@@ -2,15 +2,16 @@ use std::num::ParseFloatError;
 use std::result;
 use std::sync::Arc;
 
-use neovim_lib::neovim_api::Tabpage;
-use neovim_lib::{UiOption, Value};
+use nvim_rs::Value;
 
 use crate::shell;
+use crate::nvim::Tabpage;
 use crate::ui::UiMutex;
 
 use rmpv;
 use crate::value::ValueMapExt;
 
+use super::NvimSession;
 use super::handler::NvimHandler;
 use super::repaint_mode::RepaintMode;
 
@@ -112,6 +113,22 @@ macro_rules! call {
     )
 }
 
+macro_rules! set_ui_opts {
+    ($ui:ident, $first_opt:ident = $first_val:expr $(, $( $opt:ident = $val:expr ),* )? ) => {
+        $ui.nvim()
+           .ok_or_else(|| "Nvim not initialized".to_owned())
+           .and_then(|nvim| {
+                   set_ui_opt(&nvim, stringify!(ext_$first_opt), &$first_val)
+                   $( $( ?; set_ui_opt(&nvim, stringify!(ext_$opt), &$val) )* )?
+           })
+    };
+}
+
+fn set_ui_opt(nvim: &NvimSession, opt: &str, val: &Value) -> Result<(), String> {
+    nvim.block_timeout(nvim.set_option(opt, Value::from(try_uint!(val) == 1)))
+        .map_err(|e| e.to_string())
+}
+
 pub enum NvimCommand {
     ToggleSidebar,
     ShowProjectView,
@@ -136,29 +153,9 @@ pub fn call_gui_event(
             opt => error!("Unknown option {}", opt),
         },
         "Option" => match try_str!(args[0]) {
-            "Popupmenu" => ui
-                .nvim()
-                .ok_or_else(|| "Nvim not initialized".to_owned())
-                .and_then(|mut nvim| {
-                    nvim.set_option(UiOption::ExtPopupmenu(try_uint!(args[1]) == 1))
-                        .map_err(|e| e.to_string())
-                })?,
-            "Tabline" => ui
-                .nvim()
-                .ok_or_else(|| "Nvim not initialized".to_owned())
-                .and_then(|mut nvim| {
-                    nvim.set_option(UiOption::ExtTabline(try_uint!(args[1]) == 1))
-                        .map_err(|e| e.to_string())
-                })?,
-            "Cmdline" => ui
-                .nvim()
-                .ok_or_else(|| "Nvim not initialized".to_owned())
-                .and_then(|mut nvim| {
-                    nvim.set_option(UiOption::ExtCmdline(try_uint!(args[1]) == 1))
-                        .map_err(|e| e.to_string())?;
-                    nvim.set_option(UiOption::ExtWildmenu(try_uint!(args[1]) == 1))
-                        .map_err(|e| e.to_string())
-                })?,
+            "Popupmenu" => set_ui_opts!(ui, popupmenu = args[1])?,
+            "Tabline" => set_ui_opts!(ui, tabline = args[1])?,
+            "Cmdline" => set_ui_opts!(ui, cmdline = args[1], wildmenu = args[1])?,
             opt => error!("Unknown option {}", opt),
         },
         "Command" => {
@@ -272,6 +269,7 @@ pub fn call(
         "popupmenu_hide" => ui.popupmenu_hide(),
         "popupmenu_select" => call!(ui->popupmenu_select(args: int)),
         "tabline_update" => {
+            let nvim = ui.nvim().ok_or_else(|| "Nvim not initialized".to_owned())?;
             let tabs_out = map_array!(args[1], "Error get tabline list".to_owned(), |tab| tab
                 .as_map()
                 .ok_or_else(|| "Error get map for tab".to_owned())
@@ -282,12 +280,12 @@ pub fn call(
                         .and_then(|n| n.as_str().map(|s| s.to_owned()));
                     let tab_attr = tab_attrs
                         .get("tab")
-                        .map(|&tab_id| Tabpage::new(tab_id.clone()))
+                        .map(|&tab_id| Tabpage::new(tab_id.clone(), (*nvim).clone()))
                         .unwrap();
 
                     (tab_attr, name_attr)
                 }))?;
-            ui.tabline_update(Tabpage::new(args[0].clone()), tabs_out)
+            ui.tabline_update(Tabpage::new(args[0].clone(), (*nvim).clone()), tabs_out)
         }
         "mode_info_set" => call!(ui->mode_info_set(args: bool, ext)),
         "option_set" => call!(ui->option_set(args: str, val)),

@@ -6,18 +6,40 @@ mod ext;
 
 pub use self::redraw_handler::{CompleteItem, NvimCommand};
 pub use self::repaint_mode::RepaintMode;
-pub use self::client::{NeovimClient, NeovimClientAsync, NeovimRef};
+pub use self::client::NeovimClient;
 pub use self::ext::ErrorReport;
 pub use self::handler::NvimHandler;
 
-use std::error;
-use std::fmt;
-use std::env;
-use std::process::{Command, Stdio};
-use std::result;
-use std::time::Duration;
+use std::{
+    error, fmt, env, result,
+    time::Duration,
+    pin::Pin,
+    process::Stdio,
+    task::{Context, Poll},
+    ops::{Deref, DerefMut},
+    future::Future,
+    sync::Arc,
+};
 
-use neovim_lib::{Neovim, NeovimApi, Session, UiAttachOptions};
+use tokio::{
+    io::{self, AsyncWrite},
+    process::{Command, ChildStdin},
+    time::{timeout, error::Elapsed},
+    task::JoinHandle,
+    runtime::Runtime,
+};
+use tokio_util::compat::*;
+
+use futures::future::{
+    FutureExt, BoxFuture,
+};
+
+use nvim_rs::{
+    self,
+    UiAttachOptions,
+    error::{LoopError, CallError},
+    compat::tokio::Compat,
+};
 
 use crate::nvim_config::NvimConfig;
 
@@ -73,18 +95,193 @@ impl error::Error for NvimInitError {
     }
 }
 
+#[derive(Debug)]
+pub enum SessionError {
+    CallError(Box<CallError>),
+    TimeoutError(Elapsed),
+}
+
+impl error::Error for SessionError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        match self {
+            Self::CallError(e) => Some(e),
+            Self::TimeoutError(e) => Some(e),
+        }
+    }
+}
+
+impl fmt::Display for SessionError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::CallError(e) => write!(f, "{:?}", e),
+            Self::TimeoutError(e) => write!(f, "{:?}", e),
+        }
+    }
+}
+
+impl From<Box<CallError>> for SessionError {
+    fn from(err: Box<CallError>) -> Self {
+        SessionError::CallError(err)
+    }
+}
+
+impl From<Elapsed> for SessionError {
+    fn from(err: Elapsed) -> Self {
+        SessionError::TimeoutError(err)
+    }
+}
+
 #[cfg(target_os = "windows")]
 fn set_windows_creation_flags(cmd: &mut Command) {
     use std::os::windows::process::CommandExt;
     cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
 }
 
-pub fn start(
+pub enum NvimWriter {
+    ChildProcess(ChildStdin),
+}
+
+impl From<ChildStdin> for NvimWriter {
+    fn from(stdin: ChildStdin) -> Self {
+        Self::ChildProcess(stdin)
+    }
+}
+
+impl AsyncWrite for NvimWriter {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8]
+    ) -> Poll<io::Result<usize>> {
+        match *self {
+            Self::ChildProcess(ref mut stdin) => Pin::new(stdin).poll_write(cx, buf),
+        }
+    }
+
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        match *self {
+            Self::ChildProcess(ref mut stdin) => Pin::new(stdin).poll_flush(cx),
+        }
+    }
+
+    fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        match *self {
+            Self::ChildProcess(ref mut stdin) => Pin::new(stdin).poll_shutdown(cx),
+        }
+    }
+}
+
+pub type Neovim = nvim_rs::Neovim<Compat<NvimWriter>>;
+pub type Tabpage = nvim_rs::Tabpage<Compat<NvimWriter>>;
+
+/// Our main wrapper for `Neovim`, which also provides access to the timeout duration for this
+/// session
+#[derive(Clone)]
+pub struct NvimSession {
+    nvim: Neovim,
+    timeout: Duration,
+    runtime: Arc<Runtime>,
+}
+
+impl NvimSession {
+    pub fn new_child<'a>(
+        mut cmd: Command,
+        handler: NvimHandler,
+        timeout: Duration,
+    ) -> Result<(NvimSession, BoxFuture<'a, Result<(), Box<LoopError>>>), NvimInitError> {
+        let runtime = Arc::new(
+            Runtime::new().map_err(|e| NvimInitError::new(&cmd, e))?
+        );
+        let mut child = runtime.block_on(async move {
+            cmd.spawn().map_err(|e| NvimInitError::new(&cmd, e))
+        })?;
+
+        let (nvim, io_future) = Neovim::new(
+            child.stdout.take().unwrap().compat(),
+            NvimWriter::from(child.stdin.take().unwrap()).compat_write(),
+            handler
+        );
+
+        Ok((Self { nvim, timeout, runtime }, io_future.boxed()))
+    }
+
+    /// Wrap a future from an RPC call to neovim within a timeout
+    pub async fn timeout<F, T>(&self, f: F) -> Result<T, SessionError>
+    where
+        F: Future<Output = Result<T, Box<CallError>>>,
+    {
+        match timeout(self.timeout, f).await {
+            Ok(f) => match f {
+                Ok(f) => Ok(f),
+                Err(e) => Err(e.into()),
+            },
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    /// Execute a future on the current thread using this session's tokio runtime
+    #[inline]
+    pub fn block_on<T>(&self, f: impl Future<Output = T>) -> T {
+        self.runtime.block_on(f)
+    }
+
+    /// Spawn a future on this session's tokio runtime
+    #[inline]
+    pub fn spawn(&self, f: impl Future<Output = ()> + Send + 'static) -> JoinHandle<()> {
+        self.runtime.spawn(f)
+    }
+
+    /// Wrap a future from an RPC call to neovim inside a timeout, and execute it on the current
+    /// thread using this session's tokio runtime
+    pub fn block_timeout<F, T>(&self, f: F) -> Result<T, SessionError>
+    where
+        F: Future<Output = Result<T, Box<CallError>>>,
+    {
+        self.block_on(self.timeout(f))
+    }
+
+    #[doc(hidden)]
+    pub fn spawn_timeout<F, T>(&self, f: F) -> JoinHandle<()>
+    where
+        F: Future<Output = Result<T, Box<CallError>>> + Send + 'static
+    {
+        let nvim = self.clone();
+
+        self.spawn(async move {
+            nvim.timeout(f).await.report_err()
+        })
+    }
+}
+
+impl Deref for NvimSession {
+    type Target = Neovim;
+
+    fn deref(&self) -> &Self::Target {
+        &self.nvim
+    }
+}
+
+impl DerefMut for NvimSession {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.nvim
+    }
+}
+
+/// Wrap a future with a timeout, and spawn it on this session's tokio runtime, then report any
+/// resulting errors to the console.
+#[macro_export] macro_rules! spawn_timeout {
+    ($nvim:ident.$fn:ident($( $a:expr ),*)) => {
+        let nvim = $nvim.clone();
+        $nvim.spawn_timeout(async move { nvim.$fn($( $a ),*).await })
+    };
+}
+
+pub fn start<'a>(
     handler: NvimHandler,
-    nvim_bin_path: Option<&String>,
+    nvim_bin_path: Option<String>,
     timeout: Option<Duration>,
     args_for_neovim: Vec<String>,
-) -> result::Result<Neovim, NvimInitError> {
+) -> result::Result<(NvimSession, BoxFuture<'a, Result<(), Box<LoopError>>>), NvimInitError> {
     let mut cmd = if let Some(path) = nvim_bin_path {
         Command::new(path)
     } else {
@@ -96,7 +293,9 @@ pub fn start(
         .arg("set termguicolors")
         .arg("--cmd")
         .arg("let g:GtkGuiLoaded = 1")
-        .stderr(Stdio::inherit());
+        .stderr(Stdio::inherit())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped());
 
     #[cfg(target_os = "windows")]
     set_windows_creation_flags(&mut cmd);
@@ -121,58 +320,38 @@ pub fn start(
         cmd.arg(arg);
     }
 
-    let session = Session::new_child_cmd(&mut cmd);
-
-    let mut session = match session {
-        Err(e) => return Err(NvimInitError::new(&cmd, e)),
-        Ok(s) => s,
-    };
-
-    session.set_timeout(timeout.unwrap_or(Duration::from_millis(10_000)));
-
-    let mut nvim = Neovim::new(session);
-
-    nvim.session.start_event_loop_handler(handler);
-
-    Ok(nvim)
+    NvimSession::new_child(cmd, handler, timeout.unwrap_or(Duration::from_secs(10)))
 }
 
-pub fn post_start_init(
-    nvim: NeovimClientAsync,
+pub async fn post_start_init(
+    nvim: NvimSession,
     cols: i64,
     rows: i64,
     input_data: Option<String>,
-) -> result::Result<(), NvimInitError> {
-    nvim.borrow()
-        .unwrap()
-        .ui_attach(
-            cols,
-            rows,
-            UiAttachOptions::new()
-                .set_popupmenu_external(true)
-                .set_tabline_external(true)
-                .set_linegrid_external(true)
-                .set_hlstate_external(true)
-        )
-        .map_err(NvimInitError::new_post_init)?;
+) -> Result<(), NvimInitError> {
+    nvim.timeout(nvim.ui_attach(
+        cols,
+        rows,
+        UiAttachOptions::new()
+        .set_popupmenu_external(true)
+        .set_tabline_external(true)
+        .set_linegrid_external(true)
+        .set_hlstate_external(true)
+        ))
+        .await.map_err(NvimInitError::new_post_init)?;
 
-    nvim.borrow()
-        .unwrap()
-        .command("runtime! ginit.vim")
-        .map_err(NvimInitError::new_post_init)?;
+    nvim.timeout(nvim.command("runtime! ginit.vim")).await.map_err(NvimInitError::new_post_init)?;
 
     if let Some(input_data) = input_data {
-        let mut nvim = nvim.borrow().unwrap();
-        let buf = nvim.get_current_buf().ok_and_report();
+        let buf = nvim.timeout(nvim.get_current_buf()).await.ok_and_report();
 
         if let Some(buf) = buf {
-            buf.set_lines(
-                &mut *nvim,
+            nvim.timeout(buf.set_lines(
                 0,
                 0,
                 true,
-                input_data.lines().map(|l| l.to_owned()).collect(),
-            ).report_err();
+                input_data.lines().map(|l| l.to_owned()).collect()
+            )).await.report_err();
         }
     }
 

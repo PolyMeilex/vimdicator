@@ -1,8 +1,10 @@
 use std::collections::HashMap;
 
-use neovim_lib::{NeovimApi, NeovimApiAsync, Value};
+use nvim_rs::Value;
 
-use crate::nvim::{ErrorReport, NeovimRef};
+use crate::{
+    nvim::NvimSession, spawn_timeout,
+};
 
 /// A subscription to a Neovim autocmd event.
 struct Subscription {
@@ -109,7 +111,7 @@ impl Subscriptions {
     /// Register all subscriptions with Neovim.
     ///
     /// This function is wrapped by `shell::State`.
-    pub fn set_autocmds(&self, nvim: &mut NeovimRef) {
+    pub fn set_autocmds(&self, nvim: &NvimSession) {
         for (key, subscriptions) in &self.0 {
             let SubscriptionKey {
                 event_name,
@@ -124,7 +126,7 @@ impl Subscriptions {
                     "autocmd {} {} call rpcnotify(1, 'subscription', '{}', '{}', {} {})",
                     event_name, pattern, event_name, pattern, i, args,
                 );
-                nvim.command_async(&autocmd).cb(|r| r.report_err()).call();
+                spawn_timeout!(nvim.command(&autocmd));
             }
         }
     }
@@ -175,12 +177,12 @@ impl Subscriptions {
     /// The `nvim` instance is needed to evaluate the `args` expressions.
     ///
     /// This function is wrapped by `shell::State`.
-    pub fn run_now(&self, handle: &SubscriptionHandle, nvim: &mut NeovimRef) {
+    pub fn run_now(&self, handle: &SubscriptionHandle, nvim: &NvimSession) {
         let subscription = &self.0.get(&handle.key).unwrap()[handle.index];
         let args = subscription
             .args
             .iter()
-            .map(|arg| nvim.eval(arg))
+            .map(|arg| nvim.block_timeout(nvim.eval(arg)))
             .map(|res| {
                 res.ok().and_then(|val| {
                     val.as_str()

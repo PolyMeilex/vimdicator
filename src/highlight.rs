@@ -5,7 +5,7 @@ use fnv::FnvHashMap;
 
 use crate::color::*;
 use crate::ui_model::Cell;
-use neovim_lib::Value;
+use nvim_rs::Value;
 
 pub struct HighlightMap {
     highlights: FnvHashMap<u64, Rc<Highlight>>,

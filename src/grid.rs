@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 use fnv::FnvHashMap;
 
-use neovim_lib::Value;
+use nvim_rs::Value;
 
 use crate::highlight::{Highlight, HighlightMap};
 use crate::ui_model::{ModelRect, ModelRectVec, UiModel};

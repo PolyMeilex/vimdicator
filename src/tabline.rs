@@ -10,11 +10,10 @@ use glib::signal;
 
 use pango;
 
-use neovim_lib::{NeovimApi, NeovimApiAsync};
-use neovim_lib::neovim_api::Tabpage;
-
-use crate::nvim;
-use crate::nvim::ErrorReport;
+use crate::{
+    nvim::{self, ErrorReport, Tabpage},
+    spawn_timeout,
+};
 
 struct State {
     data: Vec<Tabpage>,
@@ -34,17 +33,15 @@ impl State {
     fn switch_page(&self, idx: u32) {
         let target = &self.data[idx as usize];
         if Some(target) != self.selected.as_ref() {
-            if let Some(mut nvim) = self.nvim.as_ref().unwrap().nvim() {
-                nvim.set_current_tabpage(target).report_err();
+            if let Some(nvim) = self.nvim.as_ref().unwrap().nvim() {
+                nvim.block_timeout(nvim.set_current_tabpage(&target)).report_err();
             }
         }
     }
 
     fn close_tab(&self, idx: u32) {
-        if let Some(mut nvim) = self.nvim.as_ref().unwrap().nvim() {
-            nvim.command_async(&format!(":tabc {}", idx + 1))
-                .cb(|r| r.report_err())
-                .call();
+        if let Some(nvim) = self.nvim.as_ref().unwrap().nvim() {
+            spawn_timeout!(nvim.command(&format!(":tabc {}", idx + 1)));
         }
     }
 }

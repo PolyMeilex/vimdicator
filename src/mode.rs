@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use neovim_lib::Value;
+use nvim_rs::Value;
 
 #[derive(Clone, PartialEq)]
 pub enum NvimMode {

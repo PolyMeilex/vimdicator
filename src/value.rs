@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use neovim_lib::Value;
+use nvim_rs::Value;
 
 pub trait ValueMapExt {
     fn to_attrs_map(&self) -> Result<HashMap<&str, &Value>, String>;

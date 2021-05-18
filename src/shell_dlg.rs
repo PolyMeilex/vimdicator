@@ -4,7 +4,8 @@ use gtk;
 use gtk::prelude::*;
 use gtk::{ButtonsType, MessageDialog, MessageType};
 
-use neovim_lib::{CallError, NeovimApi, Value};
+use nvim_rs::Value;
+use crate::nvim::SessionError;
 use crate::shell::Shell;
 use crate::ui::{Components, UiMutex};
 
@@ -50,9 +51,9 @@ fn show_not_saved_dlg(comps: &UiMutex<Components>, shell: &Shell, changed_bufs: 
     let res = match dlg.run() {
         gtk::ResponseType::Yes => {
             let state = shell.state.borrow();
-            let mut nvim = state.nvim().unwrap();
-            match nvim.command("wa") {
-                Err(ref err) => {
+            let nvim = state.nvim().unwrap();
+            match nvim.block_timeout(nvim.command("wa")) {
+                Err(err) => {
                     error!("Error: {}", err);
                     false
                 }
@@ -68,17 +69,17 @@ fn show_not_saved_dlg(comps: &UiMutex<Components>, shell: &Shell, changed_bufs: 
     res
 }
 
-fn get_changed_buffers(shell: &Shell) -> Result<Vec<String>, CallError> {
+fn get_changed_buffers(shell: &Shell) -> Result<Vec<String>, SessionError> {
     let state = shell.state.borrow();
     let nvim = state.nvim();
-    if let Some(mut nvim) = nvim {
-        let buffers = nvim.list_bufs().unwrap();
+    if let Some(nvim) = nvim {
+        let buffers = nvim.block_timeout(nvim.list_bufs()).unwrap();
 
         Ok(buffers
             .iter()
             .map(|buf| {
                 (
-                    match buf.get_option(&mut nvim, "modified") {
+                    match nvim.block_timeout(buf.get_option("modified")) {
                         Ok(Value::Boolean(val)) => val,
                         Ok(_) => {
                             warn!("Value must be boolean");
@@ -89,7 +90,7 @@ fn get_changed_buffers(shell: &Shell) -> Result<Vec<String>, CallError> {
                             false
                         }
                     },
-                    match buf.get_name(&mut nvim) {
+                    match nvim.block_timeout(buf.get_name()) {
                         Ok(name) => name,
                         Err(ref err) => {
                             error!("Something going wrong while getting buffer name: {}", err);

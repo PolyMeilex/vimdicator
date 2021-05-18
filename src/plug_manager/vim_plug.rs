@@ -1,8 +1,7 @@
 use std::rc::Rc;
 
-use neovim_lib::{NeovimApi, NeovimApiAsync};
-
-use crate::nvim::{NeovimClient, ErrorReport, NeovimRef};
+use crate::nvim::{NeovimClient, ErrorReport, NvimSession};
+use crate::spawn_timeout;
 use crate::value::ValueMapExt;
 
 pub struct Manager {
@@ -18,13 +17,13 @@ impl Manager {
         self.nvim = Some(nvim);
     }
 
-    fn nvim(&self) -> Option<NeovimRef> {
+    fn nvim(&self) -> Option<NvimSession> {
         self.nvim.as_ref().unwrap().nvim()
     }
 
     pub fn get_plugs(&self) -> Result<Box<[VimPlugInfo]>, String> {
-        if let Some(mut nvim) = self.nvim() {
-            let g_plugs = nvim.eval("g:plugs").map_err(|e| {
+        if let Some(nvim) = self.nvim() {
+            let g_plugs = nvim.block_timeout(nvim.eval("g:plugs")).map_err(|e| {
                 format!("Can't retrive g:plugs map: {}", e)
             })?;
 
@@ -33,7 +32,9 @@ impl Manager {
                 .ok_or_else(|| "Can't retrive g:plugs map".to_owned())?
                 .to_attrs_map()?;
 
-            let g_plugs_order = nvim.eval("g:plugs_order").map_err(|e| format!("{}", e))?;
+            let g_plugs_order = nvim
+                .block_timeout(nvim.eval("g:plugs_order"))
+                .map_err(|e| format!("{}", e))?;
 
             let order_arr = g_plugs_order.as_array().ok_or_else(
                 || "Can't find g:plugs_order array"
@@ -67,8 +68,8 @@ impl Manager {
     }
 
     pub fn is_loaded(&self) -> bool {
-        if let Some(mut nvim) = self.nvim() {
-            let loaded_plug = nvim.eval("exists('g:loaded_plug')");
+        if let Some(nvim) = self.nvim() {
+            let loaded_plug = nvim.block_timeout(nvim.eval("exists('g:loaded_plug')"));
             loaded_plug
                 .ok_and_report()
                 .and_then(|loaded_plug| loaded_plug.as_i64())
@@ -79,10 +80,9 @@ impl Manager {
     }
 
     pub fn reload(&self, path: &str) {
-        if let Some(mut nvim) = self.nvim() {
-            nvim.command_async(&format!("source {}", path))
-                .cb(|r| r.report_err())
-                .call()
+        let path = path.to_owned();
+        if let Some(nvim) = self.nvim() {
+            spawn_timeout!(nvim.command(&format!("source {}", path)));
         }
     }
 }

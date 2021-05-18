@@ -12,10 +12,9 @@ use gio::prelude::*;
 use gtk;
 use gtk::prelude::*;
 
-use neovim_lib::{NeovimApi, NeovimApiAsync};
-
 use crate::misc::escape_filename;
-use crate::nvim::{ErrorReport, NeovimClient, NeovimRef};
+use crate::nvim::{NeovimClient, NvimSession};
+use crate::spawn_timeout;
 use crate::shell;
 use crate::subscriptions::SubscriptionKey;
 
@@ -102,7 +101,7 @@ impl FileBrowserWidget {
         file_browser
     }
 
-    fn nvim(&self) -> Option<NeovimRef> {
+    fn nvim(&self) -> Option<NvimSession> {
         self.nvim.as_ref().unwrap().nvim()
     }
 
@@ -178,11 +177,10 @@ impl FileBrowserWidget {
 
         let cd_action = &self.comps.cd_action;
         cd_action.connect_activate(clone!(state_ref, nvim_ref => move |_, _| {
-            let mut nvim = nvim_ref.nvim().unwrap();
-            if let Some(ref path) = state_ref.borrow().selected_path {
-                nvim.set_current_dir_async(&path)
-                    .cb(|r| r.report_err())
-                    .call();
+            let nvim = nvim_ref.nvim().unwrap();
+            if let Some(ref path) = &state_ref.borrow().selected_path {
+                let path = path.clone();
+                spawn_timeout!(nvim.set_current_dir(&path));
             }
         }));
         actions.add_action(cd_action);
@@ -269,10 +267,10 @@ impl FileBrowserWidget {
                 } else {
                     &file_path
                 };
-                let file_path = escape_filename(file_path);
-                nvim_ref.nvim().unwrap().command_async(&format!(":e {}", file_path))
-                    .cb(|r| r.report_err())
-                    .call();
+                let file_path = escape_filename(file_path).to_string();
+                let nvim = nvim_ref.nvim().unwrap();
+
+                spawn_timeout!(nvim.command(&format!(":e {}", file_path)));
             }
         }));
 
@@ -281,12 +279,10 @@ impl FileBrowserWidget {
         self.comps.dir_list.connect_changed(clone!(nvim_ref, state_ref => move |dir_list| {
             if let Some(iter) = dir_list.get_active_iter() {
                 let model = dir_list.get_model().unwrap();
-                if let Some(dir) = model.get_value(&iter, 2).get::<&str>() {
+                if let Some(dir) = model.get_value(&iter, 2).get::<String>() {
                     if dir != state_ref.borrow().current_dir {
-                        let mut nvim = nvim_ref.nvim().unwrap();
-                        nvim.set_current_dir_async(dir)
-                            .cb(|r| r.report_err())
-                            .call();
+                        let nvim = nvim_ref.nvim().unwrap();
+                        spawn_timeout!(nvim.set_current_dir(&dir));
                     }
                 }
             }
@@ -517,8 +513,8 @@ fn populate_tree_nodes(
     }
 }
 
-fn get_current_dir(nvim: &mut NeovimRef) -> Option<String> {
-    match nvim.eval("getcwd()") {
+fn get_current_dir(nvim: &NvimSession) -> Option<String> {
+    match nvim.block_timeout(nvim.eval("getcwd()")) {
         Ok(cwd) => cwd.as_str().map(|s| s.to_owned()),
         Err(err) => {
             error!("Couldn't get cwd: {}", err);

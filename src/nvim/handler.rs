@@ -1,10 +1,16 @@
 use std::result;
 use std::sync::{mpsc, Arc};
 
-use neovim_lib::{Handler, RequestHandler, Value};
+use nvim_rs::{
+    Handler, Value,
+    compat::tokio::Compat,
+};
+
+use async_trait::async_trait;
 
 use crate::ui::UiMutex;
 use crate::shell;
+use crate::nvim::{NvimWriter, Neovim};
 use glib;
 
 use super::repaint_mode::RepaintMode;
@@ -17,7 +23,7 @@ pub struct NvimHandler {
 }
 
 impl NvimHandler {
-    pub fn new(shell: Arc<UiMutex<shell::State>>) -> NvimHandler {
+    pub fn new(shell: Arc<UiMutex<shell::State>>) -> Self {
         NvimHandler {
             shell,
             delayed_redraw_event_id: Arc::new(UiMutex::new(None)),
@@ -60,8 +66,8 @@ impl NvimHandler {
         });
     }
 
-    fn nvim_cb(&self, method: &str, mut params: Vec<Value>) {
-        match method {
+    fn nvim_cb(&self, method: String, mut params: Vec<Value>) {
+        match method.as_ref() {
             "redraw" => {
                 redraw_handler::remove_or_delay_uneeded_events(self, &mut params);
 
@@ -107,8 +113,8 @@ impl NvimHandler {
         }
     }
 
-    fn nvim_cb_req(&self, method: &str, params: Vec<Value>) -> result::Result<Value, Value> {
-        match method {
+    fn nvim_cb_req(&self, method: String, params: Vec<Value>) -> result::Result<Value, Value> {
+        match method.as_ref() {
             "Gui" => {
                 if !params.is_empty() {
                     let mut params_iter = params.into_iter();
@@ -213,15 +219,30 @@ where
     });
 }
 
+impl Clone for NvimHandler
+{
+    fn clone(&self) -> Self {
+        NvimHandler {
+            shell: self.shell.clone(),
+            delayed_redraw_event_id: self.delayed_redraw_event_id.clone(),
+        }
+    }
+}
+
+#[async_trait]
 impl Handler for NvimHandler {
-    fn handle_notify(&mut self, name: &str, args: Vec<Value>) {
+    type Writer = Compat<NvimWriter>;
+
+    async fn handle_notify(&self, name: String, args: Vec<Value>, _: Neovim) {
         self.nvim_cb(name, args);
     }
 
-}
-
-impl RequestHandler for NvimHandler {
-    fn handle_request(&mut self, name: &str, args: Vec<Value>) -> result::Result<Value, Value> {
+    async fn handle_request(
+        &self,
+        name: String,
+        args: Vec<Value>,
+        _: Neovim
+    ) -> result::Result<Value, Value> {
         self.nvim_cb_req(name, args)
     }
 }

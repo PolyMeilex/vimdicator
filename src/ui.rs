@@ -14,8 +14,6 @@ use gtk::{AboutDialog, ApplicationWindow, Button, HeaderBar, Orientation, Paned,
 
 use toml;
 
-use neovim_lib::NeovimApi;
-
 use crate::file_browser::FileBrowserWidget;
 use crate::misc;
 use crate::nvim::{ErrorReport, NvimCommand};
@@ -321,7 +319,8 @@ impl Ui {
                     let filename = misc::escape_filename(filename);
                     command + " " + &filename
                 });
-            shell.nvim().unwrap().command(&command).report_err();
+            let nvim = shell.nvim().unwrap();
+            nvim.block_timeout(nvim.command(&command)).report_err();
         }
     }
 
