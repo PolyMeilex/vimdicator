@@ -1,4 +1,5 @@
 use std::cell::{Ref, RefCell, RefMut};
+use std::convert::TryFrom;
 use std::path::Path;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -16,7 +17,7 @@ use toml;
 
 use crate::file_browser::FileBrowserWidget;
 use crate::misc;
-use crate::nvim::{ErrorReport, NvimCommand};
+use crate::nvim::*;
 use crate::plug_manager;
 use crate::project::Projects;
 use crate::settings::{Settings, SettingsLoader};
@@ -319,8 +320,20 @@ impl Ui {
                     let filename = misc::escape_filename(filename);
                     command + " " + &filename
                 });
+
             let nvim = shell.nvim().unwrap();
-            nvim.block_timeout(nvim.command(&command)).report_err();
+            nvim.clone().spawn(async move {
+                if let Err(e) = nvim.command(&command).await {
+                    if let Ok(e) = NormalError::try_from(&*e) {
+                        if e == NormalError::KeyboardInterrupt {
+                            nvim.shutdown().await;
+                        } else if !e.has_code(325) {
+                            return;
+                        }
+                    }
+                    e.print();
+                }
+            });
         }
     }
 

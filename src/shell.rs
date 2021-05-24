@@ -1,12 +1,15 @@
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::ops::Deref;
 use std::rc::Rc;
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::Duration;
 
-use futures::FutureExt;
+use futures::{FutureExt, executor::block_on};
+
+use tokio::sync::Mutex as AsyncMutex;
 
 use clap::{self, value_t};
 
@@ -28,6 +31,7 @@ use crate::highlight::HighlightMap;
 use crate::misc::{decode_uri, escape_filename, split_at_comma};
 use crate::nvim::{
     self, CompleteItem, ErrorReport, NeovimClient, NvimHandler, RepaintMode, NvimSession, Tabpage,
+    NormalError, CallErrorExt
 };
 use crate::settings::{FontSource, Settings};
 use crate::ui_model::ModelRect;
@@ -122,6 +126,7 @@ pub struct State {
 
     resize_request: (i64, i64),
     resize_timer: Rc<Cell<Option<glib::SourceId>>>,
+    focus_state: Arc<AsyncMutex<FocusState>>,
 
     pub clipboard_clipboard: gtk::Clipboard,
     pub clipboard_primary: gtk::Clipboard,
@@ -169,6 +174,11 @@ impl State {
 
             resize_request: (-1, -1),
             resize_timer: Rc::new(Cell::new(None)),
+            focus_state: Arc::new(AsyncMutex::new(FocusState {
+                last: true,
+                next: true,
+                is_pending: false
+            })),
 
             clipboard_clipboard: gtk::Clipboard::get(&gdk::Atom::intern("CLIPBOARD")),
             clipboard_primary: gtk::Clipboard::get(&gdk::Atom::intern("PRIMARY")),
@@ -315,8 +325,8 @@ impl State {
 
     pub fn open_file(&self, path: &str) {
         if let Some(nvim) = self.nvim() {
-            let path = format!("e {}", path);
-            spawn_timeout!(nvim.command(path.as_str()));
+            let path = format!("e {}", path).to_owned();
+            spawn_timeout!(nvim.command(&path));
         }
     }
 
@@ -522,6 +532,48 @@ impl State {
         }
 
         self.command_cb = cb;
+    }
+
+    pub fn focus_update(&self, state: bool) {
+        let nvim = {
+            let mut focus_state = block_on(self.focus_state.lock());
+            if focus_state.next == state {
+                return;
+            }
+            focus_state.next = state;
+
+            if focus_state.is_pending {
+                // A future is still running, no need for another
+                return;
+            } else if let Some(nvim) = self.nvim() {
+                focus_state.is_pending = true;
+                nvim
+            } else {
+                return;
+            }
+        };
+
+        let focus_state = self.focus_state.clone();
+        nvim.clone().spawn(async move {
+            loop {
+                let next = {
+                    let mut focus_state = focus_state.lock().await;
+                    if focus_state.next == focus_state.last {
+                        focus_state.is_pending = false;
+                        return;
+                    }
+
+                    focus_state.last = focus_state.next;
+                    focus_state.next
+                };
+                let autocmd = if next == true { "Gained" } else { "Lost" };
+
+                debug!("Triggering Focus{} autocmd", autocmd);
+                nvim.command(&format!(
+                    "if exists('#Focus{}') | doautocmd Focus{} | endif", autocmd, autocmd
+                )).await.report_err();
+            }
+        });
     }
 }
 
@@ -805,7 +857,17 @@ impl Shell {
                     },
                 );
                 let nvim = ref_state.borrow_mut().nvim().unwrap();
-                spawn_timeout!(nvim.command(&command));
+                nvim.clone().spawn(async move {
+                    if let Err(e) = nvim.command(&command).await {
+                        if let Ok(e) = NormalError::try_from(&*e) {
+                            // Filter out errors we get if the user is presented with a prompt
+                            if !e.has_code(325) {
+                                return;
+                            }
+                        }
+                        e.print();
+                    }
+                });
             });
 
         let ui_state_ref = self.ui_state.clone();
@@ -925,11 +987,19 @@ impl Deref for Shell {
     }
 }
 
-fn gtk_focus_in(state: &mut State) -> Inhibit {
-    if let Some(nvim) = state.nvim() {
-        spawn_timeout!(nvim.command("if exists('#FocusGained') | doautocmd FocusGained | endif"));
-    }
+/// Keeps track of focus/unfocus requests for neovim.
+struct FocusState {
+    /// The last focus state we sent to neovim, which may or may not have been received yet.
+    last: bool,
+    /// The next focus state to send to neovim, if any. If there's no new state to send, this is
+    /// equal to `last`.
+    next: bool,
+    /// Whether there's a focus/unfocus request being sent to neovim.
+    is_pending: bool,
+}
 
+fn gtk_focus_in(state: &mut State) -> Inhibit {
+    state.focus_update(true);
     state.im_context.focus_in();
     state.cursor.as_mut().unwrap().enter_focus();
     state.queue_redraw_cursor();
@@ -938,10 +1008,7 @@ fn gtk_focus_in(state: &mut State) -> Inhibit {
 }
 
 fn gtk_focus_out(state: &mut State) -> Inhibit {
-    if let Some(nvim) = state.nvim() {
-        spawn_timeout!(nvim.command("if exists('#FocusLost') | doautocmd FocusLost | endif"));
-    }
-
+    state.focus_update(false);
     state.im_context.focus_out();
     state.cursor.as_mut().unwrap().leave_focus();
     state.queue_redraw_cursor();
