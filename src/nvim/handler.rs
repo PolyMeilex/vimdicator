@@ -18,14 +18,19 @@ use super::redraw_handler;
 
 pub struct NvimHandler {
     shell: Arc<UiMutex<shell::State>>,
+    resize_status: Arc<shell::ResizeState>,
 
     delayed_redraw_event_id: Arc<UiMutex<Option<glib::SourceId>>>,
 }
 
 impl NvimHandler {
-    pub fn new(shell: Arc<UiMutex<shell::State>>) -> Self {
+    pub fn new(
+        shell: Arc<UiMutex<shell::State>>,
+        resize_status: Arc<shell::ResizeState>,
+    ) -> Self {
         NvimHandler {
             shell,
+            resize_status,
             delayed_redraw_event_id: Arc::new(UiMutex::new(None)),
         }
     }
@@ -66,7 +71,7 @@ impl NvimHandler {
         });
     }
 
-    fn nvim_cb(&self, method: String, mut params: Vec<Value>) {
+    async fn nvim_cb(&self, method: String, mut params: Vec<Value>) {
         match method.as_ref() {
             "redraw" => {
                 redraw_handler::remove_or_delay_uneeded_events(self, &mut params);
@@ -106,6 +111,10 @@ impl NvimHandler {
                     let ui = &ui.borrow();
                     ui.notify(params)
                 });
+            }
+            "resized" => {
+                debug!("Received resized notification");
+                self.resize_status.notify_finished();
             }
             _ => {
                 error!("Notification {}({:?})", method, params);
@@ -224,6 +233,7 @@ impl Clone for NvimHandler
     fn clone(&self) -> Self {
         NvimHandler {
             shell: self.shell.clone(),
+            resize_status: self.resize_status.clone(),
             delayed_redraw_event_id: self.delayed_redraw_event_id.clone(),
         }
     }
@@ -234,7 +244,7 @@ impl Handler for NvimHandler {
     type Writer = Compat<NvimWriter>;
 
     async fn handle_notify(&self, name: String, args: Vec<Value>, _: Neovim) {
-        self.nvim_cb(name, args);
+        self.nvim_cb(name, args).await;
     }
 
     async fn handle_request(

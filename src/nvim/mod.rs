@@ -12,6 +12,7 @@ pub use self::handler::NvimHandler;
 
 use std::{
     error, fmt, env, result,
+    num::*,
     time::Duration,
     pin::Pin,
     process::Stdio,
@@ -41,7 +42,10 @@ use nvim_rs::{
     compat::tokio::Compat,
 };
 
-use crate::nvim_config::NvimConfig;
+use crate::{
+    nvim_config::NvimConfig,
+    shell::ResizeState,
+};
 
 #[derive(Debug)]
 pub struct NvimInitError {
@@ -344,20 +348,27 @@ pub fn start<'a>(
 
 pub async fn post_start_init(
     nvim: NvimSession,
-    cols: i64,
-    rows: i64,
+    cols: NonZeroI64,
+    rows: NonZeroI64,
+    resize_state: &ResizeState,
     input_data: Option<String>,
 ) -> Result<(), NvimInitError> {
-    nvim.timeout(nvim.ui_attach(
-        cols,
-        rows,
-        UiAttachOptions::new()
-        .set_popupmenu_external(true)
-        .set_tabline_external(true)
-        .set_linegrid_external(true)
-        .set_hlstate_external(true)
-        ))
-        .await.map_err(NvimInitError::new_post_init)?;
+    {
+        let mut requests = resize_state.requests.lock().await;
+
+        nvim.timeout(nvim.ui_attach(
+                cols.get(),
+                rows.get(),
+                UiAttachOptions::new()
+                .set_popupmenu_external(true)
+                .set_tabline_external(true)
+                .set_linegrid_external(true)
+                .set_hlstate_external(true)
+            ))
+            .await
+            .map_err(NvimInitError::new_post_init)?;
+        requests.current = Some((cols, rows));
+    }
 
     nvim.timeout(nvim.command("runtime! ginit.vim")).await.map_err(NvimInitError::new_post_init)?;
 

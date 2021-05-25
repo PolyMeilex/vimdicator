@@ -1,6 +1,7 @@
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::num::*;
 use std::ops::Deref;
 use std::rc::Rc;
 use std::sync::{Arc, Condvar, Mutex};
@@ -9,7 +10,10 @@ use std::time::Duration;
 
 use futures::{FutureExt, executor::block_on};
 
-use tokio::sync::Mutex as AsyncMutex;
+use tokio::sync::{
+    Mutex as AsyncMutex,
+    Notify,
+};
 
 use clap::{self, value_t};
 
@@ -113,6 +117,30 @@ impl TransparencySettigns {
     }
 }
 
+/// Contains state related to resize requests we are going to/have sent to nvim
+pub struct ResizeRequests {
+    /// The most recently submitted resize request, if any. This might not have been received by
+    /// neovim yet.
+    pub current: Option<(NonZeroI64, NonZeroI64)>,
+    /// The next resize request to submit to neovim, if any.
+    requested: Option<(NonZeroI64, NonZeroI64)>,
+    /// Whether there's a resize future active or not
+    active: bool,
+}
+
+pub struct ResizeState {
+    /// The current state of neovim's resize requests
+    pub requests: AsyncMutex<ResizeRequests>,
+    /// Signal when we've finished a resize request
+    autocmd_status: Notify,
+}
+
+impl ResizeState {
+    pub fn notify_finished(&self) {
+        self.autocmd_status.notify_one();
+    }
+}
+
 pub struct State {
     pub grids: GridMap,
 
@@ -124,8 +152,7 @@ pub struct State {
     settings: Rc<RefCell<Settings>>,
     render_state: Rc<RefCell<RenderState>>,
 
-    resize_request: (i64, i64),
-    resize_timer: Rc<Cell<Option<glib::SourceId>>>,
+    resize_status: Arc<ResizeState>,
     focus_state: Arc<AsyncMutex<FocusState>>,
 
     pub clipboard_clipboard: gtk::Clipboard,
@@ -172,8 +199,14 @@ impl State {
             settings,
             render_state,
 
-            resize_request: (-1, -1),
-            resize_timer: Rc::new(Cell::new(None)),
+            resize_status: Arc::new(ResizeState {
+                requests: AsyncMutex::new(ResizeRequests {
+                    current: None,
+                    requested: None,
+                    active: false,
+                }),
+                autocmd_status: Notify::new(),
+            }),
             focus_state: Arc::new(AsyncMutex::new(FocusState {
                 last: true,
                 next: true,
@@ -392,17 +425,22 @@ impl State {
         }
     }
 
-    fn calc_nvim_size(&self) -> (usize, usize) {
+    fn calc_nvim_size(&self) -> (NonZeroI64, NonZeroI64) {
         let &CellMetrics {
             line_height,
             char_width,
             ..
         } = self.render_state.borrow().font_ctx.cell_metrics();
         let alloc = self.drawing_area.get_allocation();
-        (
-            (alloc.width as f64 / char_width).trunc() as usize,
-            (alloc.height as f64 / line_height).trunc() as usize,
-        )
+        // SAFETY: We clamp w to 1 and h to 3
+        unsafe {(
+            NonZeroI64::new_unchecked(((alloc.width as f64 / char_width).trunc() as i64).max(1)),
+            /* Neovim won't resize to below 3 rows, and trying to do this will potentially cause
+             * nvim to avoid sending back an autocmd when the resize is processed. So, limit us to
+             * at least 3 rows at all times.
+             */
+            NonZeroI64::new_unchecked(((alloc.height as f64 / line_height).trunc() as i64).max(3)),
+        )}
     }
 
     fn show_error_area(&self) {
@@ -429,39 +467,86 @@ impl State {
         }
     }
 
+    pub fn resize_status(&self) -> Arc<ResizeState> {
+        self.resize_status.clone()
+    }
+
     fn try_nvim_resize(&mut self) {
-        let (columns, rows) = self.calc_nvim_size();
+        let nvim = match self.nvim() {
+            Some(nvim) => nvim,
+            None => return,
+        };
 
-        let (requested_rows, requested_cols) = self.resize_request;
+        {
+            let mut status = nvim.block_on(self.resize_status.requests.lock());
 
-        if requested_rows == rows as i64 && requested_cols == columns as i64 {
-            return;
-        }
-
-        let resize_timer = self.resize_timer.take();
-        if let Some(resize_timer) = resize_timer {
-            glib::source_remove(resize_timer);
-        }
-
-        self.resize_request = (rows as i64, columns as i64);
-
-        let nvim = self.nvim.clone();
-        let resize_timer = self.resize_timer.clone();
-
-        let resize_id = gtk::timeout_add(200, move || {
-            if let Some(nvim) = nvim.nvim() {
-                debug!("ui_try_resize {}/{}", columns, rows);
-                resize_timer.set(None);
-
-                spawn_timeout!(nvim.ui_try_resize(columns as i64, rows as i64));
-
-                return Continue(false);
+            // Abort if the UI isn't attached yet
+            if status.current.is_none() {
+                return;
             }
 
-            Continue(true)
-        });
+            let our_req = self.calc_nvim_size();
+            if status.requested == Some(our_req) {
+                return;
+            } else if status.current == Some(our_req) {
+                if status.requested.is_some() {
+                    debug!("Resize request matches last committed size, cancelling reqs");
+                }
+                status.requested = None;
+                return;
+            }
 
-        self.resize_timer.set(Some(resize_id));
+            debug!("Requesting resize to {:?}", our_req);
+            status.requested.replace(our_req);
+
+            // Don't spawn a resize future if one's already active
+            if status.active {
+                debug!("Request already pending, not starting new one");
+                return;
+            }
+            status.active = true;
+        }
+
+        let status_ref = self.resize_status.clone();
+        nvim.clone().spawn(async move {
+            loop {
+                let (cols, rows) = {
+                    let mut status = status_ref.requests.lock().await;
+                    let req = status.requested.take();
+
+                    if let Some((cols, rows)) = req {
+                        status.current = req;
+                        (cols, rows)
+                    } else {
+                        status.active = false;
+                        debug!("No new resize requests, finishing");
+                        return;
+                    }
+                };
+
+                debug!("Committing new size {}x{}...", cols, rows);
+
+                /* We don't use subscriptions for this since we want to ensure that there's
+                 * no potential for RPC requests between autocmd registration and our resize
+                 * request
+                 */
+                nvim.call_atomic(vec![
+                    Value::Array(vec![
+                        "nvim_command".into(),
+                        Value::Array(vec![
+                            "au VimResized * ++once cal rpcnotify(1, 'resized')".into()
+                        ]),
+                    ]),
+                    Value::Array(vec![
+                        "nvim_ui_try_resize".into(),
+                        Value::Array(vec![cols.get().into(), rows.get().into()]),
+                    ]),
+                ]).await.report_err();
+
+                // Wait for the resize request to finish, and then update the request state
+                status_ref.autocmd_status.notified().await;
+            };
+        });
     }
 
     fn edit_paste(&self, clipboard: &'static str) {
@@ -566,11 +651,11 @@ impl State {
                     focus_state.last = focus_state.next;
                     focus_state.next
                 };
-                let autocmd = if next == true { "Gained" } else { "Lost" };
+                let autocmd = if next == true { "FocusGained" } else { "FocusLost" };
 
-                debug!("Triggering Focus{} autocmd", autocmd);
+                debug!("Triggering {} autocmd", autocmd);
                 nvim.command(&format!(
-                    "if exists('#Focus{}') | doautocmd Focus{} | endif", autocmd, autocmd
+                    "if exists('#{a}') | doau {a} | endif", a = autocmd
                 )).await.report_err();
             }
         });
@@ -1209,10 +1294,11 @@ fn show_nvim_init_error(err: &nvim::NvimInitError, state_arc: Arc<UiMutex<State>
 
 fn init_nvim_async(
     state_arc: Arc<UiMutex<State>>,
+    resize_state: Arc<ResizeState>,
     nvim_handler: NvimHandler,
     options: ShellOptions,
-    cols: usize,
-    rows: usize,
+    cols: NonZeroI64,
+    rows: NonZeroI64,
 ) {
     // execute nvim
     let (session, io_future) = match nvim::start(
@@ -1252,8 +1338,9 @@ fn init_nvim_async(
     // attach ui
     let input_data = options.input_data;
     session.clone().spawn(async move {
-        if let Err(ref err) = nvim::post_start_init(session, cols as i64, rows as i64,
-                                                    input_data).await {
+        if let Err(ref err) = nvim::post_start_init(
+            session, cols, rows, &*resize_state, input_data
+        ).await {
             show_nvim_init_error(err, state_arc);
         } else {
             set_nvim_initialized(state_arc);
@@ -1338,9 +1425,12 @@ fn init_nvim(state_ref: &Arc<UiMutex<State>>) {
         debug!("Init nvim {}/{}", cols, rows);
 
         let state_arc = state_ref.clone();
-        let nvim_handler = NvimHandler::new(state_ref.clone());
+        let resize_state = state.resize_status();
+        let nvim_handler = NvimHandler::new(state_ref.clone(), state.resize_status());
         let options = state.options.take();
-        thread::spawn(move || init_nvim_async(state_arc, nvim_handler, options, cols, rows));
+        thread::spawn(move || init_nvim_async(
+            state_arc, resize_state, nvim_handler, options, cols, rows
+        ));
     }
 }
 
