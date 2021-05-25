@@ -3,7 +3,7 @@ use std::error::Error;
 
 use nvim_rs::error::CallError;
 
-use crate::nvim::SessionError;
+use crate::nvim::{SessionError, NvimSession};
 
 pub trait CallErrorExt {
     fn print(&self);
@@ -68,6 +68,15 @@ pub enum NormalError<'a> {
 }
 
 impl<'a> NormalError<'a> {
+    /// Print an error message to neovim's message buffer, if we have one
+    pub async fn print(&self, nvim: &NvimSession) {
+        if let Self::Message { message, .. } = self {
+            if let Err(e) = nvim.timeout(nvim.err_writeln(message)).await {
+                error!("Failed to print error message \"{:?}\" in nvim: {}", self, e);
+            }
+        }
+    }
+
     /// Check if this error has the given code
     pub fn has_code(&self, code: u32) -> bool {
         match self {

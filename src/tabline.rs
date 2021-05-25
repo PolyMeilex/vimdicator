@@ -12,7 +12,7 @@ use pango;
 
 use crate::{
     nvim::{self, ErrorReport, Tabpage},
-    spawn_timeout,
+    spawn_timeout_user_err,
 };
 
 struct State {
@@ -41,7 +41,7 @@ impl State {
 
     fn close_tab(&self, idx: u32) {
         if let Some(nvim) = self.nvim.as_ref().unwrap().nvim() {
-            spawn_timeout!(nvim.command(&format!(":tabc {}", idx + 1)));
+            spawn_timeout_user_err!(nvim.command(&format!("tabc {}", idx + 1)));
         }
     }
 }

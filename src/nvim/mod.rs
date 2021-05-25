@@ -12,6 +12,7 @@ pub use self::handler::NvimHandler;
 
 use std::{
     error, fmt, env, result,
+    convert::TryFrom,
     num::*,
     time::Duration,
     pin::Pin,
@@ -256,6 +257,26 @@ impl NvimSession {
         })
     }
 
+    #[doc(hidden)]
+    pub fn spawn_timeout_user_err<F, T>(&self, f: F) -> JoinHandle<()>
+    where
+        F: Future<Output = Result<T, Box<CallError>>> + Send + 'static,
+        T: Send
+    {
+        let nvim = self.clone();
+
+        self.spawn(async move {
+            let res = nvim.timeout(f).await;
+            if let Err(ref err) = res {
+                if let Ok(e) = NormalError::try_from(err) {
+                    e.print(&nvim).await;
+                } else {
+                    res.report_err();
+                }
+            }
+        })
+    }
+
     /// Shutdown this neovim session by executing the relevant autocommands, and then closing our
     /// RPC channel with the Neovim instance.
     pub async fn shutdown(&self) {
@@ -304,6 +325,16 @@ impl DerefMut for NvimSession {
         let nvim = $nvim.clone();
         $nvim.spawn_timeout(async move { nvim.$fn($( $a ),*).await })
     };
+}
+
+/// Wrap a future with a timeout, and spawn it on this session's tokio runtime, then report any
+/// non-normal (see `NormalError` for more info) errors to the console. Any normal errors will be
+/// printed as error messages in Neovim.
+#[macro_export] macro_rules! spawn_timeout_user_err {
+    ($nvim:ident.$fn:ident($( $a:expr ),*)) => {
+        let nvim = $nvim.clone();
+        $nvim.spawn_timeout_user_err(async move { nvim.$fn($( $a ),*).await })
+    }
 }
 
 pub fn start<'a>(

@@ -328,8 +328,9 @@ impl Ui {
                         if e == NormalError::KeyboardInterrupt {
                             nvim.shutdown().await;
                         } else if !e.has_code(325) {
-                            return;
+                            e.print(&nvim).await;
                         }
+                        return;
                     }
                     e.print();
                 }

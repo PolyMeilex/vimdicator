@@ -39,7 +39,7 @@ use crate::nvim::{
 };
 use crate::settings::{FontSource, Settings};
 use crate::ui_model::ModelRect;
-use crate::spawn_timeout;
+use crate::{spawn_timeout, spawn_timeout_user_err};
 
 use crate::cmd_line::{CmdLine, CmdLineContext};
 use crate::cursor::{BlinkCursor, Cursor, CursorRedrawCb};
@@ -359,7 +359,7 @@ impl State {
     pub fn open_file(&self, path: &str) {
         if let Some(nvim) = self.nvim() {
             let path = format!("e {}", path).to_owned();
-            spawn_timeout!(nvim.command(&path));
+            spawn_timeout_user_err!(nvim.command(&path));
         }
     }
 
@@ -556,16 +556,16 @@ impl State {
             if render_state.mode.is(&mode::NvimMode::Insert)
                 || render_state.mode.is(&mode::NvimMode::Normal)
             {
-                spawn_timeout!(nvim.command(&format!("normal! \"{}P", clipboard)));
+                spawn_timeout_user_err!(nvim.command(&format!("normal! \"{}P", clipboard)));
             } else {
-                spawn_timeout!(nvim.input(&format!("<C-r>{}", clipboard)));
+                spawn_timeout_user_err!(nvim.input(&format!("<C-r>{}", clipboard)));
             };
         }
     }
 
     fn edit_copy(&self, clipboard: &'static str) {
         if let Some(nvim) = self.nvim() {
-            spawn_timeout!(nvim.command(&format!("normal! \"{}y", clipboard)));
+            spawn_timeout_user_err!(nvim.command(&format!("normal! \"{}y", clipboard)));
         }
     }
 
@@ -947,8 +947,9 @@ impl Shell {
                         if let Ok(e) = NormalError::try_from(&*e) {
                             // Filter out errors we get if the user is presented with a prompt
                             if !e.has_code(325) {
-                                return;
+                                e.print(&nvim).await;
                             }
+                            return;
                         }
                         e.print();
                     }
@@ -1022,7 +1023,7 @@ impl Shell {
 
     pub fn edit_save_all(&self) {
         if let Some(nvim) = self.state.borrow().nvim() {
-            spawn_timeout!(nvim.command(":wa"));
+            spawn_timeout_user_err!(nvim.command(":wa"));
         }
     }
 
