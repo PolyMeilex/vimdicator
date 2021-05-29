@@ -498,7 +498,8 @@ fn gtk_delete(comps: &UiMutex<Components>, shell: &RefCell<Shell>) -> Inhibit {
         return Inhibit(false);
     }
 
-    Inhibit(if shell_dlg::can_close_window(comps, shell) {
+    let nvim = shell.borrow().state.borrow().nvim_clone();
+    Inhibit(if shell_dlg::can_close_window(comps, shell, &nvim) {
         let comps = comps.borrow();
         comps.close_window();
         shell.borrow_mut().detach_ui();

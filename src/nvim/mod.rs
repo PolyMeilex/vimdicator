@@ -302,6 +302,13 @@ impl NvimSession {
             res.report_err();
         }
     }
+
+    /// A helper for checking if nvim is currently blocked waiting on user input or not
+    pub fn is_blocked(&self) -> bool {
+        let &(_, ref blocked) = &self.block_on(self.get_mode()).unwrap()[1];
+
+        blocked.as_bool().unwrap()
+    }
 }
 
 impl Deref for NvimSession {
