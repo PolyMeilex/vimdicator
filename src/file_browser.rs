@@ -6,6 +6,7 @@ use std::fs::DirEntry;
 use std::path::{Component, Path, PathBuf};
 use std::rc::Rc;
 use std::ops::Deref;
+use std::sync::Arc;
 
 use gio;
 use gio::prelude::*;
@@ -13,10 +14,11 @@ use gtk;
 use gtk::prelude::*;
 
 use crate::misc::escape_filename;
-use crate::nvim::{NeovimClient, NvimSession};
+use crate::nvim::NvimSession;
 use crate::spawn_timeout;
 use crate::shell;
 use crate::subscriptions::SubscriptionKey;
+use crate::ui::UiMutex;
 
 const ICON_FOLDER_CLOSED: &str = "folder-symbolic";
 const ICON_FOLDER_OPEN: &str = "folder-open-symbolic";
@@ -40,7 +42,7 @@ pub struct FileBrowserWidget {
     store: gtk::TreeStore,
     tree: gtk::TreeView,
     widget: gtk::Box,
-    nvim: Option<Rc<NeovimClient>>,
+    shell_state: Arc<UiMutex<shell::State>>,
     comps: Components,
     state: Rc<RefCell<State>>,
 }
@@ -68,7 +70,7 @@ enum Column {
 }
 
 impl FileBrowserWidget {
-    pub fn new() -> Self {
+    pub fn new(shell_state: &Arc<UiMutex<shell::State>>) -> Self {
         let builder = gtk::Builder::new_from_string(include_str!("../resources/side-panel.ui"));
         let widget: gtk::Box = builder.get_object("file_browser").unwrap();
         let tree: gtk::TreeView = builder.get_object("file_browser_tree_view").unwrap();
@@ -80,11 +82,13 @@ impl FileBrowserWidget {
             .get_object("file_browser_show_hidden_checkbox")
             .unwrap();
 
+        // Disable the file browser widget by default, it'll be re-enabled once nvim is ready
+        widget.set_sensitive(false);
+
         let file_browser = FileBrowserWidget {
             store,
             tree,
             widget,
-            nvim: None,
             comps: Components {
                 dir_list_model,
                 dir_list,
@@ -97,18 +101,17 @@ impl FileBrowserWidget {
                 show_hidden: false,
                 selected_path: None,
             })),
+            shell_state: shell_state.clone(),
         };
         file_browser
     }
 
     fn nvim(&self) -> Option<NvimSession> {
-        self.nvim.as_ref().unwrap().nvim()
+        self.shell_state.borrow().nvim()
     }
 
-    pub fn init(&mut self, shell_state: &shell::State) {
+    pub fn init(&mut self) {
         // Initialize values.
-        let nvim = shell_state.nvim_clone();
-        self.nvim = Some(nvim);
         if let Some(dir) = get_current_dir(&mut self.nvim().unwrap()) {
             update_dir_list(&dir, &self.comps.dir_list_model, &self.comps.dir_list);
             self.state.borrow_mut().current_dir = dir;
@@ -158,7 +161,7 @@ impl FileBrowserWidget {
 
         // Further initialization.
         self.init_actions();
-        self.init_subscriptions(shell_state);
+        self.init_subscriptions(&self.shell_state.borrow());
         self.connect_events();
     }
 
@@ -167,7 +170,7 @@ impl FileBrowserWidget {
 
         let store = &self.store;
         let state_ref = &self.state;
-        let nvim_ref = self.nvim.as_ref().unwrap();
+        let nvim_ref = self.shell_state.borrow().nvim_clone();
 
         let reload_action = gio::SimpleAction::new("reload", None);
         reload_action.connect_activate(clone!(store, state_ref => move |_, _| {
@@ -236,46 +239,48 @@ impl FileBrowserWidget {
         // Open file / go to dir, when user clicks on an entry.
         let store = &self.store;
         let state_ref = &self.state;
-        let nvim_ref = self.nvim.as_ref().unwrap();
-        self.tree.connect_row_activated(clone!(store, state_ref, nvim_ref => move |tree, path, _| {
-            let iter = store.get_iter(path).unwrap();
-            let file_type = store
-                .get_value(&iter, Column::FileType as i32)
-                .get::<u8>()
-                .unwrap();
-            let file_path = store
-                .get_value(&iter, Column::Path as i32)
-                .get::<String>()
-                .unwrap();
-            if file_type == FileType::Dir as u8 {
-                let expanded = tree.row_expanded(path);
-                if expanded {
-                    tree.collapse_row(path);
-                } else {
-                    tree.expand_row(path, false);
-                }
-            } else {
-                // FileType::File
-                let cwd = &state_ref.borrow().current_dir;
-                let cwd = Path::new(cwd);
-                let file_path = if let Some(rel_path) = Path::new(&file_path)
-                    .strip_prefix(&cwd)
-                    .ok()
-                    .and_then(|p| p.to_str())
-                {
-                    rel_path
-                } else {
-                    &file_path
-                };
-                let file_path = escape_filename(file_path).to_string();
-                let nvim = nvim_ref.nvim().unwrap();
+        let shell_state_ref = &self.shell_state;
 
-                spawn_timeout!(nvim.command(&format!(":e {}", file_path)));
-            }
-        }));
+        self.tree.connect_row_activated(
+            clone!(store, state_ref, shell_state_ref => move |tree, path, _| {
+                let iter = store.get_iter(path).unwrap();
+                let file_type = store
+                    .get_value(&iter, Column::FileType as i32)
+                    .get::<u8>()
+                    .unwrap();
+                let file_path = store
+                    .get_value(&iter, Column::Path as i32)
+                    .get::<String>()
+                    .unwrap();
+                if file_type == FileType::Dir as u8 {
+                    let expanded = tree.row_expanded(path);
+                    if expanded {
+                        tree.collapse_row(path);
+                    } else {
+                        tree.expand_row(path, false);
+                    }
+                } else {
+                    // FileType::File
+                    let cwd = &state_ref.borrow().current_dir;
+                    let cwd = Path::new(cwd);
+                    let file_path = if let Some(rel_path) = Path::new(&file_path)
+                        .strip_prefix(&cwd)
+                        .ok()
+                        .and_then(|p| p.to_str())
+                        {
+                            rel_path
+                        } else {
+                            &file_path
+                        };
+                    let file_path = escape_filename(file_path).to_string();
+
+                    shell_state_ref.borrow().open_file(&file_path);
+                }
+            })
+        );
 
         // Connect directory list.
-        let nvim_ref = self.nvim.as_ref().unwrap();
+        let nvim_ref = self.shell_state.borrow().nvim_clone();
         self.comps.dir_list.connect_changed(clone!(nvim_ref, state_ref => move |dir_list| {
             if let Some(iter) = dir_list.get_active_iter() {
                 let model = dir_list.get_model().unwrap();

@@ -21,7 +21,7 @@ use crate::nvim::*;
 use crate::plug_manager;
 use crate::project::Projects;
 use crate::settings::{Settings, SettingsLoader};
-use crate::shell::{self, Shell, ShellOptions};
+use crate::shell::{self, Shell, ShellOptions, HeaderBarButtons};
 use crate::shell_dlg;
 use crate::subscriptions::{SubscriptionHandle, SubscriptionKey};
 
@@ -76,6 +76,7 @@ impl Components {
         );
         open_btn.add(&open_btn_box);
         open_btn.set_can_focus(false);
+        open_btn.set_sensitive(false);
         Components {
             open_btn,
             window: None,
@@ -97,10 +98,10 @@ impl Ui {
         let plug_manager = plug_manager::Manager::new();
 
         let plug_manager = Arc::new(UiMutex::new(plug_manager));
-        let file_browser = Arc::new(UiMutex::new(FileBrowserWidget::new()));
         let comps = Arc::new(UiMutex::new(Components::new()));
         let settings = Rc::new(RefCell::new(Settings::new()));
         let shell = Rc::new(RefCell::new(Shell::new(settings.clone(), options)));
+        let file_browser = Arc::new(UiMutex::new(FileBrowserWidget::new(&shell.borrow().state)));
         settings.borrow_mut().set_shell(Rc::downgrade(&shell));
 
         let projects = Projects::new(&comps.borrow().open_btn, shell.clone());
@@ -179,10 +180,11 @@ impl Ui {
             window.set_decorated(false);
         }
 
-        let update_subtitle = if use_header_bar {
-            Some(self.create_header_bar(app))
+        let (update_subtitle, header_bar) = if use_header_bar {
+            let (subscription, header_bar) = self.create_header_bar(app);
+            (Some(subscription), Some(header_bar))
         } else {
-            None
+            (None, None)
         };
 
         let show_sidebar_action =
@@ -269,6 +271,8 @@ impl Ui {
         let plug_manager_ref = self.plug_manager.clone();
         let files_list = self.open_paths.clone();
 
+        state_ref.borrow().set_action_widgets(header_bar, file_browser_ref.borrow().clone());
+
         shell.set_nvim_started_cb(Some(move || {
             Ui::nvim_started(
                 &state_ref.borrow(),
@@ -303,7 +307,7 @@ impl Ui {
         plug_manager
             .borrow_mut()
             .init_nvim_client(shell.nvim_clone());
-        file_browser.borrow_mut().init(shell);
+        file_browser.borrow_mut().init();
         shell.set_autocmds();
         shell.run_now(&update_title);
         shell.run_now(&update_completeopt);
@@ -313,7 +317,11 @@ impl Ui {
 
         // open files as last command
         // because it can generate user query
-        if !files_list.is_empty() {
+        let action_widgets = shell.action_widgets();
+
+        if files_list.is_empty() {
+            action_widgets.borrow().as_ref().unwrap().set_enabled(true);
+        } else {
             let command = files_list
                 .iter()
                 .fold(":ar".to_owned(), |command, filename| {
@@ -323,7 +331,14 @@ impl Ui {
 
             let nvim = shell.nvim().unwrap();
             nvim.clone().spawn(async move {
-                if let Err(e) = nvim.command(&command).await {
+                let res = nvim.command(&command).await;
+
+                glib::idle_add(move || {
+                    action_widgets.borrow().as_ref().unwrap().set_enabled(true);
+                    Continue(false)
+                });
+
+                if let Err(e) = res {
                     if let Ok(e) = NormalError::try_from(&*e) {
                         if e == NormalError::KeyboardInterrupt {
                             nvim.shutdown().await;
@@ -380,7 +395,10 @@ impl Ui {
         }
     }
 
-    fn create_header_bar(&self, app: &gtk::Application) -> SubscriptionHandle {
+    fn create_header_bar(
+        &self,
+        app: &gtk::Application
+    ) -> (SubscriptionHandle, Box<HeaderBarButtons>) {
         let header_bar = HeaderBar::new();
         let comps = self.comps.borrow();
         let window = comps.window.as_ref().unwrap();
@@ -397,9 +415,12 @@ impl Ui {
         new_tab_btn.connect_clicked(move |_| shell_ref.borrow_mut().new_tab());
         new_tab_btn.set_can_focus(false);
         new_tab_btn.set_tooltip_text(Some("Open a new tab"));
+        new_tab_btn.set_sensitive(false);
         header_bar.pack_start(&new_tab_btn);
 
-        header_bar.pack_end(&self.create_primary_menu_btn(app, &window));
+        let primary_menu_btn = self.create_primary_menu_btn(app, &window);
+        primary_menu_btn.set_sensitive(false);
+        header_bar.pack_end(&primary_menu_btn);
 
         let paste_btn =
             Button::new_from_icon_name(Some("edit-paste-symbolic"), gtk::IconSize::SmallToolbar);
@@ -407,12 +428,14 @@ impl Ui {
         paste_btn.connect_clicked(move |_| shell.borrow_mut().edit_paste());
         paste_btn.set_can_focus(false);
         paste_btn.set_tooltip_text(Some("Paste from clipboard"));
+        paste_btn.set_sensitive(false);
         header_bar.pack_end(&paste_btn);
 
         let save_btn = Button::new_with_label("Save All");
         let shell = self.shell.clone();
         save_btn.connect_clicked(move |_| shell.borrow_mut().edit_save_all());
         save_btn.set_can_focus(false);
+        save_btn.set_sensitive(false);
         header_bar.pack_end(&save_btn);
 
         header_bar.set_show_close_button(true);
@@ -429,7 +452,16 @@ impl Ui {
             },
         );
 
-        update_subtitle
+        (
+            update_subtitle,
+            Box::new(HeaderBarButtons::new(
+                comps.open_btn.clone(),
+                new_tab_btn,
+                paste_btn,
+                save_btn,
+                primary_menu_btn,
+            )),
+        )
     }
 
     fn create_primary_menu_btn(

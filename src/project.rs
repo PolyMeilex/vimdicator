@@ -387,7 +387,7 @@ fn on_treeview_allocate(projects: Arc<UiMutex<Projects>>) {
     });
 }
 
-fn list_old_files(nvim: &mut NvimSession) -> Vec<String> {
+fn list_old_files(nvim: &NvimSession) -> Vec<String> {
     let oldfiles_var = nvim.block_timeout(nvim.get_vvar("oldfiles"));
 
     match oldfiles_var {

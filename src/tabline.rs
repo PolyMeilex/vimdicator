@@ -61,6 +61,7 @@ impl Tabline {
         tabs.set_show_border(false);
         tabs.set_border_width(0);
         tabs.set_hexpand(true);
+        tabs.set_sensitive(false);
         tabs.hide();
 
         let state = Rc::new(RefCell::new(State::new()));
@@ -107,7 +108,6 @@ impl Tabline {
         }
 
         self.update_state(nvim, selected, tabs);
-
 
         signal::signal_handler_block(&self.tabs, &self.switch_handler_id);
 

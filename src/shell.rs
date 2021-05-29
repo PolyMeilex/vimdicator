@@ -22,6 +22,7 @@ use gdk;
 use gdk::{EventButton, EventMotion, EventScroll, EventType, ModifierType, WindowExt};
 use glib;
 use gtk;
+use gtk::{Button, MenuButton, Notebook};
 use gtk::prelude::*;
 use pango;
 use pango::FontDescription;
@@ -141,6 +142,68 @@ impl ResizeState {
     }
 }
 
+/// A collection of all header bar buttons used in nvim-gtk
+pub struct HeaderBarButtons {
+    open_btn: Button,
+    new_tab_btn: Button,
+    paste_btn: Button,
+    save_btn: Button,
+    primary_menu_btn: MenuButton,
+}
+
+impl HeaderBarButtons {
+    pub fn new(
+        open_btn: Button,
+        new_tab_btn: Button,
+        paste_btn: Button,
+        save_btn: Button,
+        primary_menu_btn: MenuButton,
+    ) -> Self {
+        Self {
+            open_btn,
+            new_tab_btn,
+            paste_btn,
+            primary_menu_btn,
+            save_btn,
+        }
+    }
+
+    pub fn set_enabled(&self, enabled: bool) {
+        self.new_tab_btn.set_sensitive(enabled);
+        self.paste_btn.set_sensitive(enabled);
+        self.save_btn.set_sensitive(enabled);
+        self.primary_menu_btn.set_sensitive(enabled);
+
+        // Use an idle callback for open_btn, as we might be calling this from one of its own
+        // callbacks which would result in borrowing it mutably twice
+        let open_btn = self.open_btn.clone();
+        gtk::idle_add(move || {
+            open_btn.set_sensitive(enabled);
+            Continue(false)
+        });
+    }
+}
+
+/// A struct containing all of the widgets in neovim-gtk that interact with Neovim in some way using
+/// RPC calls. They are grouped together so that they may be easily enabled/disabled when nvim is
+/// blocked/unblocked.
+pub struct ActionWidgets {
+    header_bar: Option<Box<HeaderBarButtons>>,
+    tabs: Notebook,
+    file_browser: gtk::Box,
+}
+
+impl ActionWidgets {
+    /// Enable or disable all widgets
+    pub fn set_enabled(&self, enabled: bool) {
+        if let Some(ref header_bar) = self.header_bar {
+            header_bar.set_enabled(enabled);
+        }
+        self.tabs.set_sensitive(enabled);
+        self.file_browser.set_sensitive(enabled);
+    }
+}
+
 pub struct State {
     pub grids: GridMap,
 
@@ -172,6 +235,8 @@ pub struct State {
     command_cb: Option<Box<dyn FnMut(&mut State, nvim::NvimCommand) + Send + 'static>>,
 
     subscriptions: RefCell<Subscriptions>,
+
+    action_widgets: Arc<UiMutex<Option<ActionWidgets>>>,
 }
 
 impl State {
@@ -231,6 +296,8 @@ impl State {
             command_cb: None,
 
             subscriptions: RefCell::new(Subscriptions::new()),
+
+            action_widgets: Arc::new(UiMutex::new(None)),
         }
     }
 
@@ -240,6 +307,22 @@ impl State {
 
     pub fn nvim_clone(&self) -> Rc<NeovimClient> {
         self.nvim.clone()
+    }
+
+    pub fn set_action_widgets(
+        &self,
+        header_bar: Option<Box<HeaderBarButtons>>,
+        file_browser: gtk::Box
+    ) {
+        self.action_widgets.replace(Some(ActionWidgets {
+            header_bar,
+            tabs: self.tabs.clone(),
+            file_browser,
+        }));
+    }
+
+    pub fn action_widgets(&self) -> Arc<UiMutex<Option<ActionWidgets>>> {
+        self.action_widgets.clone()
     }
 
     pub fn start_nvim_initialization(&self) -> bool {
@@ -358,8 +441,30 @@ impl State {
 
     pub fn open_file(&self, path: &str) {
         if let Some(nvim) = self.nvim() {
+            let action_widgets = self.action_widgets();
             let path = format!("e {}", path).to_owned();
-            spawn_timeout_user_err!(nvim.command(&path));
+
+            action_widgets.borrow().as_ref().unwrap().set_enabled(false);
+
+            nvim.clone().spawn(async move {
+                let res = nvim.command(&path).await;
+
+                glib::idle_add(move || {
+                    action_widgets.borrow().as_ref().unwrap().set_enabled(true);
+                    Continue(false)
+                });
+
+                if let Err(e) = res {
+                    if let Ok(e) = NormalError::try_from(&*e) {
+                        // Filter out errors we get if the user is presented with a prompt
+                        if !e.has_code(325) {
+                            e.print(&nvim).await;
+                        }
+                        return;
+                    }
+                    e.print();
+                }
+            });
         }
     }
 
@@ -941,9 +1046,22 @@ impl Shell {
                         command + " " + &filename
                     },
                 );
-                let nvim = ref_state.borrow_mut().nvim().unwrap();
+
+                let state = ref_state.borrow_mut();
+                let nvim = state.nvim().unwrap();
+                let action_widgets = state.action_widgets();
+
+                action_widgets.borrow().as_ref().unwrap().set_enabled(false);
+
                 nvim.clone().spawn(async move {
-                    if let Err(e) = nvim.command(&command).await {
+                    let res = nvim.command(&command).await;
+
+                    glib::idle_add(move || {
+                        action_widgets.borrow().as_ref().unwrap().set_enabled(true);
+                        Continue(false)
+                    });
+
+                    if let Err(e) = res {
                         if let Ok(e) = NormalError::try_from(&*e) {
                             // Filter out errors we get if the user is presented with a prompt
                             if !e.has_code(325) {
