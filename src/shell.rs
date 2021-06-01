@@ -86,15 +86,15 @@ impl RenderState {
     }
 }
 
-pub struct TransparencySettigns {
+pub struct TransparencySettings {
     background_alpha: f64,
     filled_alpha: f64,
     enabled: bool,
 }
 
-impl TransparencySettigns {
+impl TransparencySettings {
     pub fn new() -> Self {
-        TransparencySettigns {
+        TransparencySettings {
             background_alpha: 1.0,
             filled_alpha: 1.0,
             enabled: false,
@@ -228,7 +228,7 @@ pub struct State {
     error_area: error::ErrorArea,
 
     options: ShellOptions,
-    transparency_settings: TransparencySettigns,
+    transparency_settings: TransparencySettings,
 
     detach_cb: Option<Box<RefCell<dyn FnMut() + Send + 'static>>>,
     nvim_started_cb: Option<Box<RefCell<dyn FnMut() + Send + 'static>>>,
@@ -289,7 +289,7 @@ impl State {
             error_area: error::ErrorArea::new(),
 
             options,
-            transparency_settings: TransparencySettigns::new(),
+            transparency_settings: TransparencySettings::new(),
 
             detach_cb: None,
             nvim_started_cb: None,
