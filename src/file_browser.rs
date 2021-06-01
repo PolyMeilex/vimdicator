@@ -242,7 +242,7 @@ impl FileBrowserWidget {
         let shell_state_ref = &self.shell_state;
 
         self.tree.connect_row_activated(
-            clone!(store, state_ref, shell_state_ref => move |tree, path, _| {
+            clone!(store, shell_state_ref => move |tree, path, _| {
                 let iter = store.get_iter(path).unwrap();
                 let file_type = store
                     .get_value(&iter, Column::FileType as i32)
@@ -261,18 +261,7 @@ impl FileBrowserWidget {
                     }
                 } else {
                     // FileType::File
-                    let cwd = &state_ref.borrow().current_dir;
-                    let cwd = Path::new(cwd);
-                    let file_path = if let Some(rel_path) = Path::new(&file_path)
-                        .strip_prefix(&cwd)
-                        .ok()
-                        .and_then(|p| p.to_str())
-                        {
-                            rel_path
-                        } else {
-                            &file_path
-                        };
-                    let file_path = escape_filename(file_path).to_string();
+                    let file_path = escape_filename(file_path.as_str()).to_string();
 
                     shell_state_ref.borrow().open_file(&file_path);
                 }
@@ -280,18 +269,24 @@ impl FileBrowserWidget {
         );
 
         // Connect directory list.
-        let nvim_ref = self.shell_state.borrow().nvim_clone();
-        self.comps.dir_list.connect_changed(clone!(nvim_ref, state_ref => move |dir_list| {
-            if let Some(iter) = dir_list.get_active_iter() {
-                let model = dir_list.get_model().unwrap();
-                if let Some(dir) = model.get_value(&iter, 2).get::<String>() {
-                    if dir != state_ref.borrow().current_dir {
-                        let nvim = nvim_ref.nvim().unwrap();
-                        spawn_timeout!(nvim.set_current_dir(&dir));
+        let dir_list_model = &self.comps.dir_list_model;
+        self.comps.dir_list.connect_changed(
+            clone!(state_ref, dir_list_model, store => move |dir_list| {
+                if let Some(iter) = dir_list.get_active_iter() {
+                    let model = dir_list.get_model().unwrap();
+                    if let Some(dir) = model.get_value(&iter, 2).get::<String>() {
+                        let mut state_ref = state_ref.borrow_mut();
+                        let current_dir = &mut state_ref.current_dir;
+
+                        if dir != *current_dir {
+                            *current_dir = dir.to_owned();
+                            update_dir_list(&dir, &dir_list_model, &dir_list);
+                            tree_reload(&store, &*state_ref);
+                        }
                     }
                 }
             }
-        }));
+        ));
 
         let context_menu = &self.comps.context_menu;
         let cd_action = &self.comps.cd_action;
