@@ -239,6 +239,10 @@ impl Highlight {
                         model_attrs.special = Some(Color::from_indexed_color(bg));
                     }
                 }
+                "standout" => {
+                    model_attrs.bold = true;
+                    model_attrs.reverse = true;
+                },
                 "reverse" => model_attrs.reverse = true,
                 "bold" => model_attrs.bold = true,
                 "italic" => model_attrs.italic = true,
