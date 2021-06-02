@@ -864,7 +864,8 @@ impl Shell {
         let state = self.state.borrow();
 
         if let Some(nvim) = state.nvim() {
-            nvim.block_timeout(nvim.ui_detach()).expect("Error in ui_detach");
+            nvim.block_timeout(nvim.ui_detach()).report_err();
+            nvim.block_on(nvim.shutdown());
         }
     }
 

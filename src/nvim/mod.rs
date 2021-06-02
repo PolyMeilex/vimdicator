@@ -7,7 +7,7 @@ mod ext;
 pub use self::redraw_handler::{CompleteItem, NvimCommand};
 pub use self::repaint_mode::RepaintMode;
 pub use self::client::NeovimClient;
-pub use self::ext::ErrorReport;
+pub use self::ext::*;
 pub use self::handler::NvimHandler;
 
 use std::{
@@ -37,7 +37,7 @@ use futures::future::{
 use nvim_rs::{
     self,
     UiAttachOptions,
-    error::{LoopError, CallError},
+    error::{LoopError, CallError, DecodeError},
     compat::tokio::Compat,
 };
 
@@ -250,6 +250,32 @@ impl NvimSession {
         self.spawn(async move {
             nvim.timeout(f).await.report_err()
         })
+    }
+
+    /// Shutdown this neovim session by executing the relevant autocommands, and then closing our
+    /// RPC channel with the Neovim instance.
+    pub async fn shutdown(&self) {
+        self.timeout(self.command("doau VimLeavePre|doau VimLeave")).await.report_err();
+
+        let chan = self
+            .timeout(self.get_api_info())
+            .await
+            .ok_and_report()
+            .and_then(|v| v[0].as_i64())
+            .expect("Couldn't retrieve current channel for closing");
+
+        let res = self.timeout(self.command(&format!("cal chanclose({})", chan))).await;
+        if let Err(ref e) = res {
+            if let SessionError::CallError(ref e) = *e {
+                if let CallError::DecodeError(ref e, _) = **e {
+                    if let DecodeError::ReaderError(_) = **e {
+                        // It's expected that we'll fail to read the response to this
+                        return;
+                    }
+                }
+            }
+            res.report_err();
+        }
     }
 }
 
