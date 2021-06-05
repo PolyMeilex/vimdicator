@@ -67,22 +67,22 @@ fn main() {
              .long("timeout")
              .default_value("10")
              .help("Wait timeout in seconds. If nvim does not response in given time NvimGtk stops")
-            .takes_value(true))
+             .takes_value(true))
         .arg(Arg::with_name("cterm-colors")
              .long("cterm-colors")
              .help("Use ctermfg/ctermbg instead of guifg/guibg"))
-        .arg(Arg::with_name("files").help("Files to open").multiple(true))
-        .arg(
-            Arg::with_name("nvim-bin-path")
-                .long("nvim-bin-path")
-                .help("Path to nvim binary")
-                .takes_value(true),
-        ).arg(
-            Arg::with_name("nvim-args")
-                .help("Args will be passed to nvim")
-                .last(true)
-                .multiple(true),
-        ).get_matches();
+        .arg(Arg::with_name("files")
+             .help("Files to open")
+             .multiple(true))
+        .arg(Arg::with_name("nvim-bin-path")
+             .long("nvim-bin-path")
+             .help("Path to nvim binary")
+             .takes_value(true))
+        .arg(Arg::with_name("nvim-args")
+             .help("Args will be passed to nvim")
+             .last(true)
+             .multiple(true))
+        .get_matches();
 
     let input_data = RefCell::new(read_piped_input());
 
