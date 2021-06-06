@@ -79,6 +79,12 @@ pub fn about_comments() -> String {
     )
 }
 
+/// Escape a VimL expression so that it may included in quotes
+pub fn viml_escape(viml: &str) -> String {
+    viml.replace('\\', r"\\")
+        .replace('"', r#"\""#)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -94,5 +100,10 @@ mod tests {
         assert_eq!(2, res.len());
         assert_eq!("a", res[0]);
         assert_eq!("b,c", res[1]);
+    }
+
+    #[test]
+    fn test_viml_escape() {
+        assert_eq!(r#"a\"b\\"#, viml_escape(r#"a"b\"#));
     }
 }

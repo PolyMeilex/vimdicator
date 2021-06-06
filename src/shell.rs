@@ -227,7 +227,7 @@ pub struct State {
     im_context: gtk::IMMulticontext,
     error_area: error::ErrorArea,
 
-    options: ShellOptions,
+    pub options: RefCell<ShellOptions>,
     transparency_settings: TransparencySettings,
 
     detach_cb: Option<Box<RefCell<dyn FnMut() + Send + 'static>>>,
@@ -288,7 +288,7 @@ impl State {
             im_context: gtk::IMMulticontext::new(),
             error_area: error::ErrorArea::new(),
 
-            options,
+            options: RefCell::new(options),
             transparency_settings: TransparencySettings::new(),
 
             detach_cb: None,
@@ -821,6 +821,7 @@ pub struct ShellOptions {
     args_for_neovim: Vec<String>,
     input_data: Option<String>,
     cterm_colors: bool,
+    post_config_cmds: Option<Box<[String]>>,
 }
 
 impl ShellOptions {
@@ -836,17 +837,24 @@ impl ShellOptions {
                 .values_of("nvim-args")
                 .map(|args| args.map(str::to_owned).collect())
                 .unwrap_or_else(|| vec![]),
+            post_config_cmds: matches
+                .values_of("post-config-cmds")
+                .map(|args| args.map(str::to_owned).collect())
         }
     }
 
-    // remove input data from original
-    // shell option, as it need to be used only once
-    pub fn take(&mut self) -> Self {
+    /// Remove input data from original shell option, as it need to be used only once
+    pub fn input_data(&mut self) -> Self {
         let input_data = self.input_data.take();
         let mut clone = self.clone();
         clone.input_data = input_data;
 
         clone
+    }
+
+    /// Steal the post config commands, since they're only needed once
+    pub fn post_config_cmds(&mut self) -> Option<Box<[String]>> {
+        self.post_config_cmds.take()
     }
 }
 
@@ -1537,7 +1545,7 @@ fn draw_initializing(state: &State, ctx: &cairo::Context) {
 }
 
 fn init_nvim(state_ref: &Arc<UiMutex<State>>) {
-    let mut state = state_ref.borrow_mut();
+    let state = state_ref.borrow_mut();
     if state.start_nvim_initialization() {
         let (cols, rows) = state.calc_nvim_size();
 
@@ -1546,7 +1554,7 @@ fn init_nvim(state_ref: &Arc<UiMutex<State>>) {
         let state_arc = state_ref.clone();
         let resize_state = state.resize_status();
         let nvim_handler = NvimHandler::new(state_ref.clone(), state.resize_status());
-        let options = state.options.take();
+        let options = state.options.borrow_mut().input_data();
         thread::spawn(move || init_nvim_async(
             state_arc, resize_state, nvim_handler, options, cols, rows
         ));

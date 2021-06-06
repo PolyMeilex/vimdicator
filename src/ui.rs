@@ -270,6 +270,11 @@ impl Ui {
         let file_browser_ref = self.file_browser.clone();
         let plug_manager_ref = self.plug_manager.clone();
         let files_list = self.open_paths.clone();
+        let post_config_cmds = state_ref
+            .borrow()
+            .options
+            .borrow_mut()
+            .post_config_cmds();
 
         state_ref.borrow().set_action_widgets(header_bar, file_browser_ref.borrow().clone());
 
@@ -282,6 +287,7 @@ impl Ui {
                 &update_title,
                 &update_subtitle,
                 &update_completeopt,
+                &post_config_cmds
             );
         }));
 
@@ -303,6 +309,7 @@ impl Ui {
         update_title: &SubscriptionHandle,
         update_subtitle: &Option<SubscriptionHandle>,
         update_completeopt: &SubscriptionHandle,
+        post_config_cmds: &Option<Box<[String]>>,
     ) {
         plug_manager
             .borrow_mut()
@@ -315,42 +322,58 @@ impl Ui {
             shell.run_now(&update_subtitle);
         }
 
+        let mut commands = Vec::<String>::new();
+        let post_config_cmds = post_config_cmds.as_ref().map(|c| c.as_ref()).unwrap_or(&[]);
+
+        if !files_list.is_empty() {
+            commands.reserve(1 + post_config_cmds.len());
+            commands.push(format!(
+                r"try|ar {}|cat /^Vim(\a\+):E325:/|endt|difft",
+                files_list
+                .iter()
+                .map(|f| misc::escape_filename(f))
+                .collect::<Box<_>>()
+                .join(" ")
+            ));
+        }
+
+        commands.extend(
+            post_config_cmds.iter().map(|cmd| format!(r#"exec "{}""#, misc::viml_escape(cmd)))
+        );
+        debug!("{:?}", commands);
+
         // open files as last command
         // because it can generate user query
         let action_widgets = shell.action_widgets();
-
-        if files_list.is_empty() {
+        if commands.is_empty() {
             action_widgets.borrow().as_ref().unwrap().set_enabled(true);
-        } else {
-            let command = files_list
-                .iter()
-                .fold(":ar".to_owned(), |command, filename| {
-                    let filename = misc::escape_filename(filename);
-                    command + " " + &filename
-                });
+            return;
+        }
 
-            let nvim = shell.nvim().unwrap();
-            nvim.clone().spawn(async move {
-                let res = nvim.command(&command).await;
+        let commands = commands.join("|");
+        let nvim = shell.nvim().unwrap();
+        nvim.clone().spawn(async move {
+            let res = nvim.command(&commands).await;
 
-                glib::idle_add(move || {
-                    action_widgets.borrow().as_ref().unwrap().set_enabled(true);
-                    Continue(false)
-                });
+            glib::idle_add(move || {
+                action_widgets.borrow().as_ref().unwrap().set_enabled(true);
+                Continue(false)
+            });
 
-                if let Err(e) = res {
-                    if let Ok(e) = NormalError::try_from(&*e) {
-                        if e == NormalError::KeyboardInterrupt {
-                            nvim.shutdown().await;
-                        } else if !e.has_code(325) {
-                            e.print(&nvim).await;
-                        }
+            if let Err(e) = res {
+                if let Ok(e) = NormalError::try_from(&*e) {
+                    if e == NormalError::KeyboardInterrupt {
+                        nvim.shutdown().await;
                         return;
+                    } else if !e.has_code(325) {
+                        // Filter out errors we get if the user is presented with a prompt
+                        e.print(&nvim).await;
                     }
+                } else {
                     e.print();
                 }
-            });
-        }
+            }
+        });
     }
 
     fn nvim_command(
