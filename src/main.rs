@@ -71,6 +71,9 @@ fn main() {
         .arg(Arg::with_name("cterm-colors")
              .long("cterm-colors")
              .help("Use ctermfg/ctermbg instead of guifg/guibg"))
+        .arg(Arg::with_name("diff-mode")
+             .help("Open two or more files in diff mode")
+             .short("d"))
         .arg(Arg::with_name("files")
              .help("Files to open")
              .multiple(true))
@@ -92,6 +95,20 @@ fn main() {
         .get_matches();
 
     let input_data = RefCell::new(read_piped_input());
+
+    // Additional argument parsing
+    if matches.is_present("diff-mode") {
+        if let Some(files) = matches.values_of("files") {
+            if files.len() < 2 {
+                clap::Error::with_description("Diff mode (-d) requires 2 or more files",
+                                              clap::ErrorKind::TooFewValues).exit();
+            }
+        } else {
+            clap::Error::with_description("Diff mode (-d) specified but no files provided. 2 or \
+                                           more files must be provided",
+                                          clap::ErrorKind::MissingRequiredArgument).exit();
+        }
+    }
 
     #[cfg(unix)]
     {

@@ -21,7 +21,7 @@ use crate::nvim::*;
 use crate::plug_manager;
 use crate::project::Projects;
 use crate::settings::{Settings, SettingsLoader};
-use crate::shell::{self, Shell, ShellOptions, HeaderBarButtons};
+use crate::shell::{self, Shell, ShellOptions, HeaderBarButtons, StartMode};
 use crate::shell_dlg;
 use crate::subscriptions::{SubscriptionHandle, SubscriptionKey};
 
@@ -270,11 +270,13 @@ impl Ui {
         let file_browser_ref = self.file_browser.clone();
         let plug_manager_ref = self.plug_manager.clone();
         let files_list = self.open_paths.clone();
-        let post_config_cmds = state_ref
-            .borrow()
-            .options
-            .borrow_mut()
-            .post_config_cmds();
+
+        let (post_config_cmds, mode) = {
+            let state_ref = state_ref.borrow();
+            let mut options = state_ref.options.borrow_mut();
+
+            (options.post_config_cmds(), options.mode)
+        };
 
         state_ref.borrow().set_action_widgets(header_bar, file_browser_ref.borrow().clone());
 
@@ -287,7 +289,8 @@ impl Ui {
                 &update_title,
                 &update_subtitle,
                 &update_completeopt,
-                &post_config_cmds
+                &post_config_cmds,
+                mode,
             );
         }));
 
@@ -310,6 +313,7 @@ impl Ui {
         update_subtitle: &Option<SubscriptionHandle>,
         update_completeopt: &SubscriptionHandle,
         post_config_cmds: &Option<Box<[String]>>,
+        mode: StartMode,
     ) {
         plug_manager
             .borrow_mut()
@@ -326,15 +330,29 @@ impl Ui {
         let post_config_cmds = post_config_cmds.as_ref().map(|c| c.as_ref()).unwrap_or(&[]);
 
         if !files_list.is_empty() {
-            commands.reserve(1 + post_config_cmds.len());
-            commands.push(format!(
-                r"try|ar {}|cat /^Vim(\a\+):E325:/|endt|difft",
-                files_list
-                .iter()
-                .map(|f| misc::escape_filename(f))
-                .collect::<Box<_>>()
-                .join(" ")
-            ));
+            if mode == StartMode::Normal {
+                commands.reserve(1 + post_config_cmds.len());
+                commands.push(format!(
+                    r"try|ar {}|cat /^Vim(\a\+):E325:/|endt|difft",
+                    files_list
+                    .iter()
+                    .map(|f| misc::escape_filename(f))
+                    .collect::<Box<_>>()
+                    .join(" ")
+                ));
+            } else {
+                commands.reserve(files_list.len() + post_config_cmds.len());
+                commands.push(format!(
+                    r"try|e {}|cat /^Vim(\a\+):E325:/|endt|difft",
+                    misc::escape_filename(&files_list[0])
+                ));
+                for file in &files_list[1..] {
+                    commands.push(format!(
+                        r"try|vs {}|cat /^Vim(\a\+):E325:/|endt|difft",
+                        misc::escape_filename(file)
+                    ));
+                }
+            }
         }
 
         commands.extend(

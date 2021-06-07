@@ -814,6 +814,14 @@ impl UiState {
     }
 }
 
+/// The mode to start the neovim instance in, this is the equivalent of nvim's TUI client's -b, -d,
+/// -e, etc. options
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum StartMode {
+    Normal,
+    Diff
+}
+
 #[derive(Clone)]
 pub struct ShellOptions {
     nvim_bin_path: Option<String>,
@@ -821,6 +829,7 @@ pub struct ShellOptions {
     args_for_neovim: Vec<String>,
     input_data: Option<String>,
     cterm_colors: bool,
+    pub mode: StartMode,
     post_config_cmds: Option<Box<[String]>>,
 }
 
@@ -829,6 +838,12 @@ impl ShellOptions {
         ShellOptions {
             input_data,
             cterm_colors: matches.is_present("cterm-colors"),
+            mode:
+                if matches.is_present("diff-mode") {
+                    StartMode::Diff
+                } else {
+                    StartMode::Normal
+                },
             nvim_bin_path: matches.value_of("nvim-bin-path").map(str::to_owned),
             timeout: value_t!(matches.value_of("timeout"), u64)
                 .map(Duration::from_secs)
