@@ -7,13 +7,14 @@ use crate::nvim::{NvimSession, ErrorReport};
 
 include!(concat!(env!("OUT_DIR"), "/key_map_table.rs"));
 
-
 pub fn keyval_to_input_string(in_str: &str, in_state: gdk::ModifierType) -> String {
     let mut val = in_str;
     let mut state = in_state;
-    let mut input = String::new();
+    let empty = in_str.is_empty();
 
-    debug!("keyval -> {}", in_str);
+    if !empty {
+        debug!("keyval -> {}", in_str);
+    }
 
     // CTRL-^ and CTRL-@ don't work in the normal way.
     if state.contains(gdk::ModifierType::CONTROL_MASK) && !state.contains(gdk::ModifierType::SHIFT_MASK) &&
@@ -41,19 +42,21 @@ pub fn keyval_to_input_string(in_str: &str, in_state: gdk::ModifierType) -> Stri
         val = "lt";
     }
 
+    let mut mod_chars = Vec::<&str>::with_capacity(3);
     if state.contains(gdk::ModifierType::SHIFT_MASK) {
-        input.push_str("S-");
+        mod_chars.push("S");
     }
     if state.contains(gdk::ModifierType::CONTROL_MASK) {
-        input.push_str("C-");
+        mod_chars.push("C");
     }
     if state.contains(gdk::ModifierType::MOD1_MASK) {
-        input.push_str("A-");
+        mod_chars.push("A");
     }
 
-    input.push_str(val);
+    let sep = if empty { "" } else { "-" };
+    let input = [mod_chars.as_slice(), &[val]].concat().join(sep);
 
-    if input.chars().count() > 1 {
+    if !empty && input.chars().count() > 1 {
         format!("<{}>", input)
     } else {
         input
@@ -102,5 +105,39 @@ pub fn gtk_key_press(nvim: &NvimSession, ev: &EventKey)
         Inhibit(true)
     } else {
         Inhibit(false)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_keyval_to_input_string() {
+        macro_rules! test {
+            ( $( $in_str:literal $( , $( $mod:ident )|* )? == $out_str:literal );*; ) => {
+                let mut modifier;
+                $(
+                    modifier = gdk::ModifierType::empty() $( | $( gdk::ModifierType::$mod )|* )?;
+                    assert_eq!(keyval_to_input_string($in_str, modifier), $out_str)
+                );*
+            }
+        }
+
+        test! {
+            "a" == "a";
+            "" == "";
+            "6" == "6";
+            "2" == "2";
+            "<" == "<lt>";
+            "", SHIFT_MASK == "S";
+            "", SHIFT_MASK | CONTROL_MASK | MOD1_MASK == "SCA";
+            "a", SHIFT_MASK == "<S-a>";
+            "a", SHIFT_MASK | CONTROL_MASK | MOD1_MASK == "<S-C-A-a>";
+            "6", CONTROL_MASK == "<C-^>";
+            "6", CONTROL_MASK | MOD1_MASK == "<C-A-6>";
+            "2", CONTROL_MASK == "<C-@>";
+            "2", CONTROL_MASK | MOD1_MASK == "<C-A-2>";
+        }
     }
 }

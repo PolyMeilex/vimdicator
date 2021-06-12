@@ -1252,16 +1252,16 @@ fn gtk_scroll_event(state: &mut State, ui_state: &mut UiState, ev: &EventScroll)
 
     match ev.get_direction() {
         gdk::ScrollDirection::Right => {
-            mouse_input(state, "ScrollWheelRight", ev.get_state(), ev.get_position())
+            mouse_input(state, "wheel", "right", ev.get_state(), ev.get_position())
         }
         gdk::ScrollDirection::Left => {
-            mouse_input(state, "ScrollWheelLeft", ev.get_state(), ev.get_position())
+            mouse_input(state, "wheel", "left", ev.get_state(), ev.get_position())
         }
         gdk::ScrollDirection::Up => {
-            mouse_input(state, "ScrollWheelUp", ev.get_state(), ev.get_position())
+            mouse_input(state, "wheel", "up", ev.get_state(), ev.get_position())
         }
         gdk::ScrollDirection::Down => {
-            mouse_input(state, "ScrollWheelDown", ev.get_state(), ev.get_position())
+            mouse_input(state, "wheel", "down", ev.get_state(), ev.get_position())
         }
         gdk::ScrollDirection::Smooth => {
             // Remember and accumulate scroll deltas, so slow scrolling still
@@ -1272,16 +1272,16 @@ fn gtk_scroll_event(state: &mut State, ui_state: &mut UiState, ev: &EventScroll)
             let x = ui_state.scroll_delta.0 as isize;
             let y = ui_state.scroll_delta.1 as isize;
             for _ in 0..x {
-                mouse_input(state, "ScrollWheelRight", ev.get_state(), ev.get_position())
+                mouse_input(state, "wheel", "right", ev.get_state(), ev.get_position())
             }
             for _ in 0..-x {
-                mouse_input(state, "ScrollWheelLeft", ev.get_state(), ev.get_position())
+                mouse_input(state, "wheel", "left", ev.get_state(), ev.get_position())
             }
             for _ in 0..y {
-                mouse_input(state, "ScrollWheelDown", ev.get_state(), ev.get_position())
+                mouse_input(state, "wheel", "down", ev.get_state(), ev.get_position())
             }
             for _ in 0..-y {
-                mouse_input(state, "ScrollWheelUp", ev.get_state(), ev.get_position())
+                mouse_input(state, "wheel", "up", ev.get_state(), ev.get_position())
             }
             // Subtract performed scroll deltas.
             ui_state.scroll_delta.0 -= x as f64;
@@ -1306,8 +1306,8 @@ fn gtk_button_press(
         ui_state.borrow_mut().mouse_pressed = true;
 
         match ev.get_button() {
-            1 => mouse_input(shell, "LeftMouse", ev.get_state(), ev.get_position()),
-            2 => mouse_input(shell, "MiddleMouse", ev.get_state(), ev.get_position()),
+            1 => mouse_input(shell, "left", "press", ev.get_state(), ev.get_position()),
+            2 => mouse_input(shell, "middle", "press", ev.get_state(), ev.get_position()),
             3 => menu.popup_at_pointer(None),
 
             _ => (),
@@ -1316,14 +1316,20 @@ fn gtk_button_press(
     Inhibit(false)
 }
 
-fn mouse_input(shell: &mut State, input: &str, state: ModifierType, position: (f64, f64)) {
+fn mouse_input(
+    shell: &mut State,
+    button: &str,
+    action: &str,
+    state: ModifierType,
+    position: (f64, f64)
+) {
     if let Some(nvim) = shell.nvim() {
         let (col, row) = mouse_coordinates_to_nvim(shell, position);
-        let input_str = format!("{}<{},{}>", keyval_to_input_string(input, state), col, row);
 
-        nvim.block_timeout(nvim.input(&input_str))
-            .ok_and_report()
-            .expect("Can't send mouse input event");
+        nvim.block_timeout(
+            nvim.input_mouse(button, action, &keyval_to_input_string("", state), 0,
+                             row as i64, col as i64)
+        ).ok_and_report().expect("Can't send mouse input event");
     }
 }
 
@@ -1347,9 +1353,9 @@ fn gtk_button_release(shell: &mut State, ui_state: &mut UiState, ev: &EventButto
 
     if shell.mouse_enabled && !shell.nvim.is_initializing() {
         match ev.get_button() {
-            1 => mouse_input(shell, "LeftRelease", ev.get_state(), ev.get_position()),
-            2 => mouse_input(shell, "MiddleRelease", ev.get_state(), ev.get_position()),
-            3 => mouse_input(shell, "RightRelease", ev.get_state(), ev.get_position()),
+            1 => mouse_input(shell, "left", "release", ev.get_state(), ev.get_position()),
+            2 => mouse_input(shell, "middle", "release", ev.get_state(), ev.get_position()),
+            3 => mouse_input(shell, "right", "release", ev.get_state(), ev.get_position()),
             _ => (),
         }
     }
@@ -1365,7 +1371,7 @@ fn gtk_motion_notify(shell: &mut State, ui_state: &mut UiState, ev: &EventMotion
         // if we fire LeftDrag on the same coordinates multiple times, then
         // we get: https://github.com/daa84/neovim-gtk/issues/185
         if pos != ui_state.prev_pos {
-            mouse_input(shell, "LeftDrag", ev.get_state(), ev_pos);
+            mouse_input(shell, "left", "drag", ev.get_state(), ev_pos);
             ui_state.prev_pos = pos;
         }
     }
