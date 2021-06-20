@@ -7,7 +7,7 @@ extern crate winres;
 use std::env;
 use std::fs::File;
 use std::io::{BufWriter, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 fn main() {
     build_version::write_version_file().expect("Failed to write version.rs file");
@@ -56,6 +56,17 @@ fn main() {
             .build()
     )
     .unwrap();
+
+    println!(
+        "cargo:rustc-env=RUNTIME_PATH={}",
+        if let Some(prefix) = option_env!("PREFIX") {
+            PathBuf::from(prefix).join("share/nvim-gtk/runtime")
+        } else {
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("runtime")
+        }
+        .to_str()
+        .unwrap()
+    );
 }
 
 #[cfg(windows)]

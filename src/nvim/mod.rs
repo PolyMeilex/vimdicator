@@ -319,22 +319,15 @@ pub fn start<'a>(
         .arg("set termguicolors")
         .arg("--cmd")
         .arg("let g:GtkGuiLoaded = 1")
+        .arg("--cmd")
+        .arg(&format!("let &rtp.=',{}'",
+                      env::var("NVIM_GTK_RUNTIME_PATH").unwrap_or(env!("RUNTIME_PATH").into())))
         .stderr(Stdio::inherit())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped());
 
     #[cfg(target_os = "windows")]
     set_windows_creation_flags(&mut cmd);
-
-    if let Ok(runtime_path) = env::var("NVIM_GTK_RUNTIME_PATH") {
-        cmd.arg("--cmd")
-            .arg(format!("let &rtp.=',{}'", runtime_path));
-    } else if let Some(prefix) = option_env!("PREFIX") {
-        cmd.arg("--cmd")
-            .arg(format!("let &rtp.=',{}/share/nvim-gtk/runtime'", prefix));
-    } else {
-        cmd.arg("--cmd").arg("let &rtp.=',runtime'");
-    }
 
     if let Some(nvim_config) = NvimConfig::config_path() {
         if let Some(path) = nvim_config.to_str() {
