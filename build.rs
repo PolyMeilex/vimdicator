@@ -4,12 +4,15 @@ extern crate phf_codegen;
 #[cfg(windows)]
 extern crate winres;
 
+use std::process::Command;
 use std::env;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 
 fn main() {
+    let out_dir = &env::var("OUT_DIR").unwrap();
+
     build_version::write_version_file().expect("Failed to write version.rs file");
 
     if cfg!(target_os = "windows") {
@@ -18,7 +21,7 @@ fn main() {
         set_win_icon();
     }
 
-    let path = Path::new(&env::var("OUT_DIR").unwrap()).join("key_map_table.rs");
+    let path = Path::new(out_dir).join("key_map_table.rs");
     let mut file = BufWriter::new(File::create(&path).unwrap());
 
     writeln!(
@@ -67,6 +70,10 @@ fn main() {
         .to_str()
         .unwrap()
     );
+
+    if let Ok(output) = Command::new("git").args(&["rev-parse", "HEAD"]).output() {
+        println!("cargo:rustc-env=GIT_COMMIT={}", String::from_utf8(output.stdout).unwrap());
+    }
 }
 
 #[cfg(windows)]

@@ -38,7 +38,7 @@ use futures::future::{
 
 use nvim_rs::{
     self,
-    UiAttachOptions,
+    UiAttachOptions, Value,
     error::{LoopError, CallError, DecodeError},
     compat::tokio::Compat,
 };
@@ -391,6 +391,25 @@ pub async fn post_start_init(
     resize_state: &ResizeState,
     input_data: Option<String>,
 ) -> Result<(), NvimInitError> {
+    let mut version_info: Vec<(Value, Value)> = vec![
+        ("major".into(), env!("CARGO_PKG_VERSION_MAJOR").into()),
+        ("minor".into(), env!("CARGO_PKG_VERSION_MINOR").into()),
+        ("patch".into(), env!("CARGO_PKG_VERSION_PATCH").into()),
+    ];
+    if let Some(git_commit) = option_env!("GIT_COMMIT") {
+        version_info.push(("commit".into(), git_commit.into()));
+    }
+
+    nvim.timeout(nvim.set_client_info(
+        env!("CARGO_PKG_NAME"),
+        version_info,
+        "ui",
+        vec![],
+        vec![
+            ("license".into(), env!("CARGO_PKG_LICENSE").into()),
+        ]))
+        .await.map_err(NvimInitError::new_post_init)?;
+
     {
         let mut requests = resize_state.requests.lock().await;
 
