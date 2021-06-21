@@ -284,7 +284,7 @@ impl CmdLine {
         drawing_area.connect_draw(clone!(state => move |_, ctx| gtk_draw(ctx, &state)));
 
         let (wild_scroll, wild_tree, wild_css_provider, wild_renderer, wild_column) =
-            CmdLine::create_widlmenu(&state);
+            CmdLine::create_wildmenu(&state);
         content.pack_start(&wild_scroll, false, true, 0);
         popover.add(&content);
 
@@ -303,7 +303,7 @@ impl CmdLine {
         }
     }
 
-    fn create_widlmenu(
+    fn create_wildmenu(
         state: &Arc<UiMutex<State>>,
     ) -> (
         gtk::ScrolledWindow,
