@@ -760,7 +760,7 @@ impl State {
 
                 debug!("Triggering {} autocmd", autocmd);
                 nvim.command(&format!(
-                    "if exists('#{a}') | doau {a} | endif", a = autocmd
+                    "if exists('#{a}')|doau {a}|endif", a = autocmd
                 )).await.report_err();
             }
         });
