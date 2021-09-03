@@ -184,30 +184,43 @@ fn call_redraw_handler(
     let mut repaint_mode = RepaintMode::Nothing;
 
     for ev in params {
-        if let Value::Array(ev_args) = ev {
-            let mut args_iter = ev_args.into_iter();
-            let ev_name = args_iter.next();
-            if let Some(ev_name) = ev_name {
-                if let Some(ev_name) = ev_name.as_str() {
-                    for local_args in args_iter {
-                        let args = match local_args {
-                            Value::Array(ar) => ar,
-                            _ => vec![],
-                        };
-                        let call_repaint_mode = match redraw_handler::call(ui, &ev_name, args) {
-                            Ok(mode) => mode,
-                            Err(desc) => return Err(format!("Event {}\n{}", ev_name, desc)),
-                        };
-                        repaint_mode = repaint_mode.join(call_repaint_mode);
-                    }
-                } else {
-                    error!("Unsupported event");
-                }
-            } else {
-                error!("Event name does not exists");
+        let ev_args = match ev {
+            Value::Array(args) => args,
+            _ => {
+                error!("Unsupported event type: {:?}", ev);
+                continue;
             }
-        } else {
-            error!("Unsupported event type {:?}", ev);
+        };
+        let mut args_iter = ev_args.into_iter();
+        let ev_name = match args_iter.next() {
+            Some(ev_name) => ev_name,
+            None => {
+                error!("No name provided with redraw event, args: {:?}", args_iter.as_slice());
+                continue;
+            },
+        };
+        let ev_name = match ev_name.as_str() {
+            Some(ev_name) => ev_name,
+            None => {
+                error!(
+                    "Expected event name to be str, instead got {:?}. Args: {:?}",
+                    ev_name, args_iter.as_slice()
+                );
+                continue;
+            },
+        };
+
+        for local_args in args_iter {
+            let args = match local_args {
+                Value::Array(ar) => ar,
+                _ => vec![],
+            };
+
+            let call_repaint_mode = match redraw_handler::call(ui, ev_name, args) {
+                Ok(mode) => mode,
+                Err(desc) => return Err(format!("Event {}\n{}", ev_name, desc)),
+            };
+            repaint_mode = repaint_mode.join(call_repaint_mode);
         }
     }
 
