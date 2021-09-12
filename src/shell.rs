@@ -1442,7 +1442,6 @@ fn show_nvim_init_error(err: &nvim::NvimInitError, state_arc: Arc<UiMutex<State>
 
 fn init_nvim_async(
     state_arc: Arc<UiMutex<State>>,
-    resize_state: Arc<ResizeState>,
     nvim_handler: NvimHandler,
     options: ShellOptions,
     cols: NonZeroI64,
@@ -1486,12 +1485,9 @@ fn init_nvim_async(
     // attach ui
     let input_data = options.input_data;
     session.clone().spawn(async move {
-        if let Err(ref err) = nvim::post_start_init(
-            session, cols, rows, &*resize_state, input_data
-        ).await {
-            show_nvim_init_error(err, state_arc);
-        } else {
-            set_nvim_initialized(state_arc);
+        match nvim::post_start_init(session, cols, rows, input_data).await {
+            Ok(_) => set_nvim_initialized(state_arc),
+            Err(ref e) => show_nvim_init_error(e, state_arc),
         }
     });
 }
@@ -1573,11 +1569,10 @@ fn init_nvim(state_ref: &Arc<UiMutex<State>>) {
         debug!("Init nvim {}/{}", cols, rows);
 
         let state_arc = state_ref.clone();
-        let resize_state = state.resize_status();
         let nvim_handler = NvimHandler::new(state_ref.clone(), state.resize_status());
         let options = state.options.borrow_mut().input_data();
         thread::spawn(move || init_nvim_async(
-            state_arc, resize_state, nvim_handler, options, cols, rows
+            state_arc, nvim_handler, options, cols, rows
         ));
     }
 }
@@ -1615,6 +1610,18 @@ impl State {
 
     pub fn grid_resize(&mut self, grid: u64, columns: u64, rows: u64) -> RepaintMode {
         debug!("on_resize {}/{}", columns, rows);
+
+        let nvim = self.nvim().unwrap();
+        nvim.block_on(async {
+            let mut resize_state = self.resize_status.requests.lock().await;
+
+            if resize_state.current.is_none() {
+                resize_state.current = Some((
+                    NonZeroI64::new(columns as i64).unwrap(),
+                    NonZeroI64::new(rows as i64).unwrap(),
+                ));
+            }
+        });
 
         self.grids.get_or_create(grid).resize(columns, rows);
         RepaintMode::Nothing
