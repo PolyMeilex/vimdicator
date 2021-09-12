@@ -261,7 +261,7 @@ pub struct CmdLine {
     wild_css_provider: gtk::CssProvider,
     wild_renderer: gtk::CellRendererText,
     wild_column: gtk::TreeViewColumn,
-    displyed: bool,
+    displayed: bool,
     state: Arc<UiMutex<State>>,
 }
 
@@ -294,7 +294,7 @@ impl CmdLine {
         CmdLine {
             popover,
             state,
-            displyed: false,
+            displayed: false,
             wild_scroll,
             wild_tree,
             wild_css_provider,
@@ -371,8 +371,8 @@ impl CmdLine {
 
         state.request_area_size();
 
-        if !self.displyed {
-            self.displyed = true;
+        if !self.displayed {
+            self.displayed = true;
             self.popover.set_pointing_to(&gtk::Rectangle {
                 x: ctx.x,
                 y: ctx.y,
@@ -416,7 +416,7 @@ impl CmdLine {
 
         if state.levels.is_empty() {
             self.popover.hide();
-            self.displyed = false;
+            self.displayed = false;
             state.cursor.as_mut().unwrap().leave_focus();
         }
     }
