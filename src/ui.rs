@@ -333,7 +333,7 @@ impl Ui {
             if mode == StartMode::Normal {
                 commands.reserve(1 + post_config_cmds.len());
                 commands.push(format!(
-                    r"try|ar {}|cat /^Vim(\a\+):E325:/|endt|difft",
+                    r"try|ar {}|cat /^Vim(\a\+):E325:/|endt",
                     files_list
                     .iter()
                     .map(|f| misc::escape_filename(f))
