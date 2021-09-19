@@ -23,7 +23,7 @@ futures = { version = "0.3", features = ["io-compat", "thread-pool"] }
 tokio = { version = "1", features = ["full"] }
 tokio-util = { version = "0.6", features = ["full"] }
 nvim-rs = { version = "0.3", features = ["use_tokio"] }
-phf = "0.8"
+phf = "0.10"
 log = "0.4"
 env_logger = "0.7"
 htmlescape = "0.3"
@@ -41,9 +41,9 @@ toml = "0.5"
 serde_json = "1"
 
 atty = "0.2"
-dirs = "2"
+dirs = "4"
 
-whoami = "0.6"
+whoami = "1"
 
 [target.'cfg(unix)'.dependencies]
 unix-daemonize = "0.1"
@@ -52,7 +52,7 @@ unix-daemonize = "0.1"
 winres = "0.1"
 
 [build-dependencies]
-phf_codegen = "0.8"
+phf_codegen = "0.10"
 build-version = "0.1.1"
 
 [dependencies.pango]
