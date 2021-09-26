@@ -930,7 +930,7 @@ impl Shell {
                 | gdk::EventMask::POINTER_MOTION_MASK,
         );
 
-        let menu = self.create_context_menu();
+        let menu = self.create_context_menu(&state);
         let ref_state = self.state.clone();
         let ref_ui_state = self.ui_state.clone();
         state.drawing_area.connect_button_press_event(move |_, ev| {
@@ -1114,21 +1114,28 @@ impl Shell {
         });
     }
 
-    fn create_context_menu(&self) -> gtk::Menu {
-        let menu = gtk::Menu::new();
-        let copy = gtk::MenuItem::new_with_label("Copy");
-        let ref_state = self.state.clone();
-        copy.connect_activate(move |_| ref_state.borrow().edit_copy("+"));
-        copy.show_all();
+    fn create_context_menu(&self, state: &State) -> gtk::PopoverMenu {
+        let state_ref = &self.state;
 
-        let paste = gtk::MenuItem::new_with_label("Paste");
-        let ref_state = self.state.clone();
-        paste.connect_activate(move |_| ref_state.borrow().edit_paste("+"));
-        paste.show_all();
+        let menu = gtk::PopoverMenu::new();
+        let menu_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
 
-        menu.append(&copy);
-        menu.append(&paste);
+        let copy = gtk::ModelButton::new();
+        copy.set_label("Copy");
+        copy.connect_clicked(clone!(state_ref => move |_| state_ref.borrow().edit_copy("+")));
+        menu_box.pack_start(&copy, false, true, 0);
 
+        let paste = gtk::ModelButton::new();
+        paste.set_label("Paste");
+        paste.connect_clicked(clone!(state_ref => move |_| state_ref.borrow().edit_paste("+")));
+        menu_box.pack_start(&paste, false, true, 0);
+
+        menu_box.set_border_width(10);
+        menu_box.show_all();
+
+        menu.add(&menu_box);
+        menu.set_relative_to(Some(&state.drawing_area));
+        menu.set_position(gtk::PositionType::Bottom);
         menu
     }
 
@@ -1296,7 +1303,7 @@ fn gtk_button_press(
     shell: &mut State,
     ui_state: &Rc<RefCell<UiState>>,
     ev: &EventButton,
-    menu: &gtk::Menu,
+    menu: &gtk::PopoverMenu,
 ) -> Inhibit {
     if ev.get_event_type() != EventType::ButtonPress {
         return Inhibit(false);
@@ -1308,8 +1315,22 @@ fn gtk_button_press(
         match ev.get_button() {
             1 => mouse_input(shell, "left", "press", ev.get_state(), ev.get_position()),
             2 => mouse_input(shell, "middle", "press", ev.get_state(), ev.get_position()),
-            3 => menu.popup_at_pointer(None),
+            3 => {
+                let (x, y) = ev.get_position();
+                menu.set_pointing_to(&gtk::Rectangle {
+                    x: x.round() as i32,
+                    y: y.round() as i32,
+                    width: 0,
+                    height: 0,
+                });
 
+                // Popping up the menu will trigger a focus event, so handle this in the idle loop
+                // to avoid a double borrow_mut()
+                gtk::idle_add(clone!(menu => move || {
+                    menu.popup();
+                    Continue(false)
+                }));
+            },
             _ => (),
         }
     }
