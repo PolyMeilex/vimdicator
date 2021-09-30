@@ -155,7 +155,7 @@ impl State {
 
         update_css(&self.css_provider, hl);
 
-        let list_store = gtk::ListStore::new(&[gtk::Type::String; 4]);
+        let list_store = gtk::ListStore::new(&[glib::Type::String; 4]);
         let all_column_ids: Vec<u32> = (0..4).map(|i| i as u32).collect();
 
         for line in ctx.menu_items {

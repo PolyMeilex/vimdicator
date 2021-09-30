@@ -7,6 +7,7 @@ use std::sync::Arc;
 use cairo;
 use gtk;
 use gtk::prelude::*;
+use glib;
 use pango;
 
 use unicode_segmentation::UnicodeSegmentation;
@@ -493,7 +494,7 @@ impl CmdLine {
         self.wild_scroll.set_max_content_width(max_width);
 
         // load data
-        let list_store = gtk::ListStore::new(&[gtk::Type::String; 1]);
+        let list_store = gtk::ListStore::new(&[glib::Type::String; 1]);
         for item in items {
             list_store.insert_with_values(None, &[0], &[&item]);
         }

@@ -7,8 +7,9 @@ use gtk;
 use gtk::prelude::*;
 use gtk::{
     CellRendererPixbuf, CellRendererText, CellRendererToggle, ListStore, Orientation, PolicyType,
-    Popover, ScrolledWindow, TreeIter, TreeModel, TreeView, TreeViewColumn, Type,
+    Popover, ScrolledWindow, TreeIter, TreeModel, TreeView, TreeViewColumn,
 };
+use glib::Type;
 use pango;
 
 use nvim_rs::Value;
