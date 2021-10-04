@@ -78,7 +78,7 @@ fn show_not_saved_dlg(comps: &UiMutex<Components>, shell: &Shell, changed_bufs: 
         gtk::ResponseType::Cancel | _ => false,
     };
 
-    dlg.destroy();
+    dlg.close();
 
     res
 }

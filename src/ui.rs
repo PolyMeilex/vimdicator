@@ -9,9 +9,11 @@ use gdk;
 use gio::prelude::*;
 use gio::{Menu, MenuItem, SimpleAction};
 use glib::variant::FromVariant;
-use gtk;
-use gtk::prelude::*;
-use gtk::{AboutDialog, ApplicationWindow, Button, HeaderBar, Orientation, Paned, SettingsExt};
+use gtk::{
+    self,
+    prelude::*,
+    AboutDialog, ApplicationWindow, Button, HeaderBar, Orientation, Paned,
+};
 
 use toml;
 
@@ -69,7 +71,7 @@ impl Components {
         let open_btn_box = gtk::Box::new(gtk::Orientation::Horizontal, 3);
         open_btn_box.pack_start(&gtk::Label::new(Some("Open")), false, false, 3);
         open_btn_box.pack_start(
-            &gtk::Image::new_from_icon_name(Some("pan-down-symbolic"), gtk::IconSize::Menu),
+            &gtk::Image::from_icon_name(Some("pan-down-symbolic"), gtk::IconSize::Menu),
             false,
             false,
             3,
@@ -85,7 +87,7 @@ impl Components {
     }
 
     pub fn close_window(&self) {
-        self.window.as_ref().unwrap().destroy();
+        self.window.as_ref().unwrap().close();
     }
 
     pub fn window(&self) -> &ApplicationWindow {
@@ -142,11 +144,12 @@ impl Ui {
             comps.window = Some(window.clone());
 
             let prefer_dark_theme = env::var("NVIM_GTK_PREFER_DARK_THEME")
-                .map(|opt| opt.trim() == "1")
+                .ok()
+                .and_then(|opt| opt.trim().parse::<bool>().ok())
                 .unwrap_or(false);
             if prefer_dark_theme {
-                if let Some(settings) = window.get_settings() {
-                    settings.set_property_gtk_application_prefer_dark_theme(true);
+                if let Some(settings) = window.settings() {
+                    settings.set_property("gtk-application-prefer-dark-theme", true).unwrap();
                 }
             }
 
@@ -260,10 +263,7 @@ impl Ui {
         let comps_ref = self.comps.clone();
         shell.set_detach_cb(Some(move || {
             let comps_ref = comps_ref.clone();
-            gtk::idle_add(move || {
-                comps_ref.borrow().close_window();
-                Continue(false)
-            });
+            glib::idle_add_once(move || comps_ref.borrow().close_window());
         }));
 
         let state_ref = self.shell.borrow().state.clone();
@@ -373,9 +373,8 @@ impl Ui {
         nvim.clone().spawn(async move {
             let res = nvim.command(&commands).await;
 
-            glib::idle_add(move || {
-                action_widgets.borrow().as_ref().unwrap().set_enabled(true);
-                Continue(false)
+            glib::idle_add_once(move || {
+                action_widgets.borrow().as_ref().unwrap().set_enabled(true)
             });
 
             if let Err(e) = res {
@@ -403,21 +402,18 @@ impl Ui {
     ) {
         match command {
             NvimCommand::ShowProjectView => {
-                gtk::idle_add(clone!(projects => move || {
-                    projects.borrow_mut().show();
-                    Continue(false)
-                }));
+                glib::idle_add_once(clone!(projects => move || projects.borrow_mut().show()));
             }
             NvimCommand::ToggleSidebar => {
                 let action = sidebar_action.borrow();
-                let state = !bool::from_variant(&action.get_state().unwrap()).unwrap();
+                let state = !bool::from_variant(&action.state().unwrap()).unwrap();
                 action.change_state(&state.to_variant());
             }
             NvimCommand::Transparency(background_alpha, filled_alpha) => {
                 let comps = comps.borrow();
                 let window = comps.window.as_ref().unwrap();
 
-                let screen = window.get_screen().unwrap();
+                let screen = window.screen().unwrap();
                 if screen.is_composited() {
                     let enabled = shell.set_transparency(background_alpha, filled_alpha);
                     window.set_app_paintable(enabled);
@@ -429,8 +425,10 @@ impl Ui {
                 let comps = comps.borrow();
                 let window = comps.window.as_ref().unwrap();
 
-                if let Some(settings) = window.get_settings() {
-                    settings.set_property_gtk_application_prefer_dark_theme(prefer_dark_theme);
+                if let Some(settings) = window.settings() {
+                    settings
+                        .set_property("gtk-application-prefer-dark-theme", prefer_dark_theme)
+                        .unwrap();
                 }
             }
         }
@@ -451,7 +449,7 @@ impl Ui {
             .connect_clicked(move |_| projects.borrow_mut().show());
 
         let new_tab_btn =
-            Button::new_from_icon_name(Some("tab-new-symbolic"), gtk::IconSize::SmallToolbar);
+            Button::from_icon_name(Some("tab-new-symbolic"), gtk::IconSize::SmallToolbar);
         let shell_ref = Rc::clone(&self.shell);
         new_tab_btn.connect_clicked(move |_| shell_ref.borrow_mut().new_tab());
         new_tab_btn.set_can_focus(false);
@@ -464,7 +462,7 @@ impl Ui {
         header_bar.pack_end(&primary_menu_btn);
 
         let paste_btn =
-            Button::new_from_icon_name(Some("edit-paste-symbolic"), gtk::IconSize::SmallToolbar);
+            Button::from_icon_name(Some("edit-paste-symbolic"), gtk::IconSize::SmallToolbar);
         let shell = self.shell.clone();
         paste_btn.connect_clicked(move |_| shell.borrow_mut().edit_paste());
         paste_btn.set_can_focus(false);
@@ -472,7 +470,7 @@ impl Ui {
         paste_btn.set_sensitive(false);
         header_bar.pack_end(&paste_btn);
 
-        let save_btn = Button::new_with_label("Save All");
+        let save_btn = Button::with_label("Save All");
         let shell = self.shell.clone();
         save_btn.connect_clicked(move |_| shell.borrow_mut().edit_save_all());
         save_btn.set_can_focus(false);
@@ -513,7 +511,7 @@ impl Ui {
         let plug_manager = self.plug_manager.clone();
         let btn = gtk::MenuButton::new();
         btn.set_can_focus(false);
-        btn.set_image(Some(&gtk::Image::new_from_icon_name(
+        btn.set_image(Some(&gtk::Image::from_icon_name(
             Some("open-menu-symbolic"),
             gtk::IconSize::SmallToolbar,
         )));
@@ -562,7 +560,7 @@ fn on_help_about(window: &gtk::ApplicationWindow) {
     about.set_authors(&[env!("CARGO_PKG_AUTHORS")]);
     about.set_comments(Some(misc::about_comments().as_str()));
 
-    about.connect_response(|about, _| about.destroy());
+    about.connect_response(|about, _| about.close());
     about.show();
 }
 
@@ -588,18 +586,18 @@ fn gtk_window_size_allocate(
     main: &Paned,
 ) {
     if !app_window.is_maximized() {
-        let (current_width, current_height) = app_window.get_size();
+        let (current_width, current_height) = app_window.size();
         comps.window_state.current_width = current_width;
         comps.window_state.current_height = current_height;
     }
     if comps.window_state.show_sidebar {
-        comps.window_state.sidebar_width = main.get_position();
+        comps.window_state.sidebar_width = main.position();
     }
 }
 
 fn gtk_window_state_event(event: &gdk::EventWindowState, comps: &mut Components) {
     comps.window_state.is_maximized = event
-        .get_new_window_state()
+        .new_window_state()
         .contains(gdk::WindowState::MAXIMIZED);
 }
 

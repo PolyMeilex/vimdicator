@@ -8,16 +8,16 @@ license = "GPLv3"
 
 [dependencies]
 clap = "2"
-cairo-rs = "0.7"
-pango-sys = "0.9"
-pangocairo = "0.8"
-pangocairo-sys = "0.10"
-glib = "0.8.0"
-glib-sys = "0.9"
-gdk = "0.11"
-gdk-sys = "0.9"
-gio = "0.7.0"
-gobject-sys = "0.9"
+cairo-rs = "0.14"
+pango-sys = "0.14"
+pangocairo = "0.14"
+pangocairo-sys = "0.14"
+glib = "0.14"
+glib-sys = "0.14"
+gdk = "0.14"
+gdk-sys = "0.14"
+gio = "0.14"
+gobject-sys = "0.14"
 async-trait = "0.1"
 futures = { version = "0.3", features = ["io-compat", "thread-pool"] }
 tokio = { version = "1", features = ["full"] }
@@ -56,13 +56,13 @@ phf_codegen = "0.10"
 build-version = "0.1.1"
 
 [dependencies.pango]
-features = ["v1_38"]
-version = "0.7"
+features = ["v1_44"]
+version = "0.14"
 
 [dependencies.gtk]
-version = "0.7"
+version = "0.14"
 features = ["v3_22"]
 
 [dependencies.gtk-sys]
-version = "0.9"
+version = "0.14"
 features = ["v3_22"]

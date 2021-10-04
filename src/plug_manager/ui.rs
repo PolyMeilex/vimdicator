@@ -26,7 +26,7 @@ impl<'a> Ui<'a> {
     }
 
     pub fn show<T: IsA<gtk::Window>>(&mut self, parent: &T) {
-        let dlg = gtk::Dialog::new_with_buttons(
+        let dlg = gtk::Dialog::with_buttons(
             Some("Plug"),
             Some(parent),
             gtk::DialogFlags::DESTROY_WITH_PARENT,
@@ -37,13 +37,13 @@ impl<'a> Ui<'a> {
         );
 
         dlg.set_default_size(800, 600);
-        let content = dlg.get_content_area();
+        let content = dlg.content_area();
 
         let header_bar = gtk::HeaderBar::new();
 
-        let add_plug_btn = gtk::Button::new_with_label("Add..");
+        let add_plug_btn = gtk::Button::with_label("Add..");
         add_plug_btn
-            .get_style_context()
+            .style_context()
             .add_class("suggested-action");
         header_bar.pack_end(&add_plug_btn);
 
@@ -121,7 +121,7 @@ impl<'a> Ui<'a> {
             }
         }
 
-        dlg.destroy();
+        dlg.close();
     }
 
     fn fill_plugin_list(&self, panel: &gtk::Box, store: &Store) -> gtk::ListBox {
@@ -129,7 +129,7 @@ impl<'a> Ui<'a> {
             Option::<&gtk::Adjustment>::None,
             Option::<&gtk::Adjustment>::None,
         );
-        scroll.get_style_context().add_class("view");
+        scroll.style_context().add_class("view");
         let plugs_panel = gtk::ListBox::new();
 
         for (idx, plug_info) in store.get_plugs().iter().enumerate() {
@@ -157,12 +157,12 @@ fn create_up_down_btns(
     manager: &Arc<UiMutex<manager::Manager>>,
 ) -> gtk::Box {
     let buttons_panel = gtk::Box::new(gtk::Orientation::Horizontal, 5);
-    let up_btn = gtk::Button::new_from_icon_name(Some("go-up-symbolic"), gtk::IconSize::Button);
-    let down_btn = gtk::Button::new_from_icon_name(Some("go-down-symbolic"), gtk::IconSize::Button);
+    let up_btn = gtk::Button::from_icon_name(Some("go-up-symbolic"), gtk::IconSize::Button);
+    let down_btn = gtk::Button::from_icon_name(Some("go-down-symbolic"), gtk::IconSize::Button);
 
     up_btn.connect_clicked(clone!(plugs_panel, manager => move |_| {
-        if let Some(row) = plugs_panel.get_selected_row() {
-            let idx = row.get_index();
+        if let Some(row) = plugs_panel.selected_row() {
+            let idx = row.index();
             if idx > 0 {
                 plugs_panel.unselect_row(&row);
                 plugs_panel.remove(&row);
@@ -174,8 +174,8 @@ fn create_up_down_btns(
     }));
 
     down_btn.connect_clicked(clone!(plugs_panel, manager => move |_| {
-        if let Some(row) = plugs_panel.get_selected_row() {
-            let idx = row.get_index();
+        if let Some(row) = plugs_panel.selected_row() {
+            let idx = row.index();
             let mut manager = manager.borrow_mut();
             if idx >= 0 && idx < manager.store.plugs_count() as i32 {
                 plugs_panel.unselect_row(&row);
@@ -204,7 +204,7 @@ fn populate_get_plugins(
     let get_plugins = UiMutex::new(get_plugins.clone());
     vimawesome::call(query, move |res| {
         let panel = get_plugins.borrow();
-        for child in panel.get_children() {
+        for child in panel.children() {
             panel.remove(&child);
         }
         match res {
@@ -238,10 +238,10 @@ fn create_plug_row(
 
     let exists_button_box = gtk::Box::new(gtk::Orientation::Horizontal, 5);
 
-    let remove_btn = gtk::Button::new_with_label("Remove");
+    let remove_btn = gtk::Button::with_label("Remove");
     exists_button_box.pack_start(&remove_btn, false, true, 0);
 
-    let undo_btn = gtk::Button::new_with_label("Undo");
+    let undo_btn = gtk::Button::with_label("Undo");
 
     row_container.pack_start(&hbox, true, true, 0);
     hbox.pack_start(&label_box, true, true, 0);
@@ -303,7 +303,7 @@ fn add_plugin(
             "Plugin with this name or path already exists",
         );
         dlg.run();
-        dlg.destroy();
+        dlg.close();
         false
     }
 }
@@ -350,12 +350,16 @@ fn add_vimawesome_tab(
         list_panel.pack_start(&spinner, false, true, 5);
         spinner.show();
         spinner.start();
-        populate_get_plugins(se.get_text().map(Into::into), &list_panel, manager.clone(), plugs_panel.clone());
+        populate_get_plugins(
+            Some(se.text().to_string()),
+            &list_panel,
+            manager.clone(),
+            plugs_panel.clone()
+        );
     }));
 
-    gtk::idle_add(clone!(manager, plugs_panel => move || {
+    glib::idle_add_local_once(clone!(manager, plugs_panel => move || {
         populate_get_plugins(None, &list_panel, manager.clone(), plugs_panel.clone());
-        Continue(false)
     }));
 }
 
@@ -380,7 +384,7 @@ impl SettingsPages {
     pub fn new<F: Fn(&str) + 'static>(row_selected: F) -> Self {
         let content = gtk::Box::new(gtk::Orientation::Horizontal, 5);
         let categories = gtk::ListBox::new();
-        categories.get_style_context().add_class("view");
+        categories.style_context().add_class("view");
         let stack = gtk::Stack::new();
         stack.set_transition_type(gtk::StackTransitionType::Crossfade);
         let rows: Rc<RefCell<Vec<(gtk::ListBoxRow, &'static str)>>> =
@@ -392,7 +396,7 @@ impl SettingsPages {
         categories.connect_row_selected(
             clone!(stack, rows => move |_, row| if let Some(row) = row {
                 if let Some(ref r) = rows.borrow().iter().find(|r| r.0 == *row) {
-                    if let Some(child) = stack.get_child_by_name(&r.1) {
+                    if let Some(child) = stack.child_by_name(&r.1) {
                         stack.set_visible_child(&child);
                         row_selected(&r.1);
                     }
@@ -409,7 +413,7 @@ impl SettingsPages {
         }
     }
 
-    fn add_page<W: gtk::IsA<gtk::Widget>>(
+    fn add_page<W: glib::IsA<gtk::Widget>>(
         &self,
         label: &gtk::Label,
         widget: &W,

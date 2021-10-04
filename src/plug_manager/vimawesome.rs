@@ -19,10 +19,7 @@ where
         let mut result = Some(request(query.as_ref().map(|s| s.as_ref())));
         let mut cb = Some(cb);
 
-        glib::idle_add(move || {
-            cb.take().unwrap()(result.take().unwrap());
-            Continue(false)
-        })
+        glib::idle_add_once(move || cb.take().unwrap()(result.take().unwrap()))
     });
 }
 
@@ -68,7 +65,7 @@ pub fn build_result_panel<F: Fn(PlugInfo) + 'static>(
         Option::<&gtk::Adjustment>::None,
         Option::<&gtk::Adjustment>::None,
     );
-    scroll.get_style_context().add_class("view");
+    scroll.style_context().add_class("view");
     let panel = gtk::ListBox::new();
 
     let cb_ref = Rc::new(add_cb);
@@ -96,7 +93,7 @@ fn create_plug_row<F: Fn(PlugInfo) + 'static>(
     let button_box = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     button_box.set_halign(gtk::Align::End);
 
-    let add_btn = gtk::Button::new_with_label("Install");
+    let add_btn = gtk::Button::with_label("Install");
     button_box.pack_start(&add_btn, false, true, 0);
 
     row_container.pack_start(&hbox, true, true, 0);

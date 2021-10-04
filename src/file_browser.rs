@@ -71,15 +71,15 @@ enum Column {
 
 impl FileBrowserWidget {
     pub fn new(shell_state: &Arc<UiMutex<shell::State>>) -> Self {
-        let builder = gtk::Builder::new_from_string(include_str!("../resources/side-panel.ui"));
-        let widget: gtk::Box = builder.get_object("file_browser").unwrap();
-        let tree: gtk::TreeView = builder.get_object("file_browser_tree_view").unwrap();
-        let store: gtk::TreeStore = builder.get_object("file_browser_tree_store").unwrap();
-        let dir_list_model: gtk::TreeStore = builder.get_object("dir_list_model").unwrap();
-        let dir_list: gtk::ComboBox = builder.get_object("dir_list").unwrap();
-        let context_menu: gtk::Menu = builder.get_object("file_browser_context_menu").unwrap();
+        let builder = gtk::Builder::from_string(include_str!("../resources/side-panel.ui"));
+        let widget: gtk::Box = builder.object("file_browser").unwrap();
+        let tree: gtk::TreeView = builder.object("file_browser_tree_view").unwrap();
+        let store: gtk::TreeStore = builder.object("file_browser_tree_store").unwrap();
+        let dir_list_model: gtk::TreeStore = builder.object("dir_list_model").unwrap();
+        let dir_list: gtk::ComboBox = builder.object("dir_list").unwrap();
+        let context_menu: gtk::Menu = builder.object("file_browser_context_menu").unwrap();
         let show_hidden_checkbox: gtk::CheckMenuItem = builder
-            .get_object("file_browser_show_hidden_checkbox")
+            .object("file_browser_show_hidden_checkbox")
             .unwrap();
 
         // Disable the file browser widget by default, it'll be re-enabled once nvim is ready
@@ -123,31 +123,31 @@ impl FileBrowserWidget {
         let store = &self.store;
         let state_ref = &self.state;
         self.tree.connect_test_expand_row(clone!(store, state_ref => move |_, iter, _| {
-            store.set(&iter, &[Column::IconName as u32], &[&ICON_FOLDER_OPEN]);
+            store.set(&iter, &[(Column::IconName as u32, &ICON_FOLDER_OPEN)]);
             // We cannot recursively populate all directories. Instead, we have prepared a single
             // empty child entry for all non-empty directories, so the row will be expandable. Now,
             // when a directory is expanded, populate its children.
             let state = state_ref.borrow();
             if let Some(child) = store.iter_children(Some(iter)) {
-                let filename = store.get_value(&child, Column::Filename as i32);
-                if filename.get::<&str>().is_none() {
+                let filename = store.value(&child, Column::Filename as i32);
+                if filename.get::<&str>().is_ok() {
                     store.remove(&child);
-                    let dir_value = store.get_value(&iter, Column::Path as i32);
-                    if let Some(dir) = dir_value.get() {
+                    let dir_value = store.value(&iter, Column::Path as i32);
+                    if let Ok(dir) = dir_value.get() {
                         populate_tree_nodes(&store, &state, dir, Some(iter));
                     }
                 } else {
                     // This directory is already populated, i.e. it has been expanded and collapsed
                     // again. Rows further down the tree might have been silently collapsed without
                     // getting an event. Update their folder icon.
-                    let mut tree_path = store.get_path(&child).unwrap();
-                    while let Some(iter) = store.get_iter(&tree_path) {
+                    let mut tree_path = store.path(&child).unwrap();
+                    while let Some(iter) = store.iter(&tree_path) {
                         tree_path.next();
                         let file_type = store
-                            .get_value(&iter, Column::FileType as i32)
+                            .value(&iter, Column::FileType as i32)
                             .get::<u8>();
-                        if file_type == Some(FileType::Dir as u8) {
-                            store.set(&iter, &[Column::IconName as u32], &[&ICON_FOLDER_CLOSED]);
+                        if file_type == Ok(FileType::Dir as u8) {
+                            store.set(&iter, &[(Column::IconName as u32, &ICON_FOLDER_CLOSED)]);
                         }
                     }
                 }
@@ -156,7 +156,7 @@ impl FileBrowserWidget {
         }));
 
         self.tree.connect_row_collapsed(clone!(store => move |_, iter, _| {
-            store.set(&iter, &[Column::IconName as u32], &[&ICON_FOLDER_CLOSED]);
+            store.set(&iter, &[(Column::IconName as u32, &ICON_FOLDER_CLOSED)]);
         }));
 
         // Further initialization.
@@ -228,7 +228,7 @@ impl FileBrowserWidget {
                         false
                     };
                 if !could_reveal {
-                    tree.get_selection().unselect_all();
+                    tree.selection().unselect_all();
                 }
             }),
         );
@@ -243,13 +243,13 @@ impl FileBrowserWidget {
 
         self.tree.connect_row_activated(
             clone!(store, shell_state_ref => move |tree, path, _| {
-                let iter = store.get_iter(path).unwrap();
+                let iter = store.iter(path).unwrap();
                 let file_type = store
-                    .get_value(&iter, Column::FileType as i32)
+                    .value(&iter, Column::FileType as i32)
                     .get::<u8>()
                     .unwrap();
                 let file_path = store
-                    .get_value(&iter, Column::Path as i32)
+                    .value(&iter, Column::Path as i32)
                     .get::<String>()
                     .unwrap();
                 if file_type == FileType::Dir as u8 {
@@ -272,9 +272,9 @@ impl FileBrowserWidget {
         let dir_list_model = &self.comps.dir_list_model;
         self.comps.dir_list.connect_changed(
             clone!(state_ref, dir_list_model, store => move |dir_list| {
-                if let Some(iter) = dir_list.get_active_iter() {
-                    let model = dir_list.get_model().unwrap();
-                    if let Some(dir) = model.get_value(&iter, 2).get::<String>() {
+                if let Some(iter) = dir_list.active_iter() {
+                    let model = dir_list.model().unwrap();
+                    if let Ok(dir) = model.value(&iter, 2).get::<String>() {
                         let mut state_ref = state_ref.borrow_mut();
                         let current_dir = &mut state_ref.current_dir;
 
@@ -293,27 +293,29 @@ impl FileBrowserWidget {
         self.tree.connect_button_press_event(
             clone!(store, state_ref, context_menu, cd_action => move |tree, ev_btn| {
                 // Open context menu on right click.
-                if ev_btn.get_button() == 3 {
+                if ev_btn.button() == 3 {
                     context_menu.popup_at_pointer(Some(&**ev_btn));
-                    let (pos_x, pos_y) = ev_btn.get_position();
+                    let (pos_x, pos_y) = ev_btn.position();
                     let iter = tree
-                        .get_path_at_pos(pos_x as i32, pos_y as i32)
+                        .path_at_pos(pos_x as i32, pos_y as i32)
                         .and_then(|(path, _, _, _)| path)
-                        .and_then(|path| store.get_iter(&path));
+                        .and_then(|path| store.iter(&path));
                     let file_type = iter
                         .as_ref()
                         .and_then(|iter| {
                             store
-                                .get_value(&iter, Column::FileType as i32)
+                                .value(&iter, Column::FileType as i32)
                                 .get::<u8>()
+                                .ok()
                         });
                     // Enable the "Go To Directory" action only if the user clicked on a folder.
                     cd_action.set_enabled(file_type == Some(FileType::Dir as u8));
                     let path = iter
                         .and_then(|iter| {
                             store
-                                .get_value(&iter, Column::Path as i32)
+                                .value(&iter, Column::Path as i32)
                                 .get::<String>()
+                                .ok()
                         });
                     state_ref.borrow_mut().selected_path = path;
                 }
@@ -324,7 +326,7 @@ impl FileBrowserWidget {
         // Show / hide hidden files when corresponding menu item is toggled.
         self.comps.show_hidden_checkbox.connect_toggled(clone!(state_ref, store => move |ev| {
             let mut state = state_ref.borrow_mut();
-            state.show_hidden = ev.get_active();
+            state.show_hidden = ev.is_active();
             tree_reload(&store, &state);
         }));
     }
@@ -370,7 +372,7 @@ fn update_dir_list(dir: &str, dir_list_model: &gtk::TreeStore, dir_list: &gtk::C
     let mut next = components.next();
 
     // Iterator over existing dir_list model.
-    let mut dir_list_iter = dir_list_model.get_iter_first();
+    let mut dir_list_iter = dir_list_model.iter_first();
 
     // Whether existing entries up to the current position of dir_list_iter are a prefix of the
     // new current working directory path.
@@ -393,7 +395,7 @@ fn update_dir_list(dir: &str, dir_list_model: &gtk::TreeStore, dir_list: &gtk::C
         // Use the current entry of dir_list, if any, otherwise append a new one.
         let current_iter = dir_list_iter.unwrap_or_else(|| dir_list_model.append(None));
         // Check if the current entry is still part of the new cwd.
-        if is_prefix && dir_list_model.get_value(&current_iter, 0).get::<&str>() != Some(&dir_name)
+        if is_prefix && dir_list_model.value(&current_iter, 0).get::<&str>() != Ok(dir_name)
         {
             is_prefix = false;
         }
@@ -401,16 +403,22 @@ fn update_dir_list(dir: &str, dir_list_model: &gtk::TreeStore, dir_list: &gtk::C
             // Update dir_list entry.
             dir_list_model.set(
                 &current_iter,
-                &[0, 1, 2],
-                &[&dir_name, &ICON_FOLDER_CLOSED, &path_str],
+                &[
+                    (0, &dir_name),
+                    (1, &ICON_FOLDER_CLOSED),
+                    (2, &path_str)
+                ],
             );
         } else {
             // We reached the last component of the new cwd path. Set the active entry of dir_list
             // to this one.
             dir_list_model.set(
                 &current_iter,
-                &[0, 1, 2],
-                &[&dir_name, &ICON_FOLDER_OPEN, &path_str],
+                &[
+                    (0, &dir_name),
+                    (1, &ICON_FOLDER_OPEN),
+                    (2, &path_str),
+                ],
             );
             dir_list.set_active_iter(Some(&current_iter));
         };
@@ -427,7 +435,7 @@ fn update_dir_list(dir: &str, dir_list_model: &gtk::TreeStore, dir_list: &gtk::C
             // If we didn't change any entries to this point and the list contains further entries,
             // the remaining ones are subdirectories of the cwd and we keep them.
             loop {
-                dir_list_model.set(&iter, &[1], &[&ICON_FOLDER_CLOSED]);
+                dir_list_model.set(&iter, &[(1, &ICON_FOLDER_CLOSED)]);
                 if !dir_list_model.iter_next(&iter) {
                     break;
                 }
@@ -493,8 +501,12 @@ fn populate_tree_nodes(
         let iter = store.append(parent);
         store.set(
             &iter,
-            &[0, 1, 2, 3],
-            &[&filename, &path, &(file_type as u8), &icon],
+            &[
+                (0, &filename),
+                (1, &path),
+                (2, &(file_type as u8)),
+                (3, &icon),
+            ],
         );
         // For directories, check whether the directory is empty. If not, append a single empty
         // entry, so the expand arrow is shown. Its contents are dynamically populated when
@@ -507,7 +519,7 @@ fn populate_tree_nodes(
             };
             if not_empty {
                 let iter = store.append(Some(&iter));
-                store.set(&iter, &[], &[]);
+                store.set(&iter, &[]);
             }
         }
     }
@@ -531,8 +543,8 @@ fn reveal_path_in_tree(store: &gtk::TreeStore, tree: &gtk::TreeView, rel_file_pa
     'components: for component in rel_file_path.components() {
         if let Component::Normal(component) = component {
             tree_path.down();
-            while let Some(iter) = store.get_iter(&tree_path) {
-                let entry_value = store.get_value(&iter, Column::Filename as i32);
+            while let Some(iter) = store.iter(&tree_path) {
+                let entry_value = store.value(&iter, Column::Filename as i32);
                 let entry = entry_value.get::<&str>().unwrap();
                 if component == entry {
                     tree.expand_row(&tree_path, false);
@@ -545,7 +557,7 @@ fn reveal_path_in_tree(store: &gtk::TreeStore, tree: &gtk::TreeView, rel_file_pa
             return false;
         }
     }
-    if tree_path.get_depth() == 0 {
+    if tree_path.depth() == 0 {
         return false;
     }
     tree.set_cursor(&tree_path, Option::<&gtk::TreeViewColumn>::None, false);

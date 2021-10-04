@@ -9,7 +9,7 @@ use gtk::{
     CellRendererPixbuf, CellRendererText, CellRendererToggle, ListStore, Orientation, PolicyType,
     Popover, ScrolledWindow, TreeIter, TreeModel, TreeView, TreeViewColumn,
 };
-use glib::Type;
+use glib;
 use pango;
 
 use nvim_rs::Value;
@@ -35,13 +35,13 @@ enum ProjectViewColumns {
 }
 
 const COLUMN_COUNT: usize = 6;
-const COLUMN_TYPES: [Type; COLUMN_COUNT] = [
-    Type::String,
-    Type::String,
-    Type::String,
-    Type::String,
-    Type::Bool,
-    Type::Bool,
+const COLUMN_TYPES: [glib::Type; COLUMN_COUNT] = [
+    glib::Type::STRING,
+    glib::Type::STRING,
+    glib::Type::STRING,
+    glib::Type::STRING,
+    glib::Type::BOOL,
+    glib::Type::BOOL,
 ];
 const COLUMN_IDS: [u32; COLUMN_COUNT] = [
     ProjectViewColumns::Name as u32,
@@ -104,7 +104,7 @@ impl Projects {
 
         vbox.pack_start(&projects.scroll, true, true, 0);
 
-        let open_btn = gtk::Button::new_with_label("Other Documents…");
+        let open_btn = gtk::ButtonBuilder::new().label("Other Documents…").build();
         vbox.pack_start(&open_btn, true, true, 5);
 
         vbox.show_all();
@@ -125,14 +125,14 @@ impl Projects {
 
             list_store.clear();
             if let Some(ref store) = projects.store {
-                store.populate(&list_store, search_box.get_text().as_ref());
+                store.populate(&list_store, Some(&search_box.text()));
             }
         });
 
         let prj_ref = projects.clone();
         search_box.connect_activate(move |_| {
-            let model = prj_ref.borrow().tree.get_model().unwrap();
-            if let Some(iter) = model.get_iter_first() {
+            let model = prj_ref.borrow().tree.model().unwrap();
+            if let Some(iter) = model.iter_first() {
                 prj_ref.borrow().open_uri(&model, &iter);
                 let popup = prj_ref.borrow().popup.clone();
                 popup.popdown();
@@ -145,12 +145,12 @@ impl Projects {
             .tree
             .connect_row_activated(move |tree, _, column| {
                 // Don't activate if the user clicked the checkbox.
-                let toggle_column = tree.get_column(2).unwrap();
+                let toggle_column = tree.column(2).unwrap();
                 if *column == toggle_column {
                     return;
                 }
-                let selection = tree.get_selection();
-                if let Some((model, iter)) = selection.get_selected() {
+                let selection = tree.selection();
+                if let Some((model, iter)) = selection.selected() {
                     prj_ref.borrow().open_uri(&model, &iter);
                     let popup = prj_ref.borrow().popup.clone();
                     popup.popdown();
@@ -180,9 +180,9 @@ impl Projects {
 
     fn toggle_stored(&mut self, path: &gtk::TreePath) {
         let list_store = self.get_list_store();
-        if let Some(iter) = list_store.get_iter(path) {
+        if let Some(iter) = list_store.iter(path) {
             let value: bool = list_store
-                .get_value(&iter, ProjectViewColumns::ProjectStored as i32)
+                .value(&iter, ProjectViewColumns::ProjectStored as i32)
                 .get()
                 .unwrap();
 
@@ -204,7 +204,7 @@ impl Projects {
                 &ToValue::to_value(pixbuf),
             );
 
-            let uri_value = list_store.get_value(&iter, ProjectViewColumns::Uri as i32);
+            let uri_value = list_store.value(&iter, ProjectViewColumns::Uri as i32);
             let uri: String = uri_value.get().unwrap();
 
             let store = self.store.as_mut().unwrap();
@@ -218,11 +218,11 @@ impl Projects {
 
     fn open_uri(&self, model: &TreeModel, iter: &TreeIter) {
         let uri: String = model
-            .get_value(iter, ProjectViewColumns::Uri as i32)
+            .value(iter, ProjectViewColumns::Uri as i32)
             .get()
             .unwrap();
         let project: bool = model
-            .get_value(iter, ProjectViewColumns::Project as i32)
+            .value(iter, ProjectViewColumns::Project as i32)
             .get()
             .unwrap();
 
@@ -235,7 +235,7 @@ impl Projects {
 
     fn get_list_store(&self) -> ListStore {
         self.tree
-            .get_model()
+            .model()
             .unwrap()
             .downcast::<ListStore>()
             .unwrap()
@@ -244,7 +244,7 @@ impl Projects {
     fn show_open_file_dlg(&self) {
         let window = self
             .popup
-            .get_toplevel()
+            .toplevel()
             .unwrap()
             .downcast::<gtk::Window>()
             .ok();
@@ -259,13 +259,13 @@ impl Projects {
             ("_Cancel", gtk::ResponseType::Cancel),
         ]);
         if dlg.run() == gtk::ResponseType::Ok {
-            if let Some(filename) = dlg.get_filename() {
+            if let Some(filename) = dlg.filename() {
                 if let Some(filename) = filename.to_str() {
                     self.shell.borrow().open_file(filename);
                 }
             }
         }
-        dlg.destroy();
+        dlg.close();
     }
 
     pub fn show(&mut self) {
@@ -311,12 +311,10 @@ impl Projects {
 
         let text_column = TreeViewColumn::new();
 
-        self.name_renderer.set_property_width_chars(45);
-        self.path_renderer.set_property_width_chars(45);
-        self.name_renderer
-            .set_property_ellipsize(pango::EllipsizeMode::Middle);
-        self.path_renderer
-            .set_property_ellipsize(pango::EllipsizeMode::Start);
+        self.name_renderer.set_width_chars(45);
+        self.path_renderer.set_width_chars(45);
+        self.name_renderer.set_ellipsize(pango::EllipsizeMode::Middle);
+        self.path_renderer.set_ellipsize(pango::EllipsizeMode::Start);
         self.name_renderer.set_padding(0, 5);
         self.path_renderer.set_padding(0, 5);
 
@@ -331,7 +329,7 @@ impl Projects {
         );
 
         let area = text_column
-            .get_area()
+            .area()
             .unwrap()
             .downcast::<gtk::CellAreaBox>()
             .expect("Error build tree view");
@@ -359,9 +357,9 @@ impl Projects {
     }
 
     fn calc_treeview_height(&self) -> i32 {
-        let (_, name_renderer_natural_size) = self.name_renderer.get_preferred_height(&self.tree);
-        let (_, path_renderer_natural_size) = self.path_renderer.get_preferred_height(&self.tree);
-        let (_, ypad) = self.name_renderer.get_padding();
+        let (_, name_renderer_natural_size) = self.name_renderer.preferred_height(&self.tree);
+        let (_, path_renderer_natural_size) = self.path_renderer.preferred_height(&self.tree);
+        let (_, ypad) = self.name_renderer.padding();
 
         let row_height = name_renderer_natural_size + path_renderer_natural_size + ypad;
 
@@ -372,11 +370,11 @@ impl Projects {
 fn on_treeview_allocate(projects: Arc<UiMutex<Projects>>) {
     let treeview_height = projects.borrow().calc_treeview_height();
 
-    idle_add(move || {
+    glib::idle_add_once(move || {
         let prj = projects.borrow();
 
         // strange solution to make gtk assertions happy
-        let previous_height = prj.scroll.get_max_content_height();
+        let previous_height = prj.scroll.max_content_height();
         if previous_height < treeview_height {
             prj.scroll.set_max_content_height(treeview_height);
             prj.scroll.set_min_content_height(treeview_height);
@@ -384,7 +382,6 @@ fn on_treeview_allocate(projects: Arc<UiMutex<Projects>>) {
             prj.scroll.set_min_content_height(treeview_height);
             prj.scroll.set_max_content_height(treeview_height);
         }
-        Continue(false)
     });
 }
 
@@ -473,7 +470,16 @@ impl EntryStore {
                 }
                 None => true,
             } {
-                list_store.insert_with_values(None, &COLUMN_IDS, &file.to_values());
+                let files = file.to_values();
+                list_store.insert_with_values(
+                    None,
+                    COLUMN_IDS
+                    .iter()
+                    .enumerate()
+                    .map(|(i, id)| (*id, files[i]))
+                    .collect::<Box<_>>()
+                    .as_ref()
+                );
             }
         }
     }
@@ -553,7 +559,7 @@ impl Entry {
         }
     }
 
-    fn to_values(&self) -> Box<[&dyn gtk::ToValue]> {
+    fn to_values(&self) -> Box<[&dyn glib::ToValue]> {
         Box::new([
             &self.file_name,
             &self.path,

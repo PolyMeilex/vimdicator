@@ -3,9 +3,7 @@ use std::cell::RefCell;
 
 use crate::shell::Shell;
 #[cfg(unix)]
-use gio;
-#[cfg(unix)]
-use gio::SettingsExt;
+use gio::{self, prelude::*};
 
 #[derive(PartialEq)]
 pub enum FontSource {
@@ -43,14 +41,8 @@ impl State {
             return;
         }
 
-        if let Some(ref font_name) =
-            self.gnome_interface_settings.get_string(
-                "monospace-font-name",
-            )
-        {
-            shell.set_font_desc(font_name);
-            self.font_source = FontSource::Gnome;
-        }
+        shell.set_font_desc(&self.gnome_interface_settings.string("monospace-font-name"));
+        self.font_source = FontSource::Gnome;
     }
 }
 
@@ -81,7 +73,7 @@ impl Settings {
         self.state
             .borrow()
             .gnome_interface_settings
-            .connect_changed(move |_, _| {
+            .connect_changed(None, move |_, _| {
                 monospace_font_changed(&mut *shell.borrow_mut(), &mut *state.borrow_mut())
             });
     }

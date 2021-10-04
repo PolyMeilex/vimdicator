@@ -1,12 +1,16 @@
 use cairo;
+use glib;
+
+use std::{
+    sync::{Arc, Weak},
+    time::Duration,
+};
+
 use crate::mode;
 use crate::render;
 use crate::render::CellMetrics;
 use crate::highlight::HighlightMap;
-use std::sync::{Arc, Weak};
 use crate::ui::UiMutex;
-
-use glib;
 
 struct Alpha(f64);
 
@@ -169,7 +173,7 @@ impl<CB: CursorRedrawCb + 'static> BlinkCursor<CB> {
         }
 
         mut_state.timer = Some(glib::timeout_add(
-            if blinkwait > 0 { blinkwait } else { 500 },
+            Duration::from_millis(if blinkwait > 0 { blinkwait as u64 } else { 500 }),
             move || anim_step(&state),
         ));
     }
@@ -212,7 +216,7 @@ impl<CB: CursorRedrawCb> Cursor for BlinkCursor<CB> {
     ) -> f64 {
         let state = self.state.borrow();
 
-        let current_point = ctx.get_current_point();
+        let current_point = ctx.current_point().unwrap();
 
         let bg = hl.cursor_bg();
         ctx.set_source_rgba(bg.0, bg.1, bg.2, state.alpha.0);
@@ -226,9 +230,9 @@ impl<CB: CursorRedrawCb> Cursor for BlinkCursor<CB> {
 
         ctx.rectangle(current_point.0, y, width, height);
         if state.anim_phase == AnimPhase::NoFocus {
-            ctx.stroke();
+            ctx.stroke().unwrap();
         } else {
-            ctx.fill();
+            ctx.fill().unwrap();
         }
 
         state.alpha.0
@@ -362,7 +366,8 @@ fn anim_step<CB: CursorRedrawCb + 'static>(state: &Arc<UiMutex<State<CB>>>) -> g
 
     if let Some(timeout) = next_event {
         let moved_state = state.clone();
-        mut_state.timer = Some(glib::timeout_add(timeout, move || anim_step(&moved_state)));
+        mut_state.timer =
+            Some(glib::timeout_add(Duration::from_millis(timeout), move || anim_step(&moved_state)));
 
         glib::Continue(false)
     } else {

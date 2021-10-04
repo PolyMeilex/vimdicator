@@ -13,7 +13,7 @@ impl<'a> Builder<'a> {
     }
 
     pub fn show<F: IsA<gtk::Window>>(&self, parent: &F) -> Option<store::PlugInfo> {
-        let dlg = gtk::Dialog::new_with_buttons(
+        let dlg = gtk::Dialog::with_buttons(
             Some(self.title),
             Some(parent),
             gtk::DialogFlags::USE_HEADER_BAR | gtk::DialogFlags::DESTROY_WITH_PARENT,
@@ -23,7 +23,7 @@ impl<'a> Builder<'a> {
             ],
         );
 
-        let content = dlg.get_content_area();
+        let content = dlg.content_area();
         let border = gtk::Box::new(gtk::Orientation::Horizontal, 0);
         border.set_border_width(12);
 
@@ -56,33 +56,30 @@ impl<'a> Builder<'a> {
         content.show_all();
 
         path_e.connect_changed(clone!(name_e => move |p| {
-            if let Some(name) = p.get_text().and_then(|t| extract_name(&t)) {
+            if let Some(name) = extract_name(p.text().as_str()) {
                 name_e.set_text(&name);
             }
         }));
 
         let res = if dlg.run() == gtk::ResponseType::Ok {
-            path_e.get_text().map(|path| {
-                let name = name_e
-                    .get_text()
-                    .map(String::from)
-                    .and_then(|name| {
-                        if name.trim().is_empty() {
-                            None
-                        } else {
-                            Some(name.to_owned())
-                        }
-                    })
-                    .or_else(|| extract_name(path.as_str()))
-                    .unwrap_or_else(|| path.as_str().to_owned());
+            let path = path_e.text().to_string();
+            let name = name_e.text();
 
-                store::PlugInfo::new(name, path.to_owned())
-            })
+            let name = if name.trim().is_empty() {
+                match extract_name(&path) {
+                    Some(name) => name,
+                    None => path.clone(),
+                }
+            } else {
+                name.to_string()
+            };
+
+            Some(store::PlugInfo::new(name, path))
         } else {
             None
         };
 
-        dlg.destroy();
+        dlg.close();
 
         res
     }

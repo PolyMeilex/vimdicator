@@ -64,15 +64,15 @@ pub fn keyval_to_input_string(in_str: &str, in_state: gdk::ModifierType) -> Stri
 }
 
 pub fn convert_key(ev: &EventKey) -> Option<String> {
-    let keyval = ev.get_keyval();
-    let state = ev.get_state();
-    if let Some(ref keyval_name) = gdk::keyval_name(keyval) {
-        if let Some(cnvt) = KEYVAL_MAP.get(keyval_name as &str).cloned() {
+    let keyval = ev.keyval();
+    let state = ev.state();
+    if let Some(ref keyval_name) = keyval.to_unicode() {
+        if let Some(cnvt) = KEYVAL_MAP.get(keyval_name.to_string().as_str()).cloned() {
             return Some(keyval_to_input_string(cnvt, state));
         }
     }
 
-    if let Some(ch) = gdk::keyval_to_unicode(keyval) {
+    if let Some(ch) = keyval.to_unicode() {
         Some(keyval_to_input_string(&ch.to_string(), state))
     } else {
         None

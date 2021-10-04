@@ -1,5 +1,8 @@
-use std::result;
-use std::sync::{mpsc, Arc};
+use std::{
+    result,
+    sync::{mpsc, Arc},
+    time::Duration,
+};
 
 use nvim_rs::{
     Handler, Value,
@@ -39,35 +42,29 @@ impl NvimHandler {
         let shell = self.shell.clone();
         let delayed_redraw_event_id = self.delayed_redraw_event_id.clone();
 
-        glib::idle_add(move || {
-            let id = Some(glib::timeout_add(
-                250,
+        glib::idle_add_once(move || {
+            let id = Some(glib::timeout_add_once(
+                Duration::from_millis(250),
                 clone!(shell, event, delayed_redraw_event_id => move || {
-                delayed_redraw_event_id.replace(None);
+                    delayed_redraw_event_id.replace(None);
 
-                if let Err(msg) = call_redraw_handler(vec![event.clone()], &shell) {
-                    error!("Error call function: {}", msg);
-                }
-
-                glib::Continue(false)
-            }),
+                    if let Err(msg) = call_redraw_handler(vec![event.clone()], &shell) {
+                        error!("Error call function: {}", msg);
+                    }
+                }),
             ));
 
             delayed_redraw_event_id.replace(id);
-
-            glib::Continue(false)
         });
     }
 
     pub fn remove_scheduled_redraw_event(&self) {
         let delayed_redraw_event_id = self.delayed_redraw_event_id.clone();
-        glib::idle_add(move || {
+        glib::idle_add_once(move || {
             let id = delayed_redraw_event_id.replace(None);
             if let Some(ev_id) = id {
                 glib::source_remove(ev_id);
             }
-
-            glib::Continue(false)
         });
     }
 
@@ -233,11 +230,10 @@ where
     F: FnOnce(&Arc<UiMutex<shell::State>>) -> result::Result<(), String> + 'static + Send,
 {
     let mut cb = Some(cb);
-    glib::idle_add(move || {
+    glib::idle_add_once(move || {
         if let Err(msg) = cb.take().unwrap()(&shell) {
             error!("Error call function: {}", msg);
         }
-        glib::Continue(false)
     });
 }
 

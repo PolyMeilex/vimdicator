@@ -373,33 +373,21 @@ impl<'c> StyleAttr<'c> {
         }
 
         if self.italic {
-            self.insert_attr(
-                attr_list,
-                pango::Attribute::new_style(pango::Style::Italic).unwrap(),
-            );
+            self.insert_attr(attr_list, pango::Attribute::new_style(pango::Style::Italic));
         }
 
         if self.bold {
-            self.insert_attr(
-                attr_list,
-                pango::Attribute::new_weight(pango::Weight::Bold).unwrap(),
-            );
+            self.insert_attr(attr_list, pango::Attribute::new_weight(pango::Weight::Bold));
         }
 
         if let Some(fg) = self.foreground {
             let (r, g, b) = fg.to_u16();
-            self.insert_attr(
-                attr_list,
-                pango::Attribute::new_foreground(r, g, b).unwrap(),
-            );
+            self.insert_attr(attr_list, pango::Attribute::new_foreground(r, g, b));
         }
 
         if let Some(bg) = self.background {
             let (r, g, b) = bg.to_u16();
-            self.insert_attr(
-                attr_list,
-                pango::Attribute::new_background(r, g, b).unwrap(),
-            );
+            self.insert_attr(attr_list, pango::Attribute::new_background(r, g, b));
         }
     }
 

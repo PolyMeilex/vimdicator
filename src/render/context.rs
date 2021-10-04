@@ -37,7 +37,7 @@ impl Context {
     }
 
     pub fn itemize(&self, line: &StyledLine) -> Vec<pango::Item> {
-        let attr_iter = line.attr_list.get_iterator();
+        let attr_iter = line.attr_list.iterator();
 
         ItemizeIterator::new(&line.line_str)
             .flat_map(|(offset, len)| {
@@ -74,7 +74,7 @@ impl Context {
             .pango_context
             .list_families()
             .iter()
-            .filter_map(pango::FontFamilyExt::get_name)
+            .map(|f| glib::GString::from(f.to_string()))
             .collect()
     }
 }
@@ -87,8 +87,8 @@ struct FontMetrix {
 
 impl FontMetrix {
     pub fn new(pango_context: pango::Context, line_space: i32) -> Self {
-        let font_metrics = pango_context.get_metrics(None, None).unwrap();
-        let font_desc = pango_context.get_font_description().unwrap();
+        let font_metrics = pango_context.metrics(None, None).unwrap();
+        let font_desc = pango_context.font_description().unwrap();
 
         FontMetrix {
             pango_context,
@@ -113,32 +113,32 @@ pub struct CellMetrics {
 
 impl CellMetrics {
     fn new(font_metrics: &pango::FontMetrics, line_space: i32) -> Self {
-        let ascent = (f64::from(font_metrics.get_ascent()) / f64::from(pango::SCALE)).ceil();
-        let descent = (f64::from(font_metrics.get_descent()) / f64::from(pango::SCALE)).ceil();
+        let ascent = (f64::from(font_metrics.ascent()) / f64::from(pango::SCALE)).ceil();
+        let descent = (f64::from(font_metrics.descent()) / f64::from(pango::SCALE)).ceil();
 
         // distance above top of underline, will typically be negative
-        let pango_underline_position = f64::from(font_metrics.get_underline_position());
+        let pango_underline_position = f64::from(font_metrics.underline_position());
         let underline_position = (pango_underline_position / f64::from(pango::SCALE))
             .abs()
             .ceil()
             .copysign(pango_underline_position);
 
         let underline_thickness =
-            (f64::from(font_metrics.get_underline_thickness()) / f64::from(pango::SCALE)).ceil();
+            (f64::from(font_metrics.underline_thickness()) / f64::from(pango::SCALE)).ceil();
 
         let strikethrough_position =
-            (f64::from(font_metrics.get_strikethrough_position()) / f64::from(pango::SCALE)).ceil();
-        let strikethrough_thickness = (f64::from(font_metrics.get_strikethrough_thickness())
+            (f64::from(font_metrics.strikethrough_position()) / f64::from(pango::SCALE)).ceil();
+        let strikethrough_thickness = (f64::from(font_metrics.strikethrough_thickness())
             / f64::from(pango::SCALE))
         .ceil();
 
         CellMetrics {
-            pango_ascent: font_metrics.get_ascent(),
-            pango_descent: font_metrics.get_descent(),
-            pango_char_width: font_metrics.get_approximate_char_width(),
+            pango_ascent: font_metrics.ascent(),
+            pango_descent: font_metrics.descent(),
+            pango_char_width: font_metrics.approximate_char_width(),
             ascent,
             line_height: ascent + descent + f64::from(line_space),
-            char_width: f64::from(font_metrics.get_approximate_char_width())
+            char_width: f64::from(font_metrics.approximate_char_width())
                 / f64::from(pango::SCALE),
             underline_position: ascent - underline_position + underline_thickness / 2.0,
             underline_thickness,

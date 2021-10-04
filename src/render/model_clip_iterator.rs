@@ -91,7 +91,7 @@ impl ModelClipIteratorFactory for ui_model::UiModel {
     ) -> ModelClipIterator<'a> {
         let model = self.model();
 
-        let (x1, y1, x2, y2) = ctx.clip_extents();
+        let (x1, y1, x2, y2) = ctx.clip_extents().unwrap();
 
         // in case ctx.translate is used y1 can be less then 0
         // in this case just use 0 as top value

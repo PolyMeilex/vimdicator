@@ -19,7 +19,7 @@ use clap::{self, value_t};
 
 use cairo;
 use gdk;
-use gdk::{EventButton, EventMotion, EventScroll, EventType, ModifierType, WindowExt};
+use gdk::{EventButton, EventMotion, EventScroll, EventType, ModifierType};
 use glib;
 use gtk;
 use gtk::{Button, MenuButton, Notebook};
@@ -60,13 +60,11 @@ pub const MINIMUM_SUPPORTED_NVIM_VERSION: &str = "0.3.2";
 
 macro_rules! idle_cb_call {
     ($state:ident.$cb:ident($( $x:expr ),*)) => (
-            glib::idle_add(move || {
-                               if let Some(ref cb) = $state.borrow().$cb {
-                                   (&mut *cb.borrow_mut())($($x),*);
-                               }
-
-                               glib::Continue(false)
-                           });
+        glib::idle_add_once(move || {
+            if let Some(ref cb) = $state.borrow().$cb {
+                (&mut *cb.borrow_mut())($($x),*);
+            }
+        });
     )
 }
 
@@ -177,10 +175,7 @@ impl HeaderBarButtons {
         // Use an idle callback for open_btn, as we might be calling this from one of its own
         // callbacks which would result in borrowing it mutably twice
         let open_btn = self.open_btn.clone();
-        gtk::idle_add(move || {
-            open_btn.set_sensitive(enabled);
-            Continue(false)
-        });
+        glib::idle_add_local_once(move || open_btn.set_sensitive(enabled));
     }
 }
 
@@ -244,7 +239,7 @@ impl State {
         -> State {
         let drawing_area = gtk::DrawingArea::new();
 
-        let pango_context = drawing_area.create_pango_context().unwrap();
+        let pango_context = drawing_area.create_pango_context();
         pango_context.set_font_description(&FontDescription::from_string(DEFAULT_FONT_NAME));
 
         let mut render_state = RenderState::new(pango_context);
@@ -370,12 +365,12 @@ impl State {
     pub fn set_font_desc(&mut self, desc: &str) {
         let font_description = FontDescription::from_string(desc);
 
-        if font_description.get_size() <= 0 {
+        if font_description.size() <= 0 {
             error!("Font size must be > 0");
             return;
         }
 
-        let pango_context = self.drawing_area.create_pango_context().unwrap();
+        let pango_context = self.drawing_area.create_pango_context();
         pango_context.set_font_description(&font_description);
 
         self.render_state
@@ -449,9 +444,8 @@ impl State {
             nvim.clone().spawn(async move {
                 let res = nvim.command(&path).await;
 
-                glib::idle_add(move || {
+                glib::idle_add_once(move || {
                     action_widgets.borrow().as_ref().unwrap().set_enabled(true);
-                    Continue(false)
                 });
 
                 if let Err(e) = res {
@@ -536,7 +530,7 @@ impl State {
             char_width,
             ..
         } = self.render_state.borrow().font_ctx.cell_metrics();
-        let alloc = self.drawing_area.get_allocation();
+        let alloc = self.drawing_area.allocation();
         // SAFETY: We clamp w to 1 and h to 3
         unsafe {(
             NonZeroI64::new_unchecked(((alloc.width as f64 / char_width).trunc() as i64).max(1)),
@@ -550,10 +544,7 @@ impl State {
 
     fn show_error_area(&self) {
         let stack = self.stack.clone();
-        gtk::idle_add(move || {
-            stack.set_visible_child_name("Error");
-            Continue(false)
-        });
+        glib::idle_add_local_once(move || stack.set_visible_child_name("Error"));
     }
 
     fn set_im_location(&self) {
@@ -675,7 +666,7 @@ impl State {
     }
 
     fn max_popup_width(&self) -> i32 {
-        self.drawing_area.get_allocated_width() - 20
+        self.drawing_area.allocated_width() - 20
     }
 
     pub fn subscribe<F>(&self, key: SubscriptionKey, args: &[&str], cb: F) -> SubscriptionHandle
@@ -809,7 +800,7 @@ impl UiState {
                 MouseCursor::Text => "text",
             };
 
-            window.set_cursor(gdk::Cursor::new_from_name(&window.get_display(), cursor).as_ref());
+            window.set_cursor(gdk::Cursor::from_name(&window.display(), cursor).as_ref());
         }
     }
 }
@@ -993,7 +984,7 @@ impl Shell {
             ref_state.borrow().im_context.filter_keypress(ev);
             ref_ui_state
                 .borrow_mut()
-                .apply_mouse_cursor(MouseCursor::None, da.get_window());
+                .apply_mouse_cursor(MouseCursor::None, da.window());
             Inhibit(false)
         });
 
@@ -1021,11 +1012,10 @@ impl Shell {
         state.drawing_area.connect_realize(move |w| {
             // sometime set_client_window does not work without idle_add
             // and looks like not enabled im_context
-            gtk::idle_add(clone!(ref_state, w => move || {
+            glib::idle_add_local_once(clone!(ref_state, w => move || {
                 ref_state.borrow().im_context.set_client_window(
-                    w.get_window().as_ref(),
+                    w.window().as_ref(),
                 );
-                Continue(false)
             }));
         });
 
@@ -1036,7 +1026,7 @@ impl Shell {
 
         let ref_state = self.state.clone();
         state.drawing_area.connect_configure_event(move |_, ev| {
-            debug!("configure_event {:?}", ev.get_size());
+            debug!("configure_event {:?}", ev.size());
 
             let mut state = ref_state.borrow_mut();
             state.try_nvim_resize();
@@ -1061,7 +1051,7 @@ impl Shell {
         state
             .drawing_area
             .connect_drag_data_received(move |_, _, _, _, s, _, _| {
-                let uris = s.get_uris();
+                let uris = s.uris();
                 let command = uris.iter().filter_map(|uri| decode_uri(uri)).fold(
                     ":ar".to_owned(),
                     |command, filename| {
@@ -1079,9 +1069,8 @@ impl Shell {
                 nvim.clone().spawn(async move {
                     let res = nvim.command(&command).await;
 
-                    glib::idle_add(move || {
+                    glib::idle_add_once(move || {
                         action_widgets.borrow().as_ref().unwrap().set_enabled(true);
-                        Continue(false)
                     });
 
                     if let Err(e) = res {
@@ -1101,7 +1090,7 @@ impl Shell {
         state.drawing_area.connect_enter_notify_event(move |_, ev| {
             ui_state_ref
                 .borrow_mut()
-                .apply_mouse_cursor(MouseCursor::Text, ev.get_window());
+                .apply_mouse_cursor(MouseCursor::Text, ev.window());
             gtk::Inhibit(false)
         });
 
@@ -1109,7 +1098,7 @@ impl Shell {
         state.drawing_area.connect_leave_notify_event(move |_, ev| {
             ui_state_ref
                 .borrow_mut()
-                .apply_mouse_cursor(MouseCursor::Default, ev.get_window());
+                .apply_mouse_cursor(MouseCursor::Default, ev.window());
             gtk::Inhibit(false)
         });
     }
@@ -1259,18 +1248,18 @@ fn gtk_scroll_event(state: &mut State, ui_state: &mut UiState, ev: &EventScroll)
 
     state.close_popup_menu();
 
-    match ev.get_direction() {
+    match ev.direction() {
         gdk::ScrollDirection::Right => {
-            mouse_input(state, "wheel", "right", ev.get_state(), ev.get_position())
+            mouse_input(state, "wheel", "right", ev.state(), ev.position())
         }
         gdk::ScrollDirection::Left => {
-            mouse_input(state, "wheel", "left", ev.get_state(), ev.get_position())
+            mouse_input(state, "wheel", "left", ev.state(), ev.position())
         }
         gdk::ScrollDirection::Up => {
-            mouse_input(state, "wheel", "up", ev.get_state(), ev.get_position())
+            mouse_input(state, "wheel", "up", ev.state(), ev.position())
         }
         gdk::ScrollDirection::Down => {
-            mouse_input(state, "wheel", "down", ev.get_state(), ev.get_position())
+            mouse_input(state, "wheel", "down", ev.state(), ev.position())
         }
         gdk::ScrollDirection::Smooth => {
             // Remember and accumulate scroll deltas, so slow scrolling still
@@ -1281,16 +1270,16 @@ fn gtk_scroll_event(state: &mut State, ui_state: &mut UiState, ev: &EventScroll)
             let x = ui_state.scroll_delta.0 as isize;
             let y = ui_state.scroll_delta.1 as isize;
             for _ in 0..x {
-                mouse_input(state, "wheel", "right", ev.get_state(), ev.get_position())
+                mouse_input(state, "wheel", "right", ev.state(), ev.position())
             }
             for _ in 0..-x {
-                mouse_input(state, "wheel", "left", ev.get_state(), ev.get_position())
+                mouse_input(state, "wheel", "left", ev.state(), ev.position())
             }
             for _ in 0..y {
-                mouse_input(state, "wheel", "down", ev.get_state(), ev.get_position())
+                mouse_input(state, "wheel", "down", ev.state(), ev.position())
             }
             for _ in 0..-y {
-                mouse_input(state, "wheel", "up", ev.get_state(), ev.get_position())
+                mouse_input(state, "wheel", "up", ev.state(), ev.position())
             }
             // Subtract performed scroll deltas.
             ui_state.scroll_delta.0 -= x as f64;
@@ -1307,18 +1296,18 @@ fn gtk_button_press(
     ev: &EventButton,
     menu: &gtk::PopoverMenu,
 ) -> Inhibit {
-    if ev.get_event_type() != EventType::ButtonPress {
+    if ev.event_type() != EventType::ButtonPress {
         return Inhibit(false);
     }
 
     if shell.mouse_enabled {
         ui_state.borrow_mut().mouse_pressed = true;
 
-        match ev.get_button() {
-            1 => mouse_input(shell, "left", "press", ev.get_state(), ev.get_position()),
-            2 => mouse_input(shell, "middle", "press", ev.get_state(), ev.get_position()),
+        match ev.button() {
+            1 => mouse_input(shell, "left", "press", ev.state(), ev.position()),
+            2 => mouse_input(shell, "middle", "press", ev.state(), ev.position()),
             3 => {
-                let (x, y) = ev.get_position();
+                let (x, y) = ev.position();
                 menu.set_pointing_to(&gtk::Rectangle {
                     x: x.round() as i32,
                     y: y.round() as i32,
@@ -1328,10 +1317,7 @@ fn gtk_button_press(
 
                 // Popping up the menu will trigger a focus event, so handle this in the idle loop
                 // to avoid a double borrow_mut()
-                gtk::idle_add(clone!(menu => move || {
-                    menu.popup();
-                    Continue(false)
-                }));
+                glib::idle_add_local_once(clone!(menu => move || menu.popup()));
             },
             _ => (),
         }
@@ -1375,10 +1361,10 @@ fn gtk_button_release(shell: &mut State, ui_state: &mut UiState, ev: &EventButto
     ui_state.mouse_pressed = false;
 
     if shell.mouse_enabled && !shell.nvim.is_initializing() {
-        match ev.get_button() {
-            1 => mouse_input(shell, "left", "release", ev.get_state(), ev.get_position()),
-            2 => mouse_input(shell, "middle", "release", ev.get_state(), ev.get_position()),
-            3 => mouse_input(shell, "right", "release", ev.get_state(), ev.get_position()),
+        match ev.button() {
+            1 => mouse_input(shell, "left", "release", ev.state(), ev.position()),
+            2 => mouse_input(shell, "middle", "release", ev.state(), ev.position()),
+            3 => mouse_input(shell, "right", "release", ev.state(), ev.position()),
             _ => (),
         }
     }
@@ -1388,18 +1374,18 @@ fn gtk_button_release(shell: &mut State, ui_state: &mut UiState, ev: &EventButto
 
 fn gtk_motion_notify(shell: &mut State, ui_state: &mut UiState, ev: &EventMotion) -> Inhibit {
     if shell.mouse_enabled && ui_state.mouse_pressed {
-        let ev_pos = ev.get_position();
+        let ev_pos = ev.position();
         let pos = mouse_coordinates_to_nvim(shell, ev_pos);
 
         // if we fire LeftDrag on the same coordinates multiple times, then
         // we get: https://github.com/daa84/neovim-gtk/issues/185
         if pos != ui_state.prev_pos {
-            mouse_input(shell, "left", "drag", ev.get_state(), ev_pos);
+            mouse_input(shell, "left", "drag", ev.state(), ev_pos);
             ui_state.prev_pos = pos;
         }
     }
 
-    ui_state.apply_mouse_cursor(MouseCursor::Text, shell.drawing_area.get_window());
+    ui_state.apply_mouse_cursor(MouseCursor::Text, shell.drawing_area.window());
     Inhibit(false)
 }
 
@@ -1421,8 +1407,8 @@ fn draw_content(state: &State, ctx: &cairo::Context) {
         state.transparency_settings.filled_alpha(),
     );
 
-    ctx.pop_group_to_source();
-    ctx.paint();
+    ctx.pop_group_to_source().unwrap();
+    ctx.paint().unwrap();
 }
 
 fn gtk_draw(state_arc: &Arc<UiMutex<State>>, ctx: &cairo::Context) -> Inhibit {
@@ -1440,26 +1426,22 @@ fn show_nvim_start_error(err: &nvim::NvimInitError, state_arc: Arc<UiMutex<State
     let source = err.source();
     let cmd = err.cmd().unwrap().to_owned();
 
-    glib::idle_add(move || {
+    glib::idle_add_once(move || {
         let state = state_arc.borrow();
         state.nvim.set_error();
         state.error_area.show_nvim_start_error(&source, &cmd);
         state.show_error_area();
-
-        Continue(false)
     });
 }
 
 fn show_nvim_init_error(err: &nvim::NvimInitError, state_arc: Arc<UiMutex<State>>) {
     let source = err.source();
 
-    glib::idle_add(move || {
+    glib::idle_add_once(move || {
         let state = state_arc.borrow();
         state.nvim.set_error();
         state.error_area.show_nvim_init_error(&source);
         state.show_error_area();
-
-        Continue(false)
     });
 }
 
@@ -1495,13 +1477,11 @@ fn init_nvim_async(
             }
         }
 
-        glib::idle_add(move || {
+        glib::idle_add_once(move || {
             cb_state_arc.borrow().nvim.clear();
             if let Some(ref cb) = cb_state_arc.borrow().detach_cb {
                 (&mut *cb.borrow_mut())();
             }
-
-            glib::Continue(false)
         });
     }));
 
@@ -1520,15 +1500,13 @@ fn set_nvim_to_state(state_arc: Arc<UiMutex<State>>, nvim: &NvimSession) {
     let pair2 = pair.clone();
     let nvim = Some(nvim.clone());
 
-    glib::idle_add(move || {
+    glib::idle_add_once(move || {
         state_arc.borrow().nvim.set(nvim.clone().unwrap());
 
         let &(ref lock, ref cvar) = &*pair2;
         let mut started = lock.lock().unwrap();
         *started = Some(nvim.clone());
         cvar.notify_one();
-
-        Continue(false)
     });
 
     // Wait idle set nvim properly
@@ -1540,15 +1518,13 @@ fn set_nvim_to_state(state_arc: Arc<UiMutex<State>>, nvim: &NvimSession) {
 }
 
 fn set_nvim_initialized(state_arc: Arc<UiMutex<State>>) {
-    glib::idle_add(clone!(state_arc => move || {
+    glib::idle_add_once(clone!(state_arc => move || {
         let mut state = state_arc.borrow_mut();
         state.nvim.set_initialized();
         // in some case resize can happens while initilization in progress
         // so force resize here
         state.try_nvim_resize();
         state.cursor.as_mut().unwrap().start();
-
-        Continue(false)
     }));
 
     idle_cb_call!(state_arc.nvim_started_cb());
@@ -1558,15 +1534,15 @@ fn draw_initializing(state: &State, ctx: &cairo::Context) {
     let render_state = state.render_state.borrow();
     let hl = &render_state.hl;
     let layout = pangocairo::functions::create_layout(ctx).unwrap();
-    let alloc = state.drawing_area.get_allocation();
+    let alloc = state.drawing_area.allocation();
 
     let bg_color = hl.bg();
     let fg_color = hl.fg();
     ctx.set_source_rgb(bg_color.0, bg_color.1, bg_color.2);
-    ctx.paint();
+    ctx.paint().unwrap();
 
     layout.set_text("Loading->");
-    let (width, height) = layout.get_pixel_size();
+    let (width, height) = layout.pixel_size();
 
     let x = alloc.width as f64 / 2.0 - width as f64 / 2.0;
     let y = alloc.height as f64 / 2.0 - height as f64 / 2.0;
@@ -1819,8 +1795,8 @@ impl State {
                     let fonts = split_at_comma(&val);
                     for font in &fonts {
                         let desc = FontDescription::from_string(&font);
-                        if desc.get_size() > 0
-                            && exists_fonts.contains(&desc.get_family().unwrap_or_else(|| "".into()))
+                        if desc.size() > 0
+                            && exists_fonts.contains(&desc.family().unwrap_or_else(|| "".into()))
                         {
                             self.set_font_rpc(font);
                             return;

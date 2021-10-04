@@ -224,7 +224,7 @@ impl State {
             let block_preferred_height =
                 self.block.as_ref().map(|b| b.preferred_height).unwrap_or(0);
 
-            let gap = self.drawing_area.get_allocated_height()
+            let gap = self.drawing_area.allocated_height()
                 - level_preferred_height
                 - block_preferred_height;
 
@@ -316,15 +316,15 @@ impl CmdLine {
         let css_provider = gtk::CssProvider::new();
 
         let tree = gtk::TreeView::new();
-        let style_context = tree.get_style_context();
+        let style_context = tree.style_context();
         style_context.add_provider(&css_provider, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);
 
-        tree.get_selection().set_mode(gtk::SelectionMode::Single);
+        tree.selection().set_mode(gtk::SelectionMode::Single);
         tree.set_headers_visible(false);
         tree.set_can_focus(false);
 
         let renderer = gtk::CellRendererText::new();
-        renderer.set_property_ellipsize(pango::EllipsizeMode::End);
+        renderer.set_ellipsize(pango::EllipsizeMode::End);
 
         let column = gtk::TreeViewColumn::new();
         column.pack_start(&renderer, true);
@@ -471,7 +471,7 @@ impl CmdLine {
         max_width: i32,
     ) {
         // update font/color
-        self.wild_renderer.set_property_font(Some(
+        self.wild_renderer.set_font(Some(
             render_state
                 .font_ctx
                 .font_description()
@@ -479,8 +479,7 @@ impl CmdLine {
                 .as_str(),
         ));
 
-        self.wild_renderer
-            .set_property_foreground_rgba(Some(&render_state.hl.pmenu_fg().into()));
+        self.wild_renderer.set_foreground_rgba(Some(&render_state.hl.pmenu_fg().into()));
 
         popup_menu::update_css(&self.wild_css_provider, &render_state.hl);
 
@@ -494,9 +493,9 @@ impl CmdLine {
         self.wild_scroll.set_max_content_width(max_width);
 
         // load data
-        let list_store = gtk::ListStore::new(&[glib::Type::String; 1]);
+        let list_store = gtk::ListStore::new(&[glib::Type::STRING; 1]);
         for item in items {
-            list_store.insert_with_values(None, &[0], &[&item]);
+            list_store.insert_with_values(None, &[(0, &item)]);
         }
         self.wild_tree.set_model(Some(&list_store));
 
@@ -516,15 +515,13 @@ impl CmdLine {
     pub fn wildmenu_select(&self, selected: i64) {
         if selected >= 0 {
             let wild_tree = self.wild_tree.clone();
-            idle_add(move || {
-                let selected_path = gtk::TreePath::new_from_string(&format!("{}", selected));
-                wild_tree.get_selection().select_path(&selected_path);
+            glib::idle_add_local_once(move || {
+                let selected_path = gtk::TreePath::from_string(&format!("{}", selected));
+                wild_tree.selection().select_path(&selected_path);
                 wild_tree.scroll_to_cell(Some(&selected_path), Option::<&gtk::TreeViewColumn>::None, false, 0.0, 0.0);
-
-                Continue(false)
             });
         } else {
-            self.wild_tree.get_selection().unselect_all();
+            self.wild_tree.selection().unselect_all();
         }
     }
 }
@@ -541,7 +538,7 @@ fn gtk_draw(ctx: &cairo::Context, state: &Arc<UiMutex<State>>) -> Inhibit {
 
     render::fill_background(ctx, &render_state.hl, None);
 
-    let gap = state.drawing_area.get_allocated_height() - preferred_height;
+    let gap = state.drawing_area.allocated_height() - preferred_height;
     if gap > 0 {
         ctx.translate(0.0, (gap / 2) as f64);
     }
@@ -570,8 +567,8 @@ fn gtk_draw(ctx: &cairo::Context, state: &Arc<UiMutex<State>>) -> Inhibit {
         );
     }
 
-    ctx.pop_group_to_source();
-    ctx.paint();
+    ctx.pop_group_to_source().unwrap();
+    ctx.paint().unwrap();
 
     Inhibit(false)
 }

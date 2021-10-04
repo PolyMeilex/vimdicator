@@ -111,7 +111,7 @@ impl Tabline {
 
         signal::signal_handler_block(&self.tabs, &self.switch_handler_id);
 
-        let count = self.tabs.get_n_pages() as usize;
+        let count = self.tabs.n_pages() as usize;
         if count < tabs.len() {
             for _ in count..tabs.len() {
                 let empty = gtk::Box::new(gtk::Orientation::Vertical, 0);
@@ -119,12 +119,12 @@ impl Tabline {
                 let title = gtk::Label::new(None);
                 title.set_ellipsize(pango::EllipsizeMode::Middle);
                 title.set_width_chars(25);
-                let close_btn = gtk::Button::new_from_icon_name(
+                let close_btn = gtk::Button::from_icon_name(
                     Some("window-close-symbolic"),
                     gtk::IconSize::Menu,
                 );
                 close_btn.set_relief(gtk::ReliefStyle::None);
-                close_btn.get_style_context().add_class("small-button");
+                close_btn.style_context().add_class("small-button");
                 close_btn.set_focus_on_click(false);
                 let label_box = gtk::Box::new(gtk::Orientation::Horizontal, 0);
                 label_box.pack_start(&title, true, false, 0);
@@ -138,10 +138,10 @@ impl Tabline {
                 let state_ref = Rc::clone(&self.state);
                 close_btn.connect_clicked(move |btn| {
                     let current_label = btn
-                        .get_parent().unwrap();
-                    for i in 0..tabs.get_n_pages() {
-                        let page = tabs.get_nth_page(Some(i)).unwrap();
-                        let label = tabs.get_tab_label(&page).unwrap();
+                        .parent().unwrap();
+                    for i in 0..tabs.n_pages() {
+                        let page = tabs.nth_page(Some(i)).unwrap();
+                        let label = tabs.tab_label(&page).unwrap();
                         if label == current_label {
                             state_ref.borrow().close_tab(i);
                         }
@@ -155,13 +155,13 @@ impl Tabline {
         }
 
         for (idx, tab) in tabs.iter().enumerate() {
-            let tab_child = self.tabs.get_nth_page(Some(idx as u32));
+            let tab_child = self.tabs.nth_page(Some(idx as u32));
             let tab_label = self.tabs
-                .get_tab_label(&tab_child.unwrap())
+                .tab_label(&tab_child.unwrap())
                 .unwrap()
                 .downcast::<gtk::Box>()
                 .unwrap()
-                .get_children()
+                .children()
                 .into_iter()
                 .next()
                 .unwrap()

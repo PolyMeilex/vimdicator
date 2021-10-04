@@ -123,6 +123,8 @@ fn main() {
         }
     }
 
+    gtk::init().expect("Failed to initialize GTK+");
+
     let app_flags = gio::ApplicationFlags::HANDLES_OPEN | gio::ApplicationFlags::NON_UNIQUE;
 
     glib::set_program_name(Some("NeovimGtk"));
@@ -131,8 +133,7 @@ fn main() {
         gtk::Application::new(Some("org.daa.NeovimGtkDebug"), app_flags)
     } else {
         gtk::Application::new(Some("org.daa.NeovimGtk"), app_flags)
-    }
-    .expect("Failed to initialize GTK application");
+    };
 
     let matches_copy = matches.clone();
     app.connect_activate(move |app| {
@@ -156,7 +157,7 @@ fn main() {
 
     let app_exe = std::env::args().next().unwrap_or_else(|| "nvim-gtk".to_owned());
 
-    app.run(
+    app.run_with_args(
         &std::iter::once(app_exe)
             .chain(
                 matches
@@ -171,7 +172,7 @@ fn main() {
 fn open(app: &gtk::Application, files: &[gio::File], matches: &ArgMatches) {
     let files_list: Vec<String> = files
         .iter()
-        .filter_map(|f| f.get_path()?.to_str().map(str::to_owned))
+        .filter_map(|f| f.path()?.to_str().map(str::to_owned))
         .collect();
 
     let mut ui = Ui::new(

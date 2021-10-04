@@ -32,7 +32,7 @@ impl ContextAlpha for cairo::Context {
 
 pub fn fill_background(ctx: &cairo::Context, hl: &HighlightMap, alpha: Option<f64>) {
     ctx.set_source_rgbo(hl.bg(), alpha);
-    ctx.paint();
+    ctx.paint().unwrap();
 }
 
 pub fn render<C: Cursor>(
@@ -85,7 +85,7 @@ fn draw_cursor<C: Cursor>(
     let cell_metrics = font_ctx.cell_metrics();
     let (cursor_row, cursor_col) = ui_model.get_cursor();
 
-    let (x1, y1, x2, y2) = ctx.clip_extents();
+    let (x1, y1, x2, y2) = ctx.clip_extents().unwrap();
     let line_x = cursor_col as f64 * cell_metrics.char_width;
     let line_y = cursor_row as f64 * cell_metrics.line_height;
 
@@ -177,7 +177,7 @@ fn draw_underline_strikethrough(
             ctx.set_line_width(strikethrough_thickness);
             ctx.move_to(line_x, line_y + strikethrough_position);
             ctx.line_to(line_x + char_width, line_y + strikethrough_position);
-            ctx.stroke();
+            ctx.stroke().unwrap();
         }
 
         if cell.hl.undercurl {
@@ -201,7 +201,7 @@ fn draw_underline_strikethrough(
             ctx.set_line_width(underline_thickness);
             ctx.move_to(line_x, line_y + underline_position);
             ctx.line_to(line_x + char_width, line_y + underline_position);
-            ctx.stroke();
+            ctx.stroke().unwrap();
         }
     }
 }
@@ -234,7 +234,7 @@ fn draw_cell_bg(
             if bg != hl.bg() {
                 ctx.set_source_rgbo(bg, bg_alpha);
                 ctx.rectangle(line_x, line_y, char_width, line_height);
-                ctx.fill();
+                ctx.fill().unwrap();
             }
         } else {
             ctx.set_source_rgbo(bg, bg_alpha);
@@ -244,7 +244,7 @@ fn draw_cell_bg(
                 char_width * line.item_len_from_idx(col) as f64,
                 line_height,
             );
-            ctx.fill();
+            ctx.fill().unwrap();
         }
     }
 }
