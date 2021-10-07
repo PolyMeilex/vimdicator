@@ -1158,8 +1158,10 @@ impl Shell {
 
     pub fn detach_ui(&mut self) {
         let state = self.state.borrow();
+        let nvim_client = state.nvim.clone();
 
-        if let Some(nvim) = state.nvim() {
+        if let Some(nvim) = nvim_client.nvim() {
+            nvim_client.clear();
             nvim.block_timeout(nvim.ui_detach()).report_err();
             nvim.block_on(nvim.shutdown());
         }
