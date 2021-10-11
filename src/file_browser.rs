@@ -71,19 +71,113 @@ enum Column {
 
 impl FileBrowserWidget {
     pub fn new(shell_state: &Arc<UiMutex<shell::State>>) -> Self {
-        let builder = gtk::Builder::from_string(include_str!("../resources/side-panel.ui"));
-        let widget: gtk::Box = builder.object("file_browser").unwrap();
-        let tree: gtk::TreeView = builder.object("file_browser_tree_view").unwrap();
-        let store: gtk::TreeStore = builder.object("file_browser_tree_store").unwrap();
-        let dir_list_model: gtk::TreeStore = builder.object("dir_list_model").unwrap();
-        let dir_list: gtk::ComboBox = builder.object("dir_list").unwrap();
-        let context_menu: gtk::Menu = builder.object("file_browser_context_menu").unwrap();
-        let show_hidden_checkbox: gtk::CheckMenuItem = builder
-            .object("file_browser_show_hidden_checkbox")
-            .unwrap();
+        let widget = gtk::BoxBuilder::new()
+            .can_focus(false)
+            .sensitive(false) // Will be enabled when nvim is ready
+            .width_request(150)
+            .orientation(gtk::Orientation::Vertical)
+            .build();
+        widget.style_context().add_class("view");
 
-        // Disable the file browser widget by default, it'll be re-enabled once nvim is ready
-        widget.set_sensitive(false);
+        let dir_list_model = gtk::TreeStore::new(&[
+            glib::Type::STRING,
+            glib::Type::STRING,
+            glib::Type::STRING,
+        ]);
+        let dir_list = gtk::ComboBoxBuilder::new()
+            .can_focus(false)
+            .focus_on_click(false)
+            .border_width(6)
+            .wrap_width(1)
+            .model(&dir_list_model)
+            .build();
+
+        let text_renderer = gtk::CellRendererTextBuilder::new()
+            .xpad(6)
+            .ellipsize(pango::EllipsizeMode::End)
+            .build();
+        dir_list.pack_end(&text_renderer, false);
+        dir_list.add_attribute(&text_renderer, "text", 0);
+
+        let pixbuf_renderer = gtk::CellRendererPixbufBuilder::new()
+            .xpad(6)
+            .build();
+        dir_list.pack_start(&pixbuf_renderer, false);
+        dir_list.add_attribute(&pixbuf_renderer, "icon-name", 1);
+
+        widget.pack_start(&dir_list, false, true, 0);
+
+        let store = gtk::TreeStore::new(&[
+            glib::Type::STRING,
+            glib::Type::STRING,
+            glib::Type::U8,
+            glib::Type::STRING,
+        ]);
+        let tree = gtk::TreeViewBuilder::new()
+            .can_focus(false)
+            .headers_visible(false)
+            .show_expanders(false)
+            .level_indentation(20)
+            .activate_on_single_click(true)
+            .model(&store)
+            .build();
+        tree.selection().set_mode(gtk::SelectionMode::Single);
+
+        let tree_column = gtk::TreeViewColumnBuilder::new()
+            .sizing(gtk::TreeViewColumnSizing::Autosize)
+            .build();
+
+        let pixbuf_renderer = gtk::CellRendererPixbufBuilder::new()
+            .xpad(6)
+            .build();
+        tree_column.pack_start(&pixbuf_renderer, false);
+        tree_column.add_attribute(&pixbuf_renderer, "icon-name", 3);
+
+        let text_renderer = gtk::CellRendererText::new();
+        tree_column.pack_start(&text_renderer, false);
+        tree_column.add_attribute(&text_renderer, "text", 0);
+
+        tree.append_column(&tree_column);
+
+        let window = gtk::ScrolledWindowBuilder::new()
+            .can_focus(false)
+            .child(&tree)
+            .build();
+        widget.pack_start(&window, true, true, 0);
+
+        let context_menu = gtk::MenuBuilder::new()
+            .visible(true)
+            .can_focus(false)
+            .build();
+
+        context_menu.append(
+            &gtk::MenuItemBuilder::new()
+            .visible(true)
+            .can_focus(false)
+            .action_name("filebrowser.cd")
+            .label("Go to directory")
+            .build()
+        );
+        context_menu.append(
+            &gtk::SeparatorMenuItemBuilder::new()
+            .visible(true)
+            .can_focus(false)
+            .build()
+        );
+        context_menu.append(
+            &gtk::MenuItemBuilder::new()
+            .visible(true)
+            .can_focus(false)
+            .action_name("filebrowser.reload")
+            .label("Reload")
+            .build()
+        );
+        let show_hidden_checkbox = gtk::CheckMenuItemBuilder::new()
+            .visible(true)
+            .can_focus(false)
+            .label("Show hidden files")
+            .build();
+        context_menu.append(&show_hidden_checkbox);
 
         let file_browser = FileBrowserWidget {
             store,
