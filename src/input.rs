@@ -66,8 +66,8 @@ pub fn keyval_to_input_string(in_str: &str, in_state: gdk::ModifierType) -> Stri
 pub fn convert_key(ev: &EventKey) -> Option<String> {
     let keyval = ev.keyval();
     let state = ev.state();
-    if let Some(ref keyval_name) = keyval.to_unicode() {
-        if let Some(cnvt) = KEYVAL_MAP.get(keyval_name.to_string().as_str()).cloned() {
+    if let Some(ref keyval_name) = keyval.name() {
+        if let Some(cnvt) = KEYVAL_MAP.get(keyval_name.as_str()).cloned() {
             return Some(keyval_to_input_string(cnvt, state));
         }
     }
