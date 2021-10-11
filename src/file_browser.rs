@@ -130,7 +130,7 @@ impl FileBrowserWidget {
             let state = state_ref.borrow();
             if let Some(child) = store.iter_children(Some(iter)) {
                 let filename = store.value(&child, Column::Filename as i32);
-                if filename.get::<&str>().is_ok() {
+                if filename.get::<&str>().is_err() {
                     store.remove(&child);
                     let dir_value = store.value(&iter, Column::Path as i32);
                     if let Ok(dir) = dir_value.get() {
