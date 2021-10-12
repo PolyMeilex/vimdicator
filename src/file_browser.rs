@@ -12,6 +12,7 @@ use gio;
 use gio::prelude::*;
 use gtk;
 use gtk::prelude::*;
+use gdk;
 
 use crate::misc::escape_filename;
 use crate::nvim::NvimSession;
@@ -27,8 +28,8 @@ const ICON_FILE: &str = "text-x-generic-symbolic";
 struct Components {
     dir_list_model: gtk::TreeStore,
     dir_list: gtk::ComboBox,
-    context_menu: gtk::Menu,
-    show_hidden_checkbox: gtk::CheckMenuItem,
+    context_menu: gtk::PopoverMenu,
+    show_hidden_action: gio::SimpleAction,
     cd_action: gio::SimpleAction,
 }
 
@@ -145,39 +146,22 @@ impl FileBrowserWidget {
             .build();
         widget.pack_start(&window, true, true, 0);
 
-        let context_menu = gtk::MenuBuilder::new()
-            .visible(true)
-            .can_focus(false)
-            .build();
+        let menu = gio::Menu::new();
 
-        context_menu.append(
-            &gtk::MenuItemBuilder::new()
-            .visible(true)
-            .can_focus(false)
-            .action_name("filebrowser.cd")
-            .label("Go to directory")
-            .build()
-        );
-        context_menu.append(
-            &gtk::SeparatorMenuItemBuilder::new()
-            .visible(true)
-            .can_focus(false)
-            .build()
-        );
-        context_menu.append(
-            &gtk::MenuItemBuilder::new()
-            .visible(true)
-            .can_focus(false)
-            .action_name("filebrowser.reload")
-            .label("Reload")
-            .build()
-        );
-        let show_hidden_checkbox = gtk::CheckMenuItemBuilder::new()
-            .visible(true)
-            .can_focus(false)
-            .label("Show hidden files")
+        let section = gio::Menu::new();
+        section.append(Some("Go to directory"), Some("cd"));
+        menu.append_section(None, &section);
+
+        let section = gio::Menu::new();
+        section.append(Some("Reload"), Some("reload"));
+        section.append(Some("Show hidden files"), Some("show-hidden"));
+        menu.append_section(None, &section);
+
+        let context_menu = gtk::PopoverMenuBuilder::new()
+            .position(gtk::PositionType::Bottom)
+            .relative_to(&tree)
             .build();
-        context_menu.append(&show_hidden_checkbox);
+        context_menu.bind_model(Some(&menu), Some("filebrowser"));
 
         let file_browser = FileBrowserWidget {
             store,
@@ -187,8 +171,10 @@ impl FileBrowserWidget {
                 dir_list_model,
                 dir_list,
                 context_menu,
-                show_hidden_checkbox,
                 cd_action: gio::SimpleAction::new("cd", None),
+                show_hidden_action: gio::SimpleAction::new_stateful(
+                    "show-hidden", None, &false.to_variant()
+                ),
             },
             state: Rc::new(RefCell::new(State {
                 current_dir: "".to_owned(),
@@ -281,6 +267,16 @@ impl FileBrowserWidget {
             }
         }));
         actions.add_action(cd_action);
+
+        // Show / hide hidden files when corresponding menu item is toggled.
+        let show_hidden_action = &self.comps.show_hidden_action;
+        show_hidden_action.connect_activate(clone!(state_ref, store => move |action, _| {
+            let mut state = state_ref.borrow_mut();
+            state.show_hidden = !state.show_hidden;
+            action.set_state(&state.show_hidden.to_variant());
+            tree_reload(&store, &state);
+        }));
+        actions.add_action(show_hidden_action);
 
         self.comps
             .context_menu
@@ -388,8 +384,14 @@ impl FileBrowserWidget {
             clone!(store, state_ref, context_menu, cd_action => move |tree, ev_btn| {
                 // Open context menu on right click.
                 if ev_btn.button() == 3 {
-                    context_menu.popup_at_pointer(Some(&**ev_btn));
                     let (pos_x, pos_y) = ev_btn.position();
+                    context_menu.set_pointing_to(&gdk::Rectangle {
+                        x: pos_x.round() as i32,
+                        y: pos_y.round() as i32,
+                        width: 0,
+                        height: 0,
+                    });
+                    context_menu.popup();
                     let iter = tree
                         .path_at_pos(pos_x as i32, pos_y as i32)
                         .and_then(|(path, _, _, _)| path)
@@ -416,13 +418,6 @@ impl FileBrowserWidget {
                 Inhibit(false)
             }),
         );
-
-        // Show / hide hidden files when corresponding menu item is toggled.
-        self.comps.show_hidden_checkbox.connect_toggled(clone!(state_ref, store => move |ev| {
-            let mut state = state_ref.borrow_mut();
-            state.show_hidden = ev.is_active();
-            tree_reload(&store, &state);
-        }));
     }
 }
 
