@@ -1106,26 +1106,30 @@ impl Shell {
     fn create_context_menu(&self, state: &State) -> gtk::PopoverMenu {
         let state_ref = &self.state;
 
-        let menu = gtk::PopoverMenu::new();
-        let menu_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        let action_group = gio::SimpleActionGroup::new();
 
-        let copy = gtk::ModelButton::new();
-        copy.set_label("Copy");
-        copy.connect_clicked(clone!(state_ref => move |_| state_ref.borrow().edit_copy("+")));
-        menu_box.pack_start(&copy, false, true, 0);
+        let copy = gio::SimpleAction::new("copy", None);
+        copy.connect_activate(clone!(state_ref => move |_, _| state_ref.borrow().edit_copy("+")));
+        action_group.add_action(&copy);
 
-        let paste = gtk::ModelButton::new();
-        paste.set_label("Paste");
-        paste.connect_clicked(clone!(state_ref => move |_| state_ref.borrow().edit_paste("+")));
-        menu_box.pack_start(&paste, false, true, 0);
+        let paste = gio::SimpleAction::new("paste", None);
+        paste.connect_activate(clone!(state_ref => move |_, _| state_ref.borrow().edit_paste("+")));
+        action_group.add_action(&paste);
 
-        menu_box.set_border_width(10);
-        menu_box.show_all();
+        let menu = gio::Menu::new();
+        let section = gio::Menu::new();
+        section.append(Some("Copy"), Some("copy"));
+        section.append(Some("Paste"), Some("paste"));
+        menu.append_section(None, &section);
 
-        menu.add(&menu_box);
-        menu.set_relative_to(Some(&state.drawing_area));
-        menu.set_position(gtk::PositionType::Bottom);
-        menu
+        let popover = gtk::PopoverMenuBuilder::new()
+            .position(gtk::PositionType::Bottom)
+            .relative_to(&state.drawing_area)
+            .build();
+        popover.insert_action_group("menu", Some(&action_group));
+        popover.bind_model(Some(&menu), Some("menu"));
+
+        popover
     }
 
     #[cfg(unix)]
