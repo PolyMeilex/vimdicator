@@ -133,11 +133,15 @@ impl Ui {
 
         let main = Paned::new(Orientation::Horizontal);
 
+        let comps_ref = &self.comps;
+        let shell_ref = &self.shell;
+        let file_browser_ref = &self.file_browser;
+
         {
             // initialize window from comps
             // borrowing of comps must be leaved
             // for event processing
-            let mut comps = self.comps.borrow_mut();
+            let mut comps = comps_ref.borrow_mut();
 
             self.shell.borrow_mut().init();
 
@@ -192,20 +196,19 @@ impl Ui {
 
         let show_sidebar_action =
             SimpleAction::new_stateful("show-sidebar", None, &false.to_variant());
-        let file_browser_ref = self.file_browser.clone();
-        let comps_ref = self.comps.clone();
-        show_sidebar_action.connect_change_state(move |action, value| {
-            if let Some(value) = value {
-                action.set_state(value);
-                let is_active = value.get::<bool>().unwrap();
-                file_browser_ref.borrow().set_visible(is_active);
-                comps_ref.borrow_mut().window_state.show_sidebar = is_active;
-            }
-        });
+        show_sidebar_action.connect_change_state(
+            clone!(file_browser_ref, comps_ref => move |action, value| {
+                if let Some(value) = value {
+                    action.set_state(value);
+                    let is_active = value.get::<bool>().unwrap();
+                    file_browser_ref.borrow().set_visible(is_active);
+                    comps_ref.borrow_mut().window_state.show_sidebar = is_active;
+                }
+            })
+        );
         app.add_action(&show_sidebar_action);
 
-        let comps_ref = self.comps.clone();
-        window.connect_size_allocate(clone!(main => move |window, _| {
+        window.connect_size_allocate(clone!(main, comps_ref => move |window, _| {
             gtk_window_size_allocate(
                 window,
                 &mut *comps_ref.borrow_mut(),
@@ -213,16 +216,14 @@ impl Ui {
             );
         }));
 
-        let comps_ref = self.comps.clone();
-        window.connect_window_state_event(move |_, event| {
+        window.connect_window_state_event(clone!(comps_ref => move |_, event| {
             gtk_window_state_event(event, &mut *comps_ref.borrow_mut());
             Inhibit(false)
-        });
+        }));
 
-        let comps_ref = self.comps.clone();
-        window.connect_destroy(move |_| {
+        window.connect_destroy(clone!(comps_ref => move |_| {
             comps_ref.borrow().window_state.save();
-        });
+        }));
 
         let shell = self.shell.borrow();
         let file_browser = self.file_browser.borrow();
@@ -236,38 +237,33 @@ impl Ui {
         if restore_win_state {
             // Hide sidebar, if it wasn't shown last time.
             // Has to be done after show_all(), so it won't be shown again.
-            let show_sidebar = self.comps.borrow().window_state.show_sidebar;
+            let show_sidebar = comps_ref.borrow().window_state.show_sidebar;
             show_sidebar_action.change_state(&show_sidebar.to_variant());
         }
 
-        let comps_ref = self.comps.clone();
         let update_title = shell.state.borrow().subscribe(
             SubscriptionKey::from("BufEnter,DirChanged"),
             &["expand('%:p')", "getcwd()"],
-            move |args| update_window_title(&comps_ref, args),
+            clone!(comps_ref => move |args| update_window_title(&comps_ref, args)),
         );
 
-        let shell_ref = self.shell.clone();
         let update_completeopt = shell.state.borrow().subscribe(
             SubscriptionKey::with_pattern("OptionSet", "completeopt"),
             &["&completeopt"],
-            move |args| set_completeopts(&*shell_ref, args),
+            clone!(shell_ref => move |args| set_completeopts(&*shell_ref, args)),
         );
 
-        let comps_ref = self.comps.clone();
-        let shell_ref = self.shell.clone();
-        window.connect_delete_event(move |_, _| gtk_delete(&*comps_ref, &*shell_ref));
+        window.connect_delete_event(clone!(comps_ref, shell_ref => move |_, _| {
+            gtk_delete(&*comps_ref, &*shell_ref)
+        }));
 
         shell.grab_focus();
 
-        let comps_ref = self.comps.clone();
-        shell.set_detach_cb(Some(move || {
-            let comps_ref = comps_ref.clone();
-            glib::idle_add_once(move || comps_ref.borrow().close_window());
-        }));
+        shell.set_detach_cb(Some(clone!(comps_ref => move || {
+            glib::idle_add_once(clone!(comps_ref => move || comps_ref.borrow().close_window()));
+        })));
 
         let state_ref = self.shell.borrow().state.clone();
-        let file_browser_ref = self.file_browser.clone();
         let plug_manager_ref = self.plug_manager.clone();
         let files_list = self.open_paths.clone();
 
@@ -280,7 +276,7 @@ impl Ui {
 
         state_ref.borrow().set_action_widgets(header_bar, file_browser_ref.borrow().clone());
 
-        shell.set_nvim_started_cb(Some(move || {
+        shell.set_nvim_started_cb(Some(clone!(file_browser_ref => move || {
             Ui::nvim_started(
                 &state_ref.borrow(),
                 &plug_manager_ref,
@@ -292,10 +288,10 @@ impl Ui {
                 &post_config_cmds,
                 mode,
             );
-        }));
+        })));
 
         let sidebar_action = UiMutex::new(show_sidebar_action);
-        let comps_ref = self.comps.clone();
+        let comps_ref = comps_ref.clone();
         let projects = self.projects.clone();
         shell.set_nvim_command_cb(Some(
             move |shell: &mut shell::State, command: NvimCommand| {
