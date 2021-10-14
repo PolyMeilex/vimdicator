@@ -61,8 +61,8 @@ version = "0.14"
 
 [dependencies.gtk]
 version = "0.14"
-features = ["v3_22"]
+features = ["v3_24"]
 
 [dependencies.gtk-sys]
 version = "0.14"
-features = ["v3_22"]
+features = ["v3_24"]
