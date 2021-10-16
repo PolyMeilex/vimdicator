@@ -118,14 +118,14 @@ macro_rules! set_ui_opts {
         $ui.nvim()
            .ok_or_else(|| "Nvim not initialized".to_owned())
            .and_then(|nvim| {
-                   set_ui_opt(&nvim, stringify!(ext_$first_opt), &$first_val)
-                   $( $( ?; set_ui_opt(&nvim, stringify!(ext_$opt), &$val) )* )?
+                   set_ui_opt(&nvim, concat!("ext_", stringify!($first_opt)), &$first_val)
+                   $( $( ?; set_ui_opt(&nvim, concat!("ext_", stringify!($opt)), &$val) )* )?
            })
     };
 }
 
 fn set_ui_opt(nvim: &NvimSession, opt: &str, val: &Value) -> Result<(), String> {
-    nvim.block_timeout(nvim.set_option(opt, Value::from(try_uint!(val) == 1)))
+    nvim.block_timeout(nvim.ui_set_option(opt, Value::from(try_uint!(val) == 1)))
         .map_err(|e| e.to_string())
 }
 
