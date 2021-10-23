@@ -148,8 +148,7 @@ impl Ui {
             comps.window = Some(window.clone());
 
             let prefer_dark_theme = env::var("NVIM_GTK_PREFER_DARK_THEME")
-                .ok()
-                .and_then(|opt| opt.trim().parse::<bool>().ok())
+                .map(|opt| opt.trim() == "1")
                 .unwrap_or(false);
             if prefer_dark_theme {
                 if let Some(settings) = window.settings() {
