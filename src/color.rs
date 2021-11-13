@@ -71,7 +71,7 @@ impl Color {
 }
 
 
-/// From https://jonasjacek.github.io/colors/ 
+/// From https://jonasjacek.github.io/colors/
 const TERMINAL_COLORS: [(u8, u8, u8); 256] = [
     (0, 0, 0),
     (128, 0, 0),
