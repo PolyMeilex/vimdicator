@@ -3,6 +3,8 @@ use std::cmp::min;
 use std::iter;
 use std::rc::Rc;
 
+use unicode_width::*;
+
 use gdk::{EventButton, EventType};
 use glib;
 use gtk;
@@ -100,18 +102,38 @@ impl State {
     fn limit_column_widths(&self, ctx: &PopupMenuContext) {
         const DEFAULT_PADDING: i32 = 5;
 
+        let mut max_word = ("", 0);
+        let mut max_kind = ("", 0);
+        let mut max_menu = ("", 0);
+        for item in ctx.menu_items {
+            let kind_width = item.kind.width_cjk();
+            let word_width = item.word.width_cjk();
+            let menu_width = item.menu.width_cjk();
+
+            if kind_width > max_kind.1 {
+                max_kind = (item.kind, kind_width);
+            }
+            if word_width > max_word.1 {
+                max_word = (item.word, word_width);
+            }
+            if menu_width > max_menu.1 {
+                max_menu = (item.menu, menu_width);
+            }
+        }
+        let max_word = max_word.0;
+        let max_kind = max_kind.0;
+        let max_menu = max_menu.0;
+
         let layout = ctx.font_ctx.create_layout();
-        let kind_exists = ctx.menu_items.iter().any(|i| !i.kind.is_empty());
         let max_width = self.scroll.max_content_width();
         let (xpad, _) = self.renderer.padding();
 
-        let max_word_line = ctx.menu_items.iter().max_by_key(|m| m.word.len()).unwrap();
-        layout.set_text(max_word_line.word);
+        layout.set_text(max_word);
         let (word_max_width, _) = layout.pixel_size();
         let word_column_width = word_max_width + xpad * 2 + DEFAULT_PADDING;
 
-        if kind_exists {
-            layout.set_text("[v]");
+        if !max_kind.is_empty() {
+            layout.set_text(max_kind);
             let (kind_width, _) = layout.pixel_size();
 
             self.kind_column
@@ -126,10 +148,8 @@ impl State {
                 .set_fixed_width(min(max_width, word_column_width));
         }
 
-        let max_menu_line = ctx.menu_items.iter().max_by_key(|m| m.menu.len()).unwrap();
-
-        if !max_menu_line.menu.is_empty() {
-            layout.set_text(max_menu_line.menu);
+        if !max_menu.is_empty() {
+            layout.set_text(max_menu);
             let (menu_max_width, _) = layout.pixel_size();
             self.menu_column
                 .set_fixed_width(menu_max_width + xpad * 2 + DEFAULT_PADDING);
