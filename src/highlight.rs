@@ -98,6 +98,10 @@ impl HighlightMap {
         let hl = Rc::new(Highlight::from_value_map(&hl));
 
         for item in info {
+            if item.get("kind").unwrap().as_str().unwrap() != "syntax" {
+                continue;
+            }
+
             match item.get("hi_name").and_then(Value::as_str) {
                 Some("Pmenu") => self.pmenu = hl.clone(),
                 Some("PmenuSel") => self.pmenu_sel = hl.clone(),
