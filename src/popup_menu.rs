@@ -64,10 +64,10 @@ impl State {
         let info_label = gtk::Label::new(None);
         info_label.set_line_wrap(true);
 
-        let scroll = gtk::ScrolledWindow::new(
-            Option::<&gtk::Adjustment>::None,
-            Option::<&gtk::Adjustment>::None,
-        );
+        let scroll = gtk::ScrolledWindowBuilder::new()
+            .propagate_natural_width(true)
+            .propagate_natural_height(true)
+            .build();
 
         tree.connect_size_allocate(
             clone!(scroll, renderer => move |tree, _| on_treeview_allocate(&scroll, tree, &renderer)),
@@ -93,8 +93,6 @@ impl State {
         }
 
         self.scroll.set_max_content_width(ctx.max_width);
-        self.scroll.set_propagate_natural_width(true);
-        self.scroll.set_propagate_natural_height(true);
         self.update_tree(&ctx);
         self.select(ctx.selected);
     }
