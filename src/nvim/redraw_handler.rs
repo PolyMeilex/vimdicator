@@ -154,7 +154,13 @@ pub fn call_gui_event(
         },
         "Option" => match try_str!(args[0]) {
             "Popupmenu" => set_ui_opts!(ui, popupmenu = args[1])?,
-            "Tabline" => set_ui_opts!(ui, tabline = args[1])?,
+            "Tabline" => {
+                let nvim = ui.nvim().ok_or_else(|| "Nvim not initialized".to_owned())?;
+                let arg = try_uint!(args[1]) == 1;
+
+                set_ui_opt(&nvim, "ext_tabline", &args[1])?;
+                ui.set_tabline(arg)
+            },
             "Cmdline" => set_ui_opts!(ui, cmdline = args[1], wildmenu = args[1])?,
             opt => error!("Unknown option {}", opt),
         },

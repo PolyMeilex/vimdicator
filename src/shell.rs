@@ -756,6 +756,10 @@ impl State {
             }
         });
     }
+
+    pub fn set_tabline(&self, visible: bool) {
+        self.tabs.set_visible(visible)
+    }
 }
 
 #[derive(PartialEq)]
