@@ -11,7 +11,6 @@ use crate::ui::UiMutex;
 use rmpv;
 use crate::value::ValueMapExt;
 
-use super::NvimSession;
 use super::handler::NvimHandler;
 use super::repaint_mode::RepaintMode;
 
@@ -113,20 +112,13 @@ macro_rules! call {
     )
 }
 
-macro_rules! set_ui_opts {
-    ($ui:ident, $first_opt:ident = $first_val:expr $(, $( $opt:ident = $val:expr ),* )? ) => {
-        $ui.nvim()
-           .ok_or_else(|| "Nvim not initialized".to_owned())
-           .and_then(|nvim| {
-                   set_ui_opt(&nvim, concat!("ext_", stringify!($first_opt)), &$first_val)
-                   $( $( ?; set_ui_opt(&nvim, concat!("ext_", stringify!($opt)), &$val) )* )?
-           })
-    };
-}
+fn set_ui_opt(ui: &mut shell::State, opts: &[&str], val: bool) -> Result<(), String> {
+    let nvim = ui.nvim().ok_or_else(|| "Nvim should be initialized by now, but isn't".to_owned())?;
 
-fn set_ui_opt(nvim: &NvimSession, opt: &str, val: &Value) -> Result<(), String> {
-    nvim.block_timeout(nvim.ui_set_option(opt, Value::from(try_uint!(val) == 1)))
-        .map_err(|e| e.to_string())
+    for opt in opts {
+        nvim.block_timeout(nvim.ui_set_option(opt, val.into())).map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 pub enum NvimCommand {
@@ -153,15 +145,14 @@ pub fn call_gui_event(
             opt => error!("Unknown option {}", opt),
         },
         "Option" => match try_str!(args[0]) {
-            "Popupmenu" => set_ui_opts!(ui, popupmenu = args[1])?,
+            "Popupmenu" => set_ui_opt(ui, &["ext_popupmenu"], try_uint!(args[1]) == 1)?,
             "Tabline" => {
-                let nvim = ui.nvim().ok_or_else(|| "Nvim not initialized".to_owned())?;
                 let arg = try_uint!(args[1]) == 1;
 
-                set_ui_opt(&nvim, "ext_tabline", &args[1])?;
-                ui.set_tabline(arg)
+                set_ui_opt(ui, &["ext_tabline"], arg)?;
+                ui.set_tabline(arg);
             },
-            "Cmdline" => set_ui_opts!(ui, cmdline = args[1], wildmenu = args[1])?,
+            "Cmdline" => set_ui_opt(ui, &["ext_cmdline", "ext_wildmenu"], try_uint!(args[1]) == 1)?,
             opt => error!("Unknown option {}", opt),
         },
         "Command" => {
