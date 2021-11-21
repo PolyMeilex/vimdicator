@@ -218,15 +218,10 @@ pub fn call_gui_request(
                         t.split('\n').map(|s| s.into()).collect::<Vec<Value>>(),
                     ))
                 }
-                opt => {
-                    error!("Unknown option {}", opt);
-                    Err(Value::Nil)
-                }
+                opt => Err(format!("Unknown option: {}", opt).into()),
             }
         }
-        _ => Err(Value::String(
-            format!("Unsupported request {}({:?})", method, args).into(),
-        )),
+        _ => Err(format!("Unsupported request {}({:?})", method, args).into()),
     }
 }
 
