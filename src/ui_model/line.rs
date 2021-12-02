@@ -1,5 +1,8 @@
-use std::ops::{Index, IndexMut};
-use std::rc::Rc;
+use std::{
+    mem,
+    ops::{Index, IndexMut},
+    rc::Rc,
+};
 
 use pango;
 
@@ -13,9 +16,10 @@ pub struct Line {
     pub line: Box<[Cell]>,
 
     // format of item line is
-    // [Item1, Item2, None, None, Item3]
-    // Item2 take 3 cells and renders as one
-    pub item_line: Box<[Option<Item>]>,
+    // [[Item1], [Item2], [], [], [Item3_1, Item3_2],]
+    // Item2 takes 3 cells and renders as one
+    // Item3_1 and Item3_2 share 1 cell and render as one
+    pub item_line: Box<[Box<[Item]>]>,
     cell_to_item: Box<[i32]>,
 
     pub dirty_line: bool,
@@ -25,7 +29,7 @@ impl Line {
     pub fn new(columns: usize) -> Self {
         Line {
             line: vec![Cell::new_empty(); columns].into_boxed_slice(),
-            item_line: vec![None; columns].into_boxed_slice(),
+            item_line: vec![Box::default(); columns].into_boxed_slice(),
             cell_to_item: vec![-1; columns].into_boxed_slice(),
             dirty_line: true,
         }
@@ -51,7 +55,7 @@ impl Line {
 
     pub fn clear_glyphs(&mut self) {
         for i in 0..self.item_line.len() {
-            self.item_line[i] = None;
+            self.item_line[i] = Box::default();
             self.cell_to_item[i] = -1;
         }
         self.dirty_line = true;
@@ -59,7 +63,7 @@ impl Line {
 
     fn set_cell_to_empty(&mut self, cell_idx: usize) -> bool {
         if self.is_binded_to_item(cell_idx) {
-            self.item_line[cell_idx] = None;
+            self.item_line[cell_idx] = Box::default();
             self.cell_to_item[cell_idx] = -1;
             self.line[cell_idx].dirty = true;
             true
@@ -68,12 +72,15 @@ impl Line {
         }
     }
 
-    fn set_cell_to_item(&mut self, new_item: &PangoItemPosition) -> bool {
+    fn set_cell_to_item(&mut self, new_item: &mut PangoItemPosition) -> bool {
         let start_item_idx = self.cell_to_item(new_item.start_cell);
         let start_item_cells_count = if start_item_idx >= 0 {
-            self.item_line[start_item_idx as usize]
-                .as_ref()
-                .map_or(-1, |item| item.cells_count as i32)
+            let items = self.item_line[start_item_idx as usize].as_ref();
+            if items.is_empty() {
+                -1
+            } else {
+                items.iter().map(|i| i.cells_count as i32).max().unwrap()
+            }
         } else {
             -1
         };
@@ -83,12 +90,13 @@ impl Line {
         // start_item == idx of item start cell
         // in case different item length was in previous iteration
         // mark all item as dirty
+        let cell_count = new_item.cells_count();
         if start_item_idx != new_item.start_cell as i32
-            || new_item.cells_count() != start_item_cells_count
+            || cell_count != start_item_cells_count
             || start_item_idx == -1
             || end_item_idx == -1
         {
-            self.initialize_cell_item(new_item.start_cell, new_item.end_cell, new_item.item);
+            self.initialize_cell_item(new_item);
             true
         } else {
             // update only if cell marked as dirty
@@ -96,10 +104,11 @@ impl Line {
                 .iter()
                 .any(|c| c.dirty)
             {
-                self.item_line[new_item.start_cell]
-                    .as_mut()
-                    .unwrap()
-                    .update(new_item.item.clone());
+                self.item_line[new_item.start_cell] = new_item
+                    .take()
+                    .into_iter()
+                    .map(|i| Item::new(i, cell_count as usize))
+                    .collect();
                 self.line[new_item.start_cell].dirty = true;
                 true
             } else {
@@ -108,19 +117,18 @@ impl Line {
         }
     }
 
-    pub fn merge(&mut self, old_items: &StyledLine, pango_items: &[pango::Item]) {
+    pub fn merge(&mut self, old_items: &StyledLine, pango_items: Vec<Vec<pango::Item>>) {
         let mut pango_item_iter = pango_items
-            .iter()
-            .map(|item| PangoItemPosition::new(old_items, item));
-
+            .into_iter()
+            .map(|i| PangoItemPosition::new(old_items, i));
         let mut next_item = pango_item_iter.next();
         let mut move_to_next_item = false;
-
         let mut cell_idx = 0;
+
         while cell_idx < self.line.len() {
             let dirty = match next_item {
                 None => self.set_cell_to_empty(cell_idx),
-                Some(ref new_item) => {
+                Some(ref mut new_item) => {
                     if cell_idx < new_item.start_cell {
                         self.set_cell_to_empty(cell_idx)
                     } else if cell_idx == new_item.start_cell {
@@ -144,28 +152,26 @@ impl Line {
         }
     }
 
-    fn initialize_cell_item(
-        &mut self,
-        start_cell: usize,
-        end_cell: usize,
-        new_item: &pango::Item,
-    ) {
-        for i in start_cell..=end_cell {
+    fn initialize_cell_item(&mut self, new_item: &mut PangoItemPosition) {
+        for i in new_item.start_cell..=new_item.end_cell {
             self.line[i].dirty = true;
-            self.cell_to_item[i] = start_cell as i32;
+            self.cell_to_item[i] = new_item.start_cell as i32;
         }
-        for i in start_cell + 1..=end_cell {
-            self.item_line[i] = None;
-        }
-        self.item_line[start_cell] = Some(Item::new(new_item.clone(), end_cell - start_cell + 1));
+        self.item_line[new_item.start_cell + 1..=new_item.end_cell].fill(Box::default());
+        let cells_count = new_item.end_cell - new_item.start_cell + 1;
+        self.item_line[new_item.start_cell] = new_item
+            .take()
+            .into_iter()
+            .map(|i| Item::new(i, cells_count))
+            .collect();
     }
 
-    pub fn get_item(&self, cell_idx: usize) -> Option<&Item> {
+    pub fn get_items(&self, cell_idx: usize) -> &[Item] {
         let item_idx = self.cell_to_item(cell_idx);
         if item_idx >= 0 {
             self.item_line[item_idx as usize].as_ref()
         } else {
-            None
+            &[]
         }
     }
 
@@ -186,7 +192,12 @@ impl Line {
 
         if item_idx >= 0 {
             let item_idx = item_idx as usize;
-            let cells_count = self.item_line[item_idx].as_ref().unwrap().cells_count;
+            let cells_count: usize = self
+                .item_line[item_idx]
+                .iter()
+                .map(|i| i.cells_count)
+                .max()
+                .unwrap();
             let offset = start_idx - item_idx;
 
             cells_count - offset
@@ -215,24 +226,29 @@ impl IndexMut<usize> for Line {
     }
 }
 
-struct PangoItemPosition<'a> {
-    item: &'a pango::Item,
+struct PangoItemPosition {
+    items: Vec<pango::Item>,
     start_cell: usize,
     end_cell: usize,
 }
 
-impl<'a> PangoItemPosition<'a> {
-    pub fn new(styled_line: &StyledLine, item: &'a pango::Item) -> Self {
-        let offset = item.offset() as usize;
-        let length = item.length() as usize;
+impl PangoItemPosition {
+    pub fn new(styled_line: &StyledLine, items: Vec<pango::Item>) -> Self {
+        let offset = items[0].offset() as usize;
+        let length: usize = items.iter().map(|i| i.length() as usize).sum();
         let start_cell = styled_line.cell_to_byte[offset];
         let end_cell = styled_line.cell_to_byte[offset + length - 1];
 
         PangoItemPosition {
-            item,
+            items,
             start_cell,
             end_cell,
         }
+    }
+
+    #[inline]
+    pub fn take(&mut self) -> Vec<pango::Item> {
+        mem::take(&mut self.items)
     }
 
     #[inline]

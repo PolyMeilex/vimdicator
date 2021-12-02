@@ -36,11 +36,11 @@ impl Context {
         self.font_metrics = FontMetrix::new(pango_context, self.line_space);
     }
 
-    pub fn itemize(&self, line: &StyledLine) -> Vec<pango::Item> {
+    pub fn itemize(&self, line: &StyledLine) -> Vec<Vec<pango::Item>> {
         let attr_iter = line.attr_list.iterator();
 
         ItemizeIterator::new(&line.line_str)
-            .flat_map(|(offset, len)| {
+            .map(|(offset, len)| {
                 pango::itemize(
                     &self.font_metrics.pango_context,
                     &line.line_str,
