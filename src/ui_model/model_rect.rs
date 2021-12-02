@@ -169,13 +169,14 @@ impl ModelRect {
         for row in self.top..self.bot + 1 {
             // left
             let line = &model.model[row];
-            if let Some(&Item {
-                ink_overflow: Some(ref overflow),
+            for Item {
+                ink_overflow: ref overflow,
                 ..
-            }) = line.item_line[self.left].as_ref()
-            {
-                if min_x_offset < overflow.left {
-                    min_x_offset = overflow.left;
+            } in &*line.item_line[self.left] {
+                if let Some(overflow) = overflow {
+                    if min_x_offset < overflow.left {
+                        min_x_offset = overflow.left;
+                    }
                 }
             }
 
@@ -185,13 +186,14 @@ impl ModelRect {
             if self.right < model.columns - 1
                 && line.cell_to_item(self.right) != line.cell_to_item(self.right + 1)
             {
-                if let Some(&Item {
-                    ink_overflow: Some(ref overflow),
+                for Item {
+                    ink_overflow: ref overflow,
                     ..
-                }) = line.get_item(self.left)
-                {
-                    if max_x_offset < overflow.right {
-                        max_x_offset = overflow.right;
+                } in line.get_items(self.left) {
+                    if let Some(overflow) = overflow {
+                        if max_x_offset < overflow.right {
+                            max_x_offset = overflow.right;
+                        }
                     }
                 }
             }
@@ -218,25 +220,28 @@ impl ModelRect {
         for col in self.left..self.right + 1 {
             // top
             let line = &model.model[self.top];
-            if let Some(&Item {
-                ink_overflow: Some(ref overflow),
+            for Item {
+                ink_overflow: ref overflow,
                 ..
-            }) = line.get_item(col)
-            {
-                if min_y_offset < overflow.top {
-                    min_y_offset = overflow.top;
+            } in line.get_items(col) {
+                if let Some(overflow) = overflow {
+                    if min_y_offset < overflow.top {
+                        min_y_offset = overflow.top;
+                    }
                 }
             }
 
             // bottom
             let line = &model.model[self.bot];
-            if let Some(&Item {
-                ink_overflow: Some(ref overflow),
+            for Item {
+                ink_overflow: ref overflow,
                 ..
-            }) = line.get_item(col)
+            } in line.get_items(col)
             {
-                if max_y_offset < overflow.top {
-                    max_y_offset = overflow.top;
+                if let Some(overflow) = overflow {
+                    if max_y_offset < overflow.top {
+                        max_y_offset = overflow.top;
+                    }
                 }
             }
         }
