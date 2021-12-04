@@ -1,9 +1,6 @@
 use std::collections::HashSet;
 
-use pango::{
-    self,
-    prelude::*,
-};
+use pango;
 
 use crate::sys::pango as sys_pango;
 
@@ -44,73 +41,14 @@ impl Context {
 
         ItemizeIterator::new(&line.line_str)
             .map(|(offset, len)| {
-                let pango_context = &self.font_metrics.pango_context;
-                let offset = offset as i32;
-                let len = len as i32;
-
-                let first_res = pango::itemize(
-                    pango_context,
+                pango::itemize(
+                    &self.font_metrics.pango_context,
                     &line.line_str,
-                    offset,
-                    len,
+                    offset as i32,
+                    len as i32,
                     &line.attr_list,
                     attr_iter.as_ref(),
-                );
-
-                if first_res.len() == 1 {
-                    return first_res;
-                }
-
-                /* If we get multiple items, pango likely had to do an additional split because not
-                 * all chars in the string were available in the current font. To ensure combining
-                 * characters are rendered correctly, we need to try reitemizing the whole thing
-                 * with the fonts containing the missing glyphs. Failing that, we fallback to the
-                 * original (likely incorrect) itemization result.
-                 */
-                let our_font = self.font_description();
-                let extra_fonts = first_res
-                    .iter()
-                    .filter_map(|i| {
-                        let font = i.analysis().font().describe().unwrap();
-                        if font != *our_font {
-                            Some(font)
-                        } else {
-                            None
-                        }
-                    });
-
-                // We do res.len() - 2 so that in the likely event that most of the Cell rendered
-                // with our_font, and the rest with another, we're able to skip allocating the
-                // HashSet completely.
-                let mut seen = HashSet::with_capacity(first_res.len() - 2);
-                let mut new_res = None;
-                for font_desc in extra_fonts {
-                    if seen.contains(&font_desc) {
-                        continue;
-                    }
-
-                    pango_context.set_font_description(&font_desc);
-                    let res = pango::itemize(
-                        pango_context,
-                        &line.line_str,
-                        offset,
-                        len,
-                        &line.attr_list,
-                        None,
-                    );
-
-                    let len = res.len();
-                    if len == 1 || len < new_res.as_ref().unwrap_or(&first_res).len() {
-                        new_res = Some(res);
-                        if len == 1 {
-                            break;
-                        }
-                    }
-                    seen.insert(font_desc);
-                }
-
-                pango_context.set_font_description(&our_font);
-                new_res.unwrap_or(first_res)
+                )
             })
             .collect()
     }
