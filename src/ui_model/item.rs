@@ -24,6 +24,13 @@ impl Item {
         }
     }
 
+    pub fn update(&mut self, item: pango::Item) {
+        self.font = item.analysis().font();
+        self.item = item;
+        self.glyphs = None;
+        self.ink_overflow = None;
+    }
+
     pub fn set_glyphs(&mut self, ctx: &render::Context, glyphs: pango::GlyphString) {
         let mut glyphs = glyphs;
         let (ink_rect, _) = glyphs.extents(&self.font);

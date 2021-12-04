@@ -265,7 +265,7 @@ fn draw_cell(
         ..
     } = row_view;
 
-    for item in &*line.item_line[col] {
+    if let Some(item) = line.item_line[col].as_ref() {
         if let Some(ref glyphs) = item.glyphs {
             let fg = hl.actual_cell_fg(cell).inverse(inverse_level);
 
@@ -285,11 +285,11 @@ pub fn shape_dirty(ctx: &context::Context, ui_model: &mut ui_model::UiModel, hl:
 
         let styled_line = ui_model::StyledLine::from(line, hl, ctx.font_features());
         let items = ctx.itemize(&styled_line);
-        line.merge(&styled_line, items);
+        line.merge(&styled_line, &items);
 
         for (col, cell) in line.line.iter_mut().enumerate() {
             if cell.dirty {
-                for item in &mut *line.item_line[col] {
+                if let Some(item) = line.item_line[col].as_mut() {
                     let mut glyphs = pango::GlyphString::new();
                     {
                         let analysis = item.analysis();
