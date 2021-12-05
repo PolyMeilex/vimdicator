@@ -1,5 +1,22 @@
 use unicode_segmentation::*;
 
+#[derive(Debug, PartialEq, Eq)]
+pub struct ItemizeResult {
+    pub offset: usize,
+    pub len: usize,
+    pub avoid_break: bool,
+}
+
+impl ItemizeResult {
+    pub fn new(offset: usize, len: usize, avoid_break: bool) -> Self {
+        Self {
+            offset,
+            len,
+            avoid_break
+        }
+    }
+}
+
 pub struct ItemizeIterator<'a> {
     grapheme_iter: GraphemeIndices<'a>,
     line: &'a str,
@@ -24,10 +41,11 @@ impl<'a> ItemizeIterator<'a> {
  * items will be per-grapheme to ensure correct monospaced display.
  */
 impl<'a> Iterator for ItemizeIterator<'a> {
-    type Item = (usize, usize);
+    type Item = ItemizeResult;
 
     fn next(&mut self) -> Option<Self::Item> {
         let mut start_index = None;
+        let mut avoid_break = false;
 
         let end_index = loop {
             let grapheme_indice = self.prev_grapheme.take().or_else(|| self.grapheme_iter.next());
@@ -51,6 +69,7 @@ impl<'a> Iterator for ItemizeIterator<'a> {
                 if start_index.is_none() && !is_whitespace {
                     start_index = Some(index);
                     if !is_ascii {
+                        avoid_break = true;
                         break index + grapheme.len();
                     }
                 }
@@ -64,7 +83,7 @@ impl<'a> Iterator for ItemizeIterator<'a> {
         };
 
         if let Some(start_index) = start_index {
-            Some((start_index, end_index - start_index))
+            Some(ItemizeResult::new(start_index, end_index - start_index, avoid_break))
         } else {
             None
         }
@@ -79,11 +98,11 @@ mod tests {
     fn test_iterator() {
         let mut iter = ItemizeIterator::new("Test  line 啊啊 ते ");
 
-        assert_eq!(Some((0, 4)), iter.next());
-        assert_eq!(Some((6, 4)), iter.next());
-        assert_eq!(Some((11, 3)), iter.next());
-        assert_eq!(Some((14, 3)), iter.next());
-        assert_eq!(Some((18, 6)), iter.next());
+        assert_eq!(Some(ItemizeResult::new(0, 4, false)), iter.next());
+        assert_eq!(Some(ItemizeResult::new(6, 4, false)), iter.next());
+        assert_eq!(Some(ItemizeResult::new(11, 3, true)), iter.next());
+        assert_eq!(Some(ItemizeResult::new(14, 3, true)), iter.next());
+        assert_eq!(Some(ItemizeResult::new(18, 6, true)), iter.next());
         assert_eq!(None, iter.next());
     }
 }

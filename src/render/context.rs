@@ -43,10 +43,10 @@ impl Context {
         let attr_iter = line.attr_list.iterator();
 
         ItemizeIterator::new(&line.line_str)
-            .flat_map(|(offset, len)| {
+            .flat_map(|res| {
                 let pango_context = &self.font_metrics.pango_context;
-                let offset = offset as i32;
-                let len = len as i32;
+                let offset = res.offset as i32;
+                let len = res.len as i32;
 
                 let first_res = pango::itemize(
                     pango_context,
@@ -57,15 +57,16 @@ impl Context {
                     attr_iter.as_ref(),
                 );
 
-                if first_res.len() == 1 {
+                if !res.avoid_break || first_res.len() == 1 {
                     return first_res;
                 }
 
-                /* If we get multiple items, pango likely had to do an additional split because not
-                 * all chars in the string were available in the current font. To ensure combining
-                 * characters are rendered correctly, we need to try reitemizing the whole thing
-                 * with the font containing the missing glyphs. Failing that, we fallback to the
-                 * original (likely incorrect) itemization result.
+                /* If we get multiple items, and it isn't from a multi-character ASCII string, then
+                 * it's likely from an additional split pango had to perform because not all chars
+                 * in the string were available in the current font. When this happens, in order to
+                 * ensure combining characters are rendered correctly we need to try reitemizing the
+                 * whole thing with the font containing the missing glyphs. Failing that, we
+                 * fallback to the original (likely incorrect) itemization result.
                  */
                 let our_font = self.font_description();
                 let extra_fonts = first_res
