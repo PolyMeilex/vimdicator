@@ -68,7 +68,7 @@ impl State {
             .build();
 
         tree.connect_size_allocate(
-            clone!(scroll, renderer => move |tree, _| on_treeview_allocate(&scroll, tree, &renderer)),
+            clone!(item_scroll, renderer => move |tree, _| on_treeview_allocate(&item_scroll, tree, &renderer)),
         );
 
         let info_label = gtk::Label::builder()
