@@ -22,7 +22,8 @@ struct State {
     nvim: Option<Rc<nvim::NeovimClient>>,
     renderer: gtk::CellRendererText,
     tree: gtk::TreeView,
-    scroll: gtk::ScrolledWindow,
+    item_scroll: gtk::ScrolledWindow,
+    info_scroll: gtk::ScrolledWindow,
     css_provider: gtk::CssProvider,
     info_label: gtk::Label,
     word_column: gtk::TreeViewColumn,
@@ -61,10 +62,7 @@ impl State {
         menu_column.add_attribute(&renderer, "text", 2);
         tree.append_column(&menu_column);
 
-        let info_label = gtk::Label::new(None);
-        info_label.set_line_wrap(true);
-
-        let scroll = gtk::ScrolledWindowBuilder::new()
+        let item_scroll = gtk::ScrolledWindow::builder()
             .propagate_natural_width(true)
             .propagate_natural_height(true)
             .build();
@@ -73,11 +71,31 @@ impl State {
             clone!(scroll, renderer => move |tree, _| on_treeview_allocate(&scroll, tree, &renderer)),
         );
 
+        let info_label = gtk::Label::builder()
+            .wrap(true)
+            .visible(true)
+            .selectable(true)
+            .can_focus(false)
+            .vexpand(true)
+            .xalign(0.0)
+            .yalign(0.0)
+            .margin(3)
+            .build();
+
+        let info_scroll = gtk::ScrolledWindow::builder()
+            .propagate_natural_width(true)
+            .propagate_natural_height(true)
+            .max_content_height(175)
+            .child(&info_label)
+            .can_focus(false)
+            .build();
+
         State {
             nvim: None,
             tree,
             renderer,
-            scroll,
+            item_scroll,
+            info_scroll,
             css_provider,
             info_label,
             word_column,
@@ -92,7 +110,8 @@ impl State {
             self.nvim = Some(ctx.nvim.clone());
         }
 
-        self.scroll.set_max_content_width(ctx.max_width);
+        self.item_scroll.set_max_content_width(ctx.max_width);
+        self.info_scroll.set_max_content_width(ctx.max_width);
         self.update_tree(&ctx);
         self.select(ctx.selected);
     }
@@ -123,7 +142,7 @@ impl State {
         let max_menu = max_menu.0;
 
         let layout = ctx.font_ctx.create_layout();
-        let max_width = self.scroll.max_content_width();
+        let max_width = self.item_scroll.max_content_width();
         let (xpad, _) = self.renderer.padding();
 
         layout.set_text(max_word);
@@ -205,7 +224,7 @@ impl State {
             self.show_info_column(&selected_path);
         } else {
             self.tree.selection().unselect_all();
-            self.info_label.hide();
+            self.info_scroll.hide();
         }
     }
 
@@ -215,17 +234,18 @@ impl State {
 
         if let Some(iter) = iter {
             let info_value = model.value(&iter, 3);
-            let info: &str = info_value.get().unwrap();
+            let info = info_value.get::<&str>().unwrap().trim();
 
-            if self.preview && !info.trim().is_empty() {
-                self.info_label.show();
+            if self.preview && !info.is_empty() {
                 self.info_label.set_text(&info);
-            } else {
-                self.info_label.hide();
+                self.info_scroll.vadjustment().set_value(0.0);
+                self.info_scroll.show();
+                return;
             }
-        } else {
-            self.info_label.hide();
         }
+
+        self.info_scroll.hide();
+        self.info_label.set_text("");
     }
 
     fn set_preview(&mut self, preview: bool) {
@@ -252,14 +272,14 @@ impl PopupMenu {
         state.tree.set_can_focus(false);
 
         state
-            .scroll
+            .item_scroll
             .set_policy(gtk::PolicyType::Automatic, gtk::PolicyType::Automatic);
 
-        state.scroll.add(&state.tree);
-        state.scroll.show_all();
+        state.item_scroll.add(&state.tree);
+        state.item_scroll.show_all();
 
-        content.pack_start(&state.scroll, true, true, 0);
-        content.pack_start(&state.info_label, false, true, 0);
+        content.pack_start(&state.item_scroll, true, true, 0);
+        content.pack_start(&state.info_scroll, false, true, 0);
         content.show();
         popover.add(&content);
 
