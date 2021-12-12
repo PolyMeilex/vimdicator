@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::num::*;
+use std::mem;
 use std::ops::Deref;
 use std::rc::Rc;
 use std::sync::{Arc, Condvar, Mutex};
@@ -825,7 +826,7 @@ pub struct ShellOptions {
     input_data: Option<String>,
     cterm_colors: bool,
     pub mode: StartMode,
-    post_config_cmds: Option<Box<[String]>>,
+    post_config_cmds: Box<[String]>,
 }
 
 impl ShellOptions {
@@ -850,6 +851,7 @@ impl ShellOptions {
             post_config_cmds: matches
                 .values_of("post-config-cmds")
                 .map(|args| args.map(str::to_owned).collect())
+                .unwrap_or_default(),
         }
     }
 
@@ -863,8 +865,8 @@ impl ShellOptions {
     }
 
     /// Steal the post config commands, since they're only needed once
-    pub fn post_config_cmds(&mut self) -> Option<Box<[String]>> {
-        self.post_config_cmds.take()
+    pub fn post_config_cmds(&mut self) -> Box<[String]> {
+        mem::take(&mut self.post_config_cmds)
     }
 }
 

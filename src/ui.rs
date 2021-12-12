@@ -284,7 +284,7 @@ impl Ui {
                 &update_title,
                 &update_subtitle,
                 &update_completeopt,
-                &post_config_cmds,
+                post_config_cmds.as_ref(),
                 mode,
             );
         })));
@@ -307,7 +307,7 @@ impl Ui {
         update_title: &SubscriptionHandle,
         update_subtitle: &Option<SubscriptionHandle>,
         update_completeopt: &SubscriptionHandle,
-        post_config_cmds: &Option<Box<[String]>>,
+        post_config_cmds: &[String],
         mode: StartMode,
     ) {
         plug_manager
@@ -322,8 +322,6 @@ impl Ui {
         }
 
         let mut commands = Vec::<String>::new();
-        let post_config_cmds = post_config_cmds.as_ref().map(|c| c.as_ref()).unwrap_or(&[]);
-
         if !files_list.is_empty() {
             if mode == StartMode::Normal {
                 commands.reserve(1 + post_config_cmds.len());
