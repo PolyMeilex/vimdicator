@@ -186,7 +186,7 @@ fn draw_underline_strikethrough(
 
     if cell.hl.undercurl {
         let sp = hl.actual_cell_sp(cell).inverse(inverse_level);
-        ctx.set_source_rgba(sp.0, sp.1, sp.2, 0.7);
+        ctx.set_source_rgb(sp.0, sp.1, sp.2);
 
         pangocairo::functions::show_error_underline(
             ctx,
