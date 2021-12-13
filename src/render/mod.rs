@@ -154,55 +154,57 @@ fn draw_underline_strikethrough(
     line_x: f64,
     inverse_level: f64,
 ) {
-    if cell.hl.underline || cell.hl.undercurl || cell.hl.strikethrough {
-        let &RowView {
-            ctx,
-            line_y,
-            cell_metrics:
-                &CellMetrics {
-                    line_height,
-                    char_width,
-                    underline_position,
-                    underline_thickness,
-                    strikethrough_position,
-                    strikethrough_thickness,
-                    ..
-                },
-            ..
-        } = cell_view;
+    if !cell.hl.underline && !cell.hl.undercurl && !cell.hl.strikethrough {
+        return;
+    }
 
-        if cell.hl.strikethrough {
-            let fg = hl.actual_cell_fg(cell).inverse(inverse_level);
-            ctx.set_source_rgb(fg.0, fg.1, fg.2);
-            ctx.set_line_width(strikethrough_thickness);
-            ctx.move_to(line_x, line_y + strikethrough_position);
-            ctx.line_to(line_x + char_width, line_y + strikethrough_position);
-            ctx.stroke().unwrap();
-        }
-
-        if cell.hl.undercurl {
-            let sp = hl.actual_cell_sp(cell).inverse(inverse_level);
-            ctx.set_source_rgba(sp.0, sp.1, sp.2, 0.7);
-
-            let max_undercurl_height = (line_height - underline_position) * 2.0;
-            let undercurl_height = (underline_thickness * 4.0).min(max_undercurl_height);
-            let undercurl_y = line_y + underline_position - undercurl_height / 2.0;
-
-            pangocairo::functions::show_error_underline(
-                ctx,
-                line_x,
-                undercurl_y,
+    let &RowView {
+        ctx,
+        line_y,
+        cell_metrics:
+            &CellMetrics {
+                line_height,
                 char_width,
-                undercurl_height,
-            );
-        } else if cell.hl.underline {
-            let sp = hl.actual_cell_sp(cell).inverse(inverse_level);
-            ctx.set_source_rgb(sp.0, sp.1, sp.2);
-            ctx.set_line_width(underline_thickness);
-            ctx.move_to(line_x, line_y + underline_position);
-            ctx.line_to(line_x + char_width, line_y + underline_position);
-            ctx.stroke().unwrap();
-        }
+                underline_position,
+                underline_thickness,
+                strikethrough_position,
+                strikethrough_thickness,
+                ..
+            },
+        ..
+    } = cell_view;
+
+    if cell.hl.strikethrough {
+        let fg = hl.actual_cell_fg(cell).inverse(inverse_level);
+        ctx.set_source_rgb(fg.0, fg.1, fg.2);
+        ctx.set_line_width(strikethrough_thickness);
+        ctx.move_to(line_x, line_y + strikethrough_position);
+        ctx.line_to(line_x + char_width, line_y + strikethrough_position);
+        ctx.stroke().unwrap();
+    }
+
+    if cell.hl.undercurl {
+        let sp = hl.actual_cell_sp(cell).inverse(inverse_level);
+        ctx.set_source_rgba(sp.0, sp.1, sp.2, 0.7);
+
+        let max_undercurl_height = (line_height - underline_position) * 2.0;
+        let undercurl_height = (underline_thickness * 4.0).min(max_undercurl_height);
+        let undercurl_y = line_y + underline_position - undercurl_height / 2.0;
+
+        pangocairo::functions::show_error_underline(
+            ctx,
+            line_x,
+            undercurl_y,
+            char_width,
+            undercurl_height,
+        );
+    } else if cell.hl.underline {
+        let sp = hl.actual_cell_sp(cell).inverse(inverse_level);
+        ctx.set_source_rgb(sp.0, sp.1, sp.2);
+        ctx.set_line_width(underline_thickness);
+        ctx.move_to(line_x, line_y + underline_position);
+        ctx.line_to(line_x + char_width, line_y + underline_position);
+        ctx.stroke().unwrap();
     }
 }
 
