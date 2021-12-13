@@ -169,6 +169,7 @@ fn draw_underline_strikethrough(
                 underline_thickness,
                 strikethrough_position,
                 strikethrough_thickness,
+                descent,
                 ..
             },
         ..
@@ -187,16 +188,12 @@ fn draw_underline_strikethrough(
         let sp = hl.actual_cell_sp(cell).inverse(inverse_level);
         ctx.set_source_rgba(sp.0, sp.1, sp.2, 0.7);
 
-        let max_undercurl_height = (line_height - underline_position) * 2.0;
-        let undercurl_height = (underline_thickness * 4.0).min(max_undercurl_height);
-        let undercurl_y = line_y + underline_position - undercurl_height / 2.0;
-
         pangocairo::functions::show_error_underline(
             ctx,
             line_x,
-            undercurl_y,
+            line_y + line_height - descent,
             char_width,
-            undercurl_height,
+            descent,
         );
     } else if cell.hl.underline {
         let sp = hl.actual_cell_sp(cell).inverse(inverse_level);
