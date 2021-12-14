@@ -86,7 +86,7 @@ fn draw_cursor<C: Cursor>(
     let (cursor_row, cursor_col) = ui_model.get_cursor();
 
     let (x1, y1, x2, y2) = ctx.clip_extents().unwrap();
-    let line_x = cursor_col as f64 * cell_metrics.char_width;
+    let mut line_x = cursor_col as f64 * cell_metrics.char_width;
     let line_y = cursor_row as f64 * cell_metrics.line_height;
 
     if line_x < x1 || line_y < y1 || line_x > x2 || line_y > y2 || !cursor.is_visible() {
@@ -98,10 +98,8 @@ fn draw_cursor<C: Cursor>(
     let cell_start_col = row_view.line.cell_to_item(cursor_col);
 
     if let Some(cursor_line) = ui_model.model().get(cursor_row) {
-        let double_width = cursor_line
-            .line
-            .get(cursor_col + 1)
-            .map_or(false, |c| c.double_width);
+        let next_cell = cursor_line.line.get(cursor_col + 1);
+        let double_width = next_cell.map_or(false, |c| c.double_width);
 
         if cell_start_col >= 0 {
             let cell = &cursor_line[cursor_col];
@@ -139,7 +137,14 @@ fn draw_cursor<C: Cursor>(
                 cell_start_line_x,
                 cursor_alpha,
             );
+
             draw_underline_strikethrough(&row_view, hl, cell, line_x, cursor_alpha);
+            if let Some(next_cell) = next_cell {
+                if double_width {
+                    line_x += cell_metrics.char_width;
+                    draw_underline_strikethrough(&row_view, hl, next_cell, line_x, cursor_alpha);
+                }
+            }
         } else {
             ctx.move_to(line_x, line_y);
             cursor.draw(ctx, font_ctx, line_y, double_width, &hl);
