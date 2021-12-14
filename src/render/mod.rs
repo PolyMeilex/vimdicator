@@ -154,7 +154,8 @@ fn draw_underline_strikethrough(
     line_x: f64,
     inverse_level: f64,
 ) {
-    if !cell.hl.underline && !cell.hl.undercurl && !cell.hl.strikethrough {
+    let any_underline = cell.hl.undercurl || cell.hl.underline;
+    if !any_underline && !cell.hl.strikethrough {
         return;
     }
 
@@ -184,10 +185,14 @@ fn draw_underline_strikethrough(
         ctx.stroke().unwrap();
     }
 
-    if cell.hl.undercurl {
-        let sp = hl.actual_cell_sp(cell).inverse(inverse_level);
-        ctx.set_source_rgb(sp.0, sp.1, sp.2);
+    if !any_underline {
+        return;
+    }
 
+    let sp = hl.actual_cell_sp(cell).inverse(inverse_level);
+    ctx.set_source_rgb(sp.0, sp.1, sp.2);
+
+    if cell.hl.undercurl {
         pangocairo::functions::show_error_underline(
             ctx,
             line_x,
@@ -196,8 +201,6 @@ fn draw_underline_strikethrough(
             descent,
         );
     } else if cell.hl.underline {
-        let sp = hl.actual_cell_sp(cell).inverse(inverse_level);
-        ctx.set_source_rgb(sp.0, sp.1, sp.2);
         ctx.set_line_width(underline_thickness);
         ctx.move_to(line_x, line_y + underline_position);
         ctx.line_to(line_x + char_width, line_y + underline_position);
