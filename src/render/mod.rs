@@ -159,8 +159,7 @@ fn draw_underline_strikethrough(
     line_x: f64,
     inverse_level: f64,
 ) {
-    let any_underline = cell.hl.undercurl || cell.hl.underline;
-    if !any_underline && !cell.hl.strikethrough {
+    if !cell.hl.underline && !cell.hl.undercurl && !cell.hl.strikethrough {
         return;
     }
 
@@ -188,10 +187,6 @@ fn draw_underline_strikethrough(
         ctx.move_to(line_x, line_y + strikethrough_position);
         ctx.line_to(line_x + char_width, line_y + strikethrough_position);
         ctx.stroke().unwrap();
-    }
-
-    if !any_underline {
-        return;
     }
 
     if cell.hl.undercurl {
