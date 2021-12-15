@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::num::*;
@@ -200,6 +200,29 @@ impl ActionWidgets {
     }
 }
 
+/// Enum for the 'background' setting in neovim, which we track to determine default colors
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum BackgroundState {
+    Light,
+    Dark,
+}
+
+impl BackgroundState {
+    pub fn default_fg(&self) -> Color {
+        match self {
+            BackgroundState::Light => COLOR_BLACK,
+            BackgroundState::Dark => COLOR_WHITE,
+        }
+    }
+
+    pub fn default_bg(&self) -> Color {
+        match self {
+            BackgroundState::Light => COLOR_WHITE,
+            BackgroundState::Dark => COLOR_BLACK,
+        }
+    }
+}
+
 pub struct State {
     pub grids: GridMap,
 
@@ -213,6 +236,7 @@ pub struct State {
 
     resize_status: Arc<ResizeState>,
     focus_state: Arc<AsyncMutex<FocusState>>,
+    background_state: Cell<BackgroundState>,
 
     pub clipboard_clipboard: gtk::Clipboard,
     pub clipboard_primary: gtk::Clipboard,
@@ -273,6 +297,7 @@ impl State {
                 next: true,
                 is_pending: false
             })),
+            background_state: Cell::new(BackgroundState::Light),
 
             clipboard_clipboard: gtk::Clipboard::get(&gdk::Atom::intern("CLIPBOARD")),
             clipboard_primary: gtk::Clipboard::get(&gdk::Atom::intern("PRIMARY")),
@@ -760,6 +785,10 @@ impl State {
 
     pub fn set_tabline(&self, visible: bool) {
         self.tabs.set_visible(visible)
+    }
+
+    pub fn set_background(&self, background: BackgroundState) {
+        self.background_state.set(background);
     }
 }
 
@@ -1690,9 +1719,21 @@ impl State {
         cterm_bg: i64,
     ) -> RepaintMode {
         self.render_state.borrow_mut().hl.set_defaults(
-            Color::from_indexed_color(fg as u64),
-            Color::from_indexed_color(bg as u64),
-            Color::from_indexed_color(sp as u64),
+            if fg >= 0 {
+                Color::from_indexed_color(fg as u64)
+            } else {
+                self.background_state.get().default_fg()
+            },
+            if bg >= 0 {
+                Color::from_indexed_color(bg as u64)
+            } else {
+                self.background_state.get().default_bg()
+            },
+            if sp >= 0 {
+                Some(Color::from_indexed_color(sp as u64))
+            } else {
+                None
+            },
             if cterm_fg > 0 {
                 Color::from_cterm((cterm_fg - 1) as u8)
             } else {

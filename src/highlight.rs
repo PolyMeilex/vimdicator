@@ -12,7 +12,7 @@ pub struct HighlightMap {
     default_hl: Rc<Highlight>,
     bg_color: Color,
     fg_color: Color,
-    sp_color: Color,
+    sp_color: Option<Color>,
 
     cterm_bg_color: Color,
     cterm_fg_color: Color,
@@ -30,7 +30,7 @@ impl HighlightMap {
             highlights: FnvHashMap::default(),
             bg_color: COLOR_BLACK,
             fg_color: COLOR_WHITE,
-            sp_color: COLOR_RED,
+            sp_color: None,
 
             cterm_bg_color: COLOR_BLACK,
             cterm_fg_color: COLOR_WHITE,
@@ -52,7 +52,7 @@ impl HighlightMap {
         &mut self,
         fg: Color,
         bg: Color,
-        sp: Color,
+        sp: Option<Color>,
         cterm_fg: Color,
         cterm_bg: Color,
     ) {
@@ -138,8 +138,8 @@ impl HighlightMap {
     }
 
     #[inline]
-    pub fn actual_cell_sp<'a>(&'a self, cell: &'a Cell) -> &'a Color {
-        cell.hl.special.as_ref().unwrap_or(&self.sp_color)
+    pub fn cell_sp<'a>(&'a self, cell: &'a Cell) -> Option<&'a Color> {
+        cell.hl.special.as_ref().or(self.sp_color.as_ref())
     }
 
     pub fn pmenu_bg(&self) -> &Color {

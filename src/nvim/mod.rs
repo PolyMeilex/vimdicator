@@ -414,6 +414,7 @@ pub async fn post_start_init(
             .set_tabline_external(true)
             .set_linegrid_external(true)
             .set_hlstate_external(true)
+            .set_termcolors_external(true)
         ))
         .await
         .map_err(NvimInitError::new_post_init)?;

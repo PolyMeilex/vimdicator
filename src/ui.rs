@@ -23,7 +23,7 @@ use crate::nvim::*;
 use crate::plug_manager;
 use crate::project::Projects;
 use crate::settings::{Settings, SettingsLoader};
-use crate::shell::{self, Shell, ShellOptions, HeaderBarButtons, StartMode};
+use crate::shell::{self, BackgroundState, Shell, ShellOptions, HeaderBarButtons, StartMode};
 use crate::shell_dlg;
 use crate::subscriptions::{SubscriptionHandle, SubscriptionKey};
 
@@ -252,6 +252,12 @@ impl Ui {
             clone!(shell_ref => move |args| set_completeopts(&*shell_ref, args)),
         );
 
+        let update_background = shell.state.borrow().subscribe(
+            SubscriptionKey::with_pattern("OptionSet", "background"),
+            &["&background"],
+            clone!(shell_ref => move |args| set_background(&*shell_ref, args)),
+        );
+
         window.connect_delete_event(clone!(comps_ref, shell_ref => move |_, _| {
             gtk_delete(&*comps_ref, &*shell_ref)
         }));
@@ -284,6 +290,7 @@ impl Ui {
                 &update_title,
                 &update_subtitle,
                 &update_completeopt,
+                &update_background,
                 post_config_cmds.as_ref(),
                 mode,
             );
@@ -307,6 +314,7 @@ impl Ui {
         update_title: &SubscriptionHandle,
         update_subtitle: &Option<SubscriptionHandle>,
         update_completeopt: &SubscriptionHandle,
+        update_background: &SubscriptionHandle,
         post_config_cmds: &[String],
         mode: StartMode,
     ) {
@@ -317,6 +325,7 @@ impl Ui {
         shell.set_autocmds();
         shell.run_now(&update_title);
         shell.run_now(&update_completeopt);
+        shell.run_now(&update_background);
         if let Some(ref update_subtitle) = update_subtitle {
             shell.run_now(&update_subtitle);
         }
@@ -598,6 +607,16 @@ fn set_completeopts(shell: &RefCell<Shell>, args: Vec<String>) {
     let options = &args[0];
 
     shell.borrow().set_completeopts(options);
+}
+
+fn set_background(shell: &RefCell<Shell>, args: Vec<String>) {
+    let background = match args[0].as_str() {
+        "light" => BackgroundState::Light,
+        "dark" => BackgroundState::Dark,
+        val => panic!("Unexpected 'background' value received: {}", val),
+    };
+
+    shell.borrow().state.borrow().set_background(background)
 }
 
 fn update_window_title(comps: &Arc<UiMutex<Components>>, args: Vec<String>) {
