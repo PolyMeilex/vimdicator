@@ -219,6 +219,7 @@ impl CellMetrics {
             pango_descent: 0,
             pango_char_width: 0,
             ascent: 0.0,
+            descent: 0.0,
             line_height,
             char_width,
             underline_position: 0.0,
