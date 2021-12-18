@@ -617,7 +617,11 @@ fn set_background(shell: &RefCell<Shell>, args: Vec<String>) {
         val => panic!("Unexpected 'background' value received: {}", val),
     };
 
-    shell.borrow().state.borrow().set_background(background)
+    let state = &shell.borrow().state;
+    state.borrow().set_background(background);
+
+    // Neovim won't send us a redraw to update the default colors on the screen, so do it ourselves
+    glib::idle_add_once(clone!(state => move || state.borrow_mut().on_redraw(&RepaintMode::All)));
 }
 
 fn update_window_title(comps: &Arc<UiMutex<Components>>, args: Vec<String>) {
