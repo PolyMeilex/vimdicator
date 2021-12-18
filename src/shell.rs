@@ -1,4 +1,4 @@
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::num::*;
@@ -33,7 +33,7 @@ use nvim_rs::Value;
 
 use crate::color::{Color, COLOR_BLACK, COLOR_WHITE};
 use crate::grid::GridMap;
-use crate::highlight::HighlightMap;
+use crate::highlight::{HighlightMap, BackgroundState};
 use crate::misc::{decode_uri, escape_filename, split_at_comma};
 use crate::nvim::{
     self, CompleteItem, ErrorReport, NeovimClient, NvimHandler, RepaintMode, NvimSession, Tabpage,
@@ -200,29 +200,6 @@ impl ActionWidgets {
     }
 }
 
-/// Enum for the 'background' setting in neovim, which we track to determine default colors
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum BackgroundState {
-    Light,
-    Dark,
-}
-
-impl BackgroundState {
-    pub fn default_fg(&self) -> Color {
-        match self {
-            BackgroundState::Light => COLOR_BLACK,
-            BackgroundState::Dark => COLOR_WHITE,
-        }
-    }
-
-    pub fn default_bg(&self) -> Color {
-        match self {
-            BackgroundState::Light => COLOR_WHITE,
-            BackgroundState::Dark => COLOR_BLACK,
-        }
-    }
-}
-
 pub struct State {
     pub grids: GridMap,
 
@@ -236,7 +213,6 @@ pub struct State {
 
     resize_status: Arc<ResizeState>,
     focus_state: Arc<AsyncMutex<FocusState>>,
-    background_state: Cell<BackgroundState>,
 
     pub clipboard_clipboard: gtk::Clipboard,
     pub clipboard_primary: gtk::Clipboard,
@@ -297,7 +273,6 @@ impl State {
                 next: true,
                 is_pending: false
             })),
-            background_state: Cell::new(BackgroundState::Light),
 
             clipboard_clipboard: gtk::Clipboard::get(&gdk::Atom::intern("CLIPBOARD")),
             clipboard_primary: gtk::Clipboard::get(&gdk::Atom::intern("PRIMARY")),
@@ -788,7 +763,7 @@ impl State {
     }
 
     pub fn set_background(&self, background: BackgroundState) {
-        self.background_state.set(background);
+        self.render_state.borrow_mut().hl.set_background_state(background)
     }
 }
 
@@ -1720,14 +1695,14 @@ impl State {
     ) -> RepaintMode {
         self.render_state.borrow_mut().hl.set_defaults(
             if fg >= 0 {
-                Color::from_indexed_color(fg as u64)
+                Some(Color::from_indexed_color(fg as u64))
             } else {
-                self.background_state.get().default_fg()
+                None
             },
             if bg >= 0 {
-                Color::from_indexed_color(bg as u64)
+                Some(Color::from_indexed_color(bg as u64))
             } else {
-                self.background_state.get().default_bg()
+                None
             },
             if sp >= 0 {
                 Some(Color::from_indexed_color(sp as u64))

@@ -18,12 +18,13 @@ use gtk::{
 use toml;
 
 use crate::file_browser::FileBrowserWidget;
+use crate::highlight::BackgroundState;
 use crate::misc;
 use crate::nvim::*;
 use crate::plug_manager;
 use crate::project::Projects;
 use crate::settings::{Settings, SettingsLoader};
-use crate::shell::{self, BackgroundState, Shell, ShellOptions, HeaderBarButtons, StartMode};
+use crate::shell::{self, Shell, ShellOptions, HeaderBarButtons, StartMode};
 use crate::shell_dlg;
 use crate::subscriptions::{SubscriptionHandle, SubscriptionKey};
 

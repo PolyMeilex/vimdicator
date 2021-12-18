@@ -10,8 +10,9 @@ use nvim_rs::Value;
 pub struct HighlightMap {
     highlights: FnvHashMap<u64, Rc<Highlight>>,
     default_hl: Rc<Highlight>,
-    bg_color: Color,
-    fg_color: Color,
+    background_state: BackgroundState,
+    bg_color: Option<Color>,
+    fg_color: Option<Color>,
     sp_color: Option<Color>,
 
     cterm_bg_color: Color,
@@ -23,13 +24,21 @@ pub struct HighlightMap {
     cursor: Rc<Highlight>,
 }
 
+/// Enum for the 'background' setting in neovim, which we track to determine default colors
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum BackgroundState {
+    Light,
+    Dark,
+}
+
 impl HighlightMap {
     pub fn new() -> Self {
         let default_hl = Rc::new(Highlight::new());
         HighlightMap {
             highlights: FnvHashMap::default(),
-            bg_color: COLOR_BLACK,
-            fg_color: COLOR_WHITE,
+            background_state: BackgroundState::Light,
+            bg_color: None,
+            fg_color: None,
             sp_color: None,
 
             cterm_bg_color: COLOR_BLACK,
@@ -50,8 +59,8 @@ impl HighlightMap {
 
     pub fn set_defaults(
         &mut self,
-        fg: Color,
-        bg: Color,
+        fg: Option<Color>,
+        bg: Option<Color>,
         sp: Option<Color>,
         cterm_fg: Color,
         cterm_bg: Color,
@@ -67,11 +76,29 @@ impl HighlightMap {
         self.cterm_color = cterm_color;
     }
 
+    pub fn set_background_state(&mut self, state: BackgroundState) {
+        self.background_state = state;
+    }
+
+    fn default_fg(&self) -> &Color {
+        match self.background_state {
+            BackgroundState::Light => &COLOR_BLACK,
+            BackgroundState::Dark => &COLOR_WHITE,
+        }
+    }
+
+    fn default_bg(&self) -> &Color {
+        match self.background_state {
+            BackgroundState::Light => &COLOR_WHITE,
+            BackgroundState::Dark => &COLOR_BLACK,
+        }
+    }
+
     pub fn bg(&self) -> &Color {
         if self.cterm_color {
             &self.cterm_bg_color
         } else {
-            &self.bg_color
+            self.bg_color.as_ref().unwrap_or_else(|| self.default_bg())
         }
     }
 
@@ -79,7 +106,7 @@ impl HighlightMap {
         if self.cterm_color {
             &self.cterm_fg_color
         } else {
-            &self.fg_color
+            self.fg_color.as_ref().unwrap_or_else(|| self.default_fg())
         }
     }
 
