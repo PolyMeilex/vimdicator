@@ -38,8 +38,10 @@ mod subscriptions;
 mod tabline;
 
 use gio::prelude::*;
+use gio::ApplicationCommandLine;
 use std::cell::RefCell;
 use std::io::Read;
+use std::sync::{Arc, Mutex};
 #[cfg(unix)]
 use unix_daemonize::{daemonize_redirect, ChdirMode};
 
@@ -125,7 +127,9 @@ fn main() {
 
     gtk::init().expect("Failed to initialize GTK+");
 
-    let app_flags = gio::ApplicationFlags::HANDLES_OPEN | gio::ApplicationFlags::NON_UNIQUE;
+    let app_flags = gio::ApplicationFlags::HANDLES_OPEN
+        | gio::ApplicationFlags::HANDLES_COMMAND_LINE
+        | gio::ApplicationFlags::NON_UNIQUE;
 
     glib::set_program_name(Some("NeovimGtk"));
 
@@ -135,58 +139,74 @@ fn main() {
         gtk::Application::new(Some("org.daa.NeovimGtk"), app_flags)
     };
 
+    let app_cmdline = Arc::new(Mutex::new(None));
+    let app_cmdline_copy = app_cmdline.clone();
     let matches_copy = matches.clone();
-    app.connect_activate(move |app| {
+    app.connect_command_line(move |app, cmdline| {
+        app_cmdline_copy.lock().unwrap().replace(cmdline.clone());
         let input_data = input_data
             .replace(None)
             .filter(|_input| !matches_copy.is_present("files"));
 
-        activate(app, &matches_copy, input_data)
+        match input_data {
+            Some(input_data) => activate(
+                app,
+                &matches_copy,
+                Some(input_data),
+                app_cmdline_copy.clone(),
+            ),
+            None => {
+                let files = matches_copy
+                    .values_of("files")
+                    .unwrap_or_default()
+                    .map(str::to_owned)
+                    .collect::<Vec<String>>();
+                open(app, files.into_boxed_slice(), &matches_copy, app_cmdline_copy.clone());
+            }
+        }
+        0
     });
-
-    let matches_copy = matches.clone();
-    app.connect_open(move |app, files, _| open(app, files, &matches_copy));
 
     let app_ref = app.clone();
     let matches_copy = matches.clone();
+    let app_cmdline_copy = Arc::clone(&app_cmdline);
     let new_window_action = gio::SimpleAction::new("new-window", None);
-    new_window_action.connect_activate(move |_, _| activate(&app_ref, &matches_copy, None));
+    new_window_action.connect_activate(move |_, _| {
+        activate(&app_ref, &matches_copy, None, app_cmdline_copy.clone())
+    });
     app.add_action(&new_window_action);
 
     gtk::Window::set_default_icon_name("org.daa.NeovimGtk");
 
-    let app_exe = std::env::args().next().unwrap_or_else(|| "nvim-gtk".to_owned());
-
-    app.run_with_args(
-        &std::iter::once(app_exe)
-            .chain(
-                matches
-                    .values_of("files")
-                    .unwrap_or_default()
-                    .map(str::to_owned),
-            )
-            .collect::<Vec<String>>(),
-    );
+    app.run();
+    let lock = app_cmdline.lock().unwrap();
+    std::process::exit(lock.as_ref().unwrap().exit_status());
 }
 
-fn open(app: &gtk::Application, files: &[gio::File], matches: &ArgMatches) {
-    let files_list: Vec<String> = files
-        .iter()
-        .filter_map(|f| f.path()?.to_str().map(str::to_owned))
-        .collect();
+fn open(
+    app: &gtk::Application,
+    files: Box<[String]>,
+    matches: &ArgMatches,
+    app_cmdline: Arc<Mutex<Option<ApplicationCommandLine>>>,
+) {
 
     let mut ui = Ui::new(
         ShellOptions::new(matches, None),
-        files_list.into_boxed_slice(),
+        files,
     );
 
-    ui.init(app, !matches.is_present("disable-win-restore"));
+    ui.init(app, !matches.is_present("disable-win-restore"), app_cmdline);
 }
 
-fn activate(app: &gtk::Application, matches: &ArgMatches, input_data: Option<String>) {
+fn activate(
+    app: &gtk::Application,
+    matches: &ArgMatches,
+    input_data: Option<String>,
+    app_cmdline: Arc<Mutex<Option<ApplicationCommandLine>>>,
+) {
     let mut ui = Ui::new(ShellOptions::new(matches, input_data), Box::new([]));
 
-    ui.init(app, !matches.is_present("disable-win-restore"));
+    ui.init(app, !matches.is_present("disable-win-restore"), app_cmdline);
 }
 
 fn read_piped_input() -> Option<String> {

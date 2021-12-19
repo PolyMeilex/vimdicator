@@ -2,12 +2,12 @@ use std::cell::{Ref, RefCell, RefMut};
 use std::convert::TryFrom;
 use std::path::Path;
 use std::rc::Rc;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::{env, thread};
 
 use gdk;
 use gio::prelude::*;
-use gio::{Menu, MenuItem, SimpleAction};
+use gio::{ApplicationCommandLine, Menu, MenuItem, SimpleAction};
 use glib::variant::FromVariant;
 use gtk::{
     self,
@@ -107,7 +107,7 @@ impl Ui {
         }
     }
 
-    pub fn init(&mut self, app: &gtk::Application, restore_win_state: bool) {
+    pub fn init(&mut self, app: &gtk::Application, restore_win_state: bool, app_cmdline: Arc<Mutex<Option<ApplicationCommandLine>>>) {
         if self.initialized {
             return;
         }
@@ -130,7 +130,7 @@ impl Ui {
             // for event processing
             let mut comps = comps_ref.borrow_mut();
 
-            self.shell.borrow_mut().init();
+            self.shell.borrow_mut().init(app_cmdline);
 
             comps.window = Some(window.clone());
 
@@ -243,6 +243,12 @@ impl Ui {
             SubscriptionKey::with_pattern("OptionSet", "background"),
             &["&background"],
             clone!(shell_ref => move |args| set_background(&*shell_ref, args)),
+        );
+
+        shell.state.borrow().subscribe(
+            SubscriptionKey::from("VimLeave"),
+            &["v:exiting ? v:exiting : 0"],
+            clone!(shell_ref => move |args| set_exit_status(&*shell_ref, args)),
         );
 
         window.connect_delete_event(clone!(comps_ref, shell_ref => move |_, _| {
@@ -626,6 +632,11 @@ fn update_window_title(comps: &Arc<UiMutex<Components>>, args: Vec<String>) {
     };
 
     window.set_title(filename);
+}
+
+fn set_exit_status(shell: &RefCell<Shell>, args: Vec<String>) {
+    let status = args[0].parse().unwrap();
+    shell.borrow().set_exit_status(status);
 }
 
 #[derive(Serialize, Deserialize)]

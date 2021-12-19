@@ -22,6 +22,9 @@ use cairo;
 use gdk;
 use gdk::{EventButton, EventMotion, EventScroll, EventType, ModifierType};
 use glib;
+use gio;
+use gio::ApplicationCommandLine;
+use gio::prelude::*;
 use gtk;
 use gtk::{Button, MenuButton, Notebook};
 use gtk::prelude::*;
@@ -233,6 +236,8 @@ pub struct State {
     subscriptions: RefCell<Subscriptions>,
 
     action_widgets: Arc<UiMutex<Option<ActionWidgets>>>,
+
+    app_cmdline: Arc<Mutex<Option<ApplicationCommandLine>>>,
 }
 
 impl State {
@@ -294,6 +299,8 @@ impl State {
             subscriptions: RefCell::new(Subscriptions::new()),
 
             action_widgets: Arc::new(UiMutex::new(None)),
+
+            app_cmdline: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -433,6 +440,12 @@ impl State {
         if let Some(cursor) = &mut self.cursor {
             cursor.set_cursor_blink(val);
         }
+    }
+
+    pub fn set_exit_status(&self, val: i32) {
+        let lock = self.app_cmdline.lock().unwrap();
+        let r: &ApplicationCommandLine = lock.as_ref().unwrap();
+        r.set_exit_status(val);
     }
 
     pub fn open_file(&self, path: &str) {
@@ -895,7 +908,9 @@ impl Shell {
         state.nvim.is_initialized()
     }
 
-    pub fn init(&mut self) {
+    pub fn init(&mut self, app_cmdline: Arc<Mutex<Option<ApplicationCommandLine>>>) {
+        self.state.borrow_mut().app_cmdline = app_cmdline.clone();
+
         let state = self.state.borrow();
 
         state.drawing_area.set_hexpand(true);
@@ -1209,6 +1224,10 @@ impl Shell {
             .borrow()
             .popup_menu
             .set_preview(options.contains("preview"));
+    }
+
+    pub fn set_exit_status(&self, status: i32) {
+        self.state.borrow().set_exit_status(status);
     }
 }
 
