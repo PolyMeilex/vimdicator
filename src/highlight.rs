@@ -280,6 +280,7 @@ impl Highlight {
                 "underline" => model_attrs.underline = true,
                 "undercurl" => model_attrs.undercurl = true,
                 "strikethrough" => model_attrs.strikethrough = true,
+                "blend" => (),
                 attr_key => error!("unknown attribute {}", attr_key),
             };
         }
