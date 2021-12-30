@@ -34,7 +34,10 @@ struct State {
 
 impl State {
     pub fn new() -> Self {
-        let tree = gtk::TreeView::new();
+        let tree = gtk::TreeView::builder()
+            .headers_visible(false)
+            .can_focus(false)
+            .build();
         tree.selection().set_mode(gtk::SelectionMode::Single);
         let css_provider = gtk::CssProvider::new();
 
@@ -65,6 +68,9 @@ impl State {
         let item_scroll = gtk::ScrolledWindow::builder()
             .propagate_natural_width(true)
             .propagate_natural_height(true)
+            .child(&tree)
+            .hscrollbar_policy(gtk::PolicyType::Automatic)
+            .vscrollbar_policy(gtk::PolicyType::Automatic)
             .build();
 
         tree.connect_size_allocate(
@@ -268,14 +274,6 @@ impl PopupMenu {
 
         let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
 
-        state.tree.set_headers_visible(false);
-        state.tree.set_can_focus(false);
-
-        state
-            .item_scroll
-            .set_policy(gtk::PolicyType::Automatic, gtk::PolicyType::Automatic);
-
-        state.item_scroll.add(&state.tree);
         state.item_scroll.show_all();
 
         content.pack_start(&state.item_scroll, true, true, 0);
