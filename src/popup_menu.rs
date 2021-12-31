@@ -73,10 +73,6 @@ impl State {
             .vscrollbar_policy(gtk::PolicyType::Automatic)
             .build();
 
-        tree.connect_size_allocate(
-            clone!(item_scroll, renderer => move |tree, _| on_treeview_allocate(&item_scroll, tree, &renderer)),
-        );
-
         let info_label = gtk::Label::builder()
             .wrap(true)
             .visible(true)
@@ -119,6 +115,7 @@ impl State {
         self.item_scroll.set_max_content_width(ctx.max_width);
         self.info_scroll.set_max_content_width(ctx.max_width);
         self.update_tree(&ctx);
+        self.item_scroll.set_max_content_height(calc_treeview_height(&self.tree, &self.renderer));
         self.select(ctx.selected);
     }
 
@@ -412,18 +409,6 @@ fn find_scroll_count(selected_idx: i32, target_idx: i32) -> i32 {
     } else {
         selected_idx - target_idx
     }
-}
-
-fn on_treeview_allocate(
-    scroll: &gtk::ScrolledWindow,
-    tree: &gtk::TreeView,
-    renderer: &gtk::CellRendererText,
-) {
-    let treeview_height = calc_treeview_height(tree, renderer);
-
-    glib::idle_add_local_once(clone!(scroll => move || {
-        scroll.set_max_content_height(treeview_height);
-    }));
 }
 
 pub fn update_css(css_provider: &gtk::CssProvider, hl: &HighlightMap) {
