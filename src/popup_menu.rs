@@ -242,6 +242,7 @@ impl State {
             if self.preview && !info.is_empty() {
                 self.info_label.set_text(&info);
                 self.info_scroll.vadjustment().set_value(0.0);
+                self.info_scroll.hadjustment().set_value(0.0);
                 self.info_scroll.show();
                 return;
             }
