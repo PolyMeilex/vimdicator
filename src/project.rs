@@ -113,12 +113,6 @@ impl Projects {
         let projects = Arc::new(UiMutex::new(projects));
 
         let prj_ref = projects.clone();
-        projects
-            .borrow()
-            .tree
-            .connect_size_allocate(move |_, _| on_treeview_allocate(prj_ref.clone()));
-
-        let prj_ref = projects.clone();
         search_box.connect_changed(move |search_box| {
             let projects = prj_ref.borrow();
             let list_store = projects.get_list_store();
@@ -270,6 +264,7 @@ impl Projects {
 
     pub fn show(&mut self) {
         self.load_oldfiles();
+        self.resize_treeview();
 
         self.popup.popup();
     }
@@ -365,24 +360,20 @@ impl Projects {
 
         row_height * MAX_VISIBLE_ROWS as i32
     }
-}
 
-fn on_treeview_allocate(projects: Arc<UiMutex<Projects>>) {
-    let treeview_height = projects.borrow().calc_treeview_height();
-
-    glib::idle_add_once(move || {
-        let prj = projects.borrow();
+    fn resize_treeview(&self) {
+        let treeview_height = self.calc_treeview_height();
+        let previous_height = self.scroll.max_content_height();
 
         // strange solution to make gtk assertions happy
-        let previous_height = prj.scroll.max_content_height();
         if previous_height < treeview_height {
-            prj.scroll.set_max_content_height(treeview_height);
-            prj.scroll.set_min_content_height(treeview_height);
+            self.scroll.set_max_content_height(treeview_height);
+            self.scroll.set_min_content_height(treeview_height);
         } else if previous_height > treeview_height {
-            prj.scroll.set_min_content_height(treeview_height);
-            prj.scroll.set_max_content_height(treeview_height);
+            self.scroll.set_min_content_height(treeview_height);
+            self.scroll.set_max_content_height(treeview_height);
         }
-    });
+    }
 }
 
 fn list_old_files(nvim: &NvimSession) -> Vec<String> {
