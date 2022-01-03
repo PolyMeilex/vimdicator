@@ -64,10 +64,10 @@ pub struct Projects {
 }
 
 impl Projects {
-    pub fn new(ref_widget: &gtk::Button, shell: Rc<RefCell<Shell>>) -> Arc<UiMutex<Projects>> {
+    pub fn new(ref_widget: &gtk::MenuButton, shell: Rc<RefCell<Shell>>) -> Arc<UiMutex<Projects>> {
         let projects = Projects {
             shell,
-            popup: Popover::new(Some(ref_widget)),
+            popup: Popover::new(Option::<&gtk::MenuButton>::None),
             tree: TreeView::new(),
             scroll: ScrolledWindow::new(
                 Option::<&gtk::Adjustment>::None,
@@ -79,6 +79,7 @@ impl Projects {
             toggle_renderer: CellRendererToggle::new(),
         };
 
+        ref_widget.set_popover(Some(&projects.popup));
         projects.setup_tree();
 
         projects.tree.set_activate_on_single_click(true);

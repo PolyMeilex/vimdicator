@@ -143,7 +143,7 @@ impl ResizeState {
 
 /// A collection of all header bar buttons used in nvim-gtk
 pub struct HeaderBarButtons {
-    open_btn: Button,
+    open_btn: MenuButton,
     new_tab_btn: Button,
     paste_btn: Button,
     save_btn: Button,
@@ -152,7 +152,7 @@ pub struct HeaderBarButtons {
 
 impl HeaderBarButtons {
     pub fn new(
-        open_btn: Button,
+        open_btn: MenuButton,
         new_tab_btn: Button,
         paste_btn: Button,
         save_btn: Button,

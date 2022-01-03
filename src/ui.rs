@@ -63,12 +63,11 @@ pub struct Ui {
 pub struct Components {
     window: Option<ApplicationWindow>,
     window_state: WindowState,
-    open_btn: Button,
+    open_btn: gtk::MenuButton,
 }
 
 impl Components {
     fn new() -> Components {
-        let open_btn = Button::new();
         let open_btn_box = gtk::Box::new(gtk::Orientation::Horizontal, 3);
         open_btn_box.pack_start(&gtk::Label::new(Some("Open")), false, false, 3);
         open_btn_box.pack_start(
@@ -77,9 +76,13 @@ impl Components {
             false,
             3,
         );
-        open_btn.add(&open_btn_box);
-        open_btn.set_can_focus(false);
-        open_btn.set_sensitive(false);
+
+        let open_btn = gtk::MenuButton::builder()
+            .can_focus(false)
+            .sensitive(false)
+            .child(&open_btn_box)
+            .build();
+
         Components {
             open_btn,
             window: None,
