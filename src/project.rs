@@ -112,33 +112,30 @@ impl Projects {
         projects.popup.add(&vbox);
 
         let projects = Arc::new(UiMutex::new(projects));
+        let projects_ref = projects.borrow();
 
-        let prj_ref = projects.clone();
-        search_box.connect_changed(move |search_box| {
-            let projects = prj_ref.borrow();
+        search_box.connect_changed(clone!(projects => move |search_box| {
+            let projects = projects.borrow();
             let list_store = projects.get_list_store();
 
             list_store.clear();
             if let Some(ref store) = projects.store {
                 store.populate(&list_store, Some(&search_box.text()));
             }
-        });
+        }));
 
-        let prj_ref = projects.clone();
-        search_box.connect_activate(move |_| {
-            let model = prj_ref.borrow().tree.model().unwrap();
+        search_box.connect_activate(clone!(projects => move |_| {
+            let model = projects.borrow().tree.model().unwrap();
             if let Some(iter) = model.iter_first() {
-                prj_ref.borrow().open_uri(&model, &iter);
-                let popup = prj_ref.borrow().popup.clone();
+                projects.borrow().open_uri(&model, &iter);
+                let popup = projects.borrow().popup.clone();
                 popup.popdown();
             }
-        });
+        }));
 
-        let prj_ref = projects.clone();
-        projects
-            .borrow()
+        projects_ref
             .tree
-            .connect_row_activated(move |tree, _, column| {
+            .connect_row_activated(clone!(projects => move |tree, _, column| {
                 // Don't activate if the user clicked the checkbox.
                 let toggle_column = tree.column(2).unwrap();
                 if *column == toggle_column {
@@ -146,30 +143,29 @@ impl Projects {
                 }
                 let selection = tree.selection();
                 if let Some((model, iter)) = selection.selected() {
-                    prj_ref.borrow().open_uri(&model, &iter);
-                    let popup = prj_ref.borrow().popup.clone();
+                    projects.borrow().open_uri(&model, &iter);
+                    let popup = projects.borrow().popup.clone();
                     popup.popdown();
                 }
-            });
+            }));
 
-        let prj_ref = projects.clone();
-        open_btn.connect_clicked(move |_| {
-            prj_ref.borrow().show_open_file_dlg();
-            let popup = prj_ref.borrow().popup.clone();
+        open_btn.connect_clicked(clone!(projects => move |_| {
+            projects.borrow().show_open_file_dlg();
+            let popup = projects.borrow().popup.clone();
             popup.popdown();
-        });
+        }));
 
-        let prj_ref = projects.clone();
-        projects
-            .borrow()
+        projects_ref
             .popup
-            .connect_closed(move |_| prj_ref.borrow_mut().clear());
+            .connect_closed(clone!(projects => move |_| projects.borrow_mut().clear()));
 
-        let prj_ref = projects.clone();
-        projects
-            .borrow()
+        projects_ref
             .toggle_renderer
-            .connect_toggled(move |_, path| prj_ref.borrow_mut().toggle_stored(&path));
+            .connect_toggled(clone!(projects => move |_, path| {
+                projects.borrow_mut().toggle_stored(&path)
+            }));
+
+        drop(projects_ref);
         projects
     }
 
