@@ -63,28 +63,11 @@ pub struct Ui {
 pub struct Components {
     window: Option<ApplicationWindow>,
     window_state: WindowState,
-    open_btn: gtk::MenuButton,
 }
 
 impl Components {
     fn new() -> Components {
-        let open_btn_box = gtk::Box::new(gtk::Orientation::Horizontal, 3);
-        open_btn_box.pack_start(&gtk::Label::new(Some("Open")), false, false, 3);
-        open_btn_box.pack_start(
-            &gtk::Image::from_icon_name(Some("pan-down-symbolic"), gtk::IconSize::Menu),
-            false,
-            false,
-            3,
-        );
-
-        let open_btn = gtk::MenuButton::builder()
-            .can_focus(false)
-            .sensitive(false)
-            .child(&open_btn_box)
-            .build();
-
         Components {
-            open_btn,
             window: None,
             window_state: WindowState::load(),
         }
@@ -110,7 +93,7 @@ impl Ui {
         let file_browser = Arc::new(UiMutex::new(FileBrowserWidget::new(&shell.borrow().state)));
         settings.borrow_mut().set_shell(Rc::downgrade(&shell));
 
-        let projects = Projects::new(&comps.borrow().open_btn, shell.clone());
+        let projects = Projects::new(shell.clone());
 
         Ui {
             initialized: false,
@@ -448,11 +431,9 @@ impl Ui {
         let comps = self.comps.borrow();
         let window = comps.window.as_ref().unwrap();
 
-        let projects = self.projects.clone();
-        header_bar.pack_start(&comps.open_btn);
-        comps
-            .open_btn
-            .connect_clicked(move |_| projects.borrow_mut().show());
+        let projects = self.projects.borrow();
+        let open_btn = projects.open_btn();
+        header_bar.pack_start(open_btn);
 
         let new_tab_btn =
             Button::from_icon_name(Some("tab-new-symbolic"), gtk::IconSize::SmallToolbar);
@@ -500,7 +481,7 @@ impl Ui {
         (
             update_subtitle,
             Box::new(HeaderBarButtons::new(
-                comps.open_btn.clone(),
+                open_btn.clone(),
                 new_tab_btn,
                 paste_btn,
                 save_btn,

@@ -6,8 +6,8 @@ use std::sync::Arc;
 use gtk;
 use gtk::prelude::*;
 use gtk::{
-    CellRendererPixbuf, CellRendererText, CellRendererToggle, ListStore, Orientation, PolicyType,
-    Popover, ScrolledWindow, TreeIter, TreeModel, TreeView, TreeViewColumn,
+    CellRendererPixbuf, CellRendererText, CellRendererToggle, ListStore, MenuButton, Orientation,
+    PolicyType, Popover, ScrolledWindow, TreeIter, TreeModel, TreeView, TreeViewColumn,
 };
 use glib;
 use pango;
@@ -54,6 +54,7 @@ const COLUMN_IDS: [u32; COLUMN_COUNT] = [
 
 pub struct Projects {
     shell: Rc<RefCell<Shell>>,
+    open_btn: MenuButton,
     popup: Popover,
     tree: TreeView,
     scroll: ScrolledWindow,
@@ -64,10 +65,28 @@ pub struct Projects {
 }
 
 impl Projects {
-    pub fn new(ref_widget: &gtk::MenuButton, shell: Rc<RefCell<Shell>>) -> Arc<UiMutex<Projects>> {
+    pub fn new(shell: Rc<RefCell<Shell>>) -> Arc<UiMutex<Projects>> {
+        let popup = Popover::new(Option::<&MenuButton>::None);
+        let open_btn_box = gtk::Box::new(gtk::Orientation::Horizontal, 3);
+        open_btn_box.pack_start(&gtk::Label::new(Some("Open")), false, false, 3);
+        open_btn_box.pack_start(
+            &gtk::Image::from_icon_name(Some("pan-down-symbolic"), gtk::IconSize::Menu),
+            false,
+            false,
+            3,
+        );
+
+        let open_btn = MenuButton::builder()
+            .can_focus(false)
+            .sensitive(false)
+            .child(&open_btn_box)
+            .popover(&popup)
+            .build();
+
         let projects = Projects {
             shell,
-            popup: Popover::new(Option::<&gtk::MenuButton>::None),
+            open_btn,
+            popup,
             tree: TreeView::new(),
             scroll: ScrolledWindow::new(
                 Option::<&gtk::Adjustment>::None,
@@ -79,7 +98,6 @@ impl Projects {
             toggle_renderer: CellRendererToggle::new(),
         };
 
-        ref_widget.set_popover(Some(&projects.popup));
         projects.setup_tree();
 
         projects.tree.set_activate_on_single_click(true);
@@ -164,6 +182,10 @@ impl Projects {
             .connect_toggled(clone!(projects => move |_, path| {
                 projects.borrow_mut().toggle_stored(&path)
             }));
+
+        projects_ref.open_btn.connect_clicked(clone!(projects => move |_| {
+            projects.borrow_mut().show();
+        }));
 
         drop(projects_ref);
         projects
@@ -370,6 +392,10 @@ impl Projects {
             self.scroll.set_min_content_height(treeview_height);
             self.scroll.set_max_content_height(treeview_height);
         }
+    }
+
+    pub fn open_btn(&self) -> &MenuButton {
+        &self.open_btn
     }
 }
 
