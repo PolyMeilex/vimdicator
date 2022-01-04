@@ -55,7 +55,6 @@ const COLUMN_IDS: [u32; COLUMN_COUNT] = [
 pub struct Projects {
     shell: Rc<RefCell<Shell>>,
     open_btn: MenuButton,
-    popup: Popover,
     tree: TreeView,
     scroll: ScrolledWindow,
     store: Option<EntryStore>,
@@ -86,7 +85,6 @@ impl Projects {
         let projects = Projects {
             shell,
             open_btn,
-            popup,
             tree: TreeView::new(),
             scroll: ScrolledWindow::new(
                 Option::<&gtk::Adjustment>::None,
@@ -127,7 +125,7 @@ impl Projects {
         vbox.pack_start(&open_btn, true, true, 5);
 
         vbox.show_all();
-        projects.popup.add(&vbox);
+        popup.add(&vbox);
 
         let projects = Arc::new(UiMutex::new(projects));
         let projects_ref = projects.borrow();
@@ -145,9 +143,9 @@ impl Projects {
         search_box.connect_activate(clone!(projects => move |_| {
             let model = projects.borrow().tree.model().unwrap();
             if let Some(iter) = model.iter_first() {
-                projects.borrow().open_uri(&model, &iter);
-                let popup = projects.borrow().popup.clone();
-                popup.popdown();
+                let projects = projects.borrow();
+                projects.open_uri(&model, &iter);
+                projects.set_active(false);
             }
         }));
 
@@ -161,21 +159,19 @@ impl Projects {
                 }
                 let selection = tree.selection();
                 if let Some((model, iter)) = selection.selected() {
-                    projects.borrow().open_uri(&model, &iter);
-                    let popup = projects.borrow().popup.clone();
-                    popup.popdown();
+                    let projects = projects.borrow();
+                    projects.open_uri(&model, &iter);
+                    projects.set_active(false);
                 }
             }));
 
         open_btn.connect_clicked(clone!(projects => move |_| {
-            projects.borrow().show_open_file_dlg();
-            let popup = projects.borrow().popup.clone();
-            popup.popdown();
+            let projects = projects.borrow();
+            projects.show_open_file_dlg();
+            projects.set_active(false);
         }));
 
-        projects_ref
-            .popup
-            .connect_closed(clone!(projects => move |_| projects.borrow_mut().clear()));
+        popup.connect_closed(clone!(projects => move |_| projects.borrow_mut().clear()));
 
         projects_ref
             .toggle_renderer
@@ -183,8 +179,8 @@ impl Projects {
                 projects.borrow_mut().toggle_stored(&path)
             }));
 
-        projects_ref.open_btn.connect_clicked(clone!(projects => move |_| {
-            projects.borrow_mut().show();
+        projects_ref.tree.connect_map(clone!(projects => move |_| {
+            projects.borrow_mut().before_show()
         }));
 
         drop(projects_ref);
@@ -256,7 +252,7 @@ impl Projects {
 
     fn show_open_file_dlg(&self) {
         let window = self
-            .popup
+            .open_btn
             .toplevel()
             .unwrap()
             .downcast::<gtk::Window>()
@@ -281,11 +277,14 @@ impl Projects {
         dlg.close();
     }
 
-    pub fn show(&mut self) {
+    pub fn before_show(&mut self) {
         self.load_oldfiles();
         self.resize_treeview();
+    }
 
-        self.popup.popup();
+    pub fn show(&mut self) {
+        self.before_show();
+        self.set_active(true);
     }
 
     fn load_oldfiles(&mut self) {
@@ -396,6 +395,14 @@ impl Projects {
 
     pub fn open_btn(&self) -> &MenuButton {
         &self.open_btn
+    }
+
+    fn set_active(&self, active: bool) {
+        /* We might be getting called from a signal handler, so open/close the projects menu with an
+         * idle callback
+         */
+        let open_btn = self.open_btn.clone();
+        glib::idle_add_local_once(move || open_btn.set_active(active));
     }
 }
 
