@@ -1132,7 +1132,7 @@ impl Shell {
         section.append(Some("Paste"), Some("paste"));
         menu.append_section(None, &section);
 
-        let popover = gtk::PopoverMenuBuilder::new()
+        let popover = gtk::PopoverMenu::builder()
             .position(gtk::PositionType::Bottom)
             .relative_to(&state.drawing_area)
             .build();

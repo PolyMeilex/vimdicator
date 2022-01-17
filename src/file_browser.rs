@@ -72,7 +72,7 @@ enum Column {
 
 impl FileBrowserWidget {
     pub fn new(shell_state: &Arc<UiMutex<shell::State>>) -> Self {
-        let widget = gtk::BoxBuilder::new()
+        let widget = gtk::Box::builder()
             .can_focus(false)
             .sensitive(false) // Will be enabled when nvim is ready
             .width_request(150)
@@ -85,7 +85,7 @@ impl FileBrowserWidget {
             glib::Type::STRING,
             glib::Type::STRING,
         ]);
-        let dir_list = gtk::ComboBoxBuilder::new()
+        let dir_list = gtk::ComboBox::builder()
             .can_focus(false)
             .focus_on_click(false)
             .border_width(6)
@@ -93,14 +93,14 @@ impl FileBrowserWidget {
             .model(&dir_list_model)
             .build();
 
-        let text_renderer = gtk::CellRendererTextBuilder::new()
+        let text_renderer = gtk::CellRendererText::builder()
             .xpad(6)
             .ellipsize(pango::EllipsizeMode::End)
             .build();
         dir_list.pack_end(&text_renderer, false);
         dir_list.add_attribute(&text_renderer, "text", 0);
 
-        let pixbuf_renderer = gtk::CellRendererPixbufBuilder::new()
+        let pixbuf_renderer = gtk::CellRendererPixbuf::builder()
             .xpad(6)
             .build();
         dir_list.pack_start(&pixbuf_renderer, false);
@@ -114,7 +114,7 @@ impl FileBrowserWidget {
             glib::Type::U8,
             glib::Type::STRING,
         ]);
-        let tree = gtk::TreeViewBuilder::new()
+        let tree = gtk::TreeView::builder()
             .can_focus(false)
             .headers_visible(false)
             .show_expanders(false)
@@ -124,11 +124,11 @@ impl FileBrowserWidget {
             .build();
         tree.selection().set_mode(gtk::SelectionMode::Single);
 
-        let tree_column = gtk::TreeViewColumnBuilder::new()
+        let tree_column = gtk::TreeViewColumn::builder()
             .sizing(gtk::TreeViewColumnSizing::Autosize)
             .build();
 
-        let pixbuf_renderer = gtk::CellRendererPixbufBuilder::new()
+        let pixbuf_renderer = gtk::CellRendererPixbuf::builder()
             .xpad(6)
             .build();
         tree_column.pack_start(&pixbuf_renderer, false);
@@ -140,7 +140,7 @@ impl FileBrowserWidget {
 
         tree.append_column(&tree_column);
 
-        let window = gtk::ScrolledWindowBuilder::new()
+        let window = gtk::ScrolledWindow::builder()
             .can_focus(false)
             .child(&tree)
             .build();
@@ -157,7 +157,7 @@ impl FileBrowserWidget {
         section.append(Some("Show hidden files"), Some("show-hidden"));
         menu.append_section(None, &section);
 
-        let context_menu = gtk::PopoverMenuBuilder::new()
+        let context_menu = gtk::PopoverMenu::builder()
             .position(gtk::PositionType::Bottom)
             .relative_to(&tree)
             .build();
