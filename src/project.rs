@@ -121,7 +121,7 @@ impl Projects {
 
         vbox.pack_start(&projects.scroll, true, true, 0);
 
-        let open_btn = gtk::ButtonBuilder::new().label("Other Documents…").build();
+        let open_btn = gtk::Button::with_label("Other Documents…");
         vbox.pack_start(&open_btn, true, true, 5);
 
         vbox.show_all();
