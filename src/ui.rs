@@ -139,7 +139,7 @@ impl Ui {
                 .unwrap_or(false);
             if prefer_dark_theme {
                 if let Some(settings) = window.settings() {
-                    settings.set_property("gtk-application-prefer-dark-theme", true).unwrap();
+                    settings.set_property("gtk-application-prefer-dark-theme", true);
                 }
             }
 
@@ -415,9 +415,7 @@ impl Ui {
                 let window = comps.window.as_ref().unwrap();
 
                 if let Some(settings) = window.settings() {
-                    settings
-                        .set_property("gtk-application-prefer-dark-theme", prefer_dark_theme)
-                        .unwrap();
+                    settings.set_property("gtk-application-prefer-dark-theme", prefer_dark_theme);
                 }
             }
         }

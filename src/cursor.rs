@@ -80,7 +80,7 @@ impl<CB: CursorRedrawCb> State<CB> {
         self.alpha = Alpha(1.0);
         self.anim_phase = phase;
         if let Some(timer_id) = self.timer.take() {
-            glib::source_remove(timer_id);
+            timer_id.remove();
         }
     }
 }
@@ -378,7 +378,7 @@ fn anim_step<CB: CursorRedrawCb + 'static>(state: &Arc<UiMutex<State<CB>>>) -> g
 impl<CB: CursorRedrawCb> Drop for BlinkCursor<CB> {
     fn drop(&mut self) {
         if let Some(timer_id) = self.state.borrow_mut().timer.take() {
-            glib::source_remove(timer_id);
+            timer_id.remove();
         }
     }
 }

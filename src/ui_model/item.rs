@@ -56,8 +56,8 @@ impl InkOverflow {
     ) -> Option<Self> {
         let cell_metrix = ctx.cell_metrics();
 
-        let ink_descent = ink_rect.y + ink_rect.height;
-        let ink_ascent = ink_rect.y.abs();
+        let ink_descent = ink_rect.y() + ink_rect.height();
+        let ink_ascent = ink_rect.y().abs();
 
         let mut top = ink_ascent - cell_metrix.pango_ascent;
         if top < 0 {
@@ -69,9 +69,9 @@ impl InkOverflow {
             bot = 0;
         }
 
-        let left = if ink_rect.x < 0 { ink_rect.x.abs() } else { 0 };
+        let left = if ink_rect.x() < 0 { ink_rect.x().abs() } else { 0 };
 
-        let mut right = ink_rect.width - cells_count * cell_metrix.pango_char_width;
+        let mut right = ink_rect.width() - cells_count * cell_metrix.pango_char_width;
         if right < 0 {
             right = 0;
         }

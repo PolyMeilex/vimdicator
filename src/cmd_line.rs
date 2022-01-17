@@ -374,13 +374,7 @@ impl CmdLine {
 
         if !self.displayed {
             self.displayed = true;
-            self.popover.set_pointing_to(&gtk::Rectangle {
-                x: ctx.x,
-                y: ctx.y,
-                width: ctx.width,
-                height: ctx.height,
-            });
-
+            self.popover.set_pointing_to(&gdk::Rectangle::new(ctx.x, ctx.y, ctx.width, ctx.height));
             self.popover.popup();
             state.cursor.as_mut().unwrap().start();
         } else {

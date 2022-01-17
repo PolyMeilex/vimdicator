@@ -385,12 +385,12 @@ impl FileBrowserWidget {
                 // Open context menu on right click.
                 if ev_btn.button() == 3 {
                     let (pos_x, pos_y) = ev_btn.position();
-                    context_menu.set_pointing_to(&gdk::Rectangle {
-                        x: pos_x.round() as i32,
-                        y: pos_y.round() as i32,
-                        width: 0,
-                        height: 0,
-                    });
+                    context_menu.set_pointing_to(&gdk::Rectangle::new(
+                        pos_x.round() as i32,
+                        pos_y.round() as i32,
+                        0,
+                        0,
+                    ));
                     context_menu.popup();
                     let iter = tree
                         .path_at_pos(pos_x as i32, pos_y as i32)

@@ -318,12 +318,7 @@ impl PopupMenu {
     pub fn show(&mut self, ctx: PopupMenuContext) {
         self.open = true;
 
-        self.popover.set_pointing_to(&gtk::Rectangle {
-            x: ctx.x,
-            y: ctx.y,
-            width: ctx.width,
-            height: ctx.height,
-        });
+        self.popover.set_pointing_to(&gdk::Rectangle::new(ctx.x, ctx.y, ctx.width, ctx.height));
         self.state.borrow_mut().before_show(ctx);
         self.popover.popup()
     }

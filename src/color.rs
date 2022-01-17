@@ -12,12 +12,7 @@ pub const COLOR_RED: Color = Color(1.0, 0.0, 0.0);
 
 impl<'a> From<&'a Color> for gdk::RGBA {
     fn from(color: &Color) -> Self {
-        gdk::RGBA {
-            red: color.0,
-            green: color.1,
-            blue: color.2,
-            alpha: 1.0,
-        }
+        gdk::RGBA::new(color.0, color.1, color.2, 1.0)
     }
 }
 

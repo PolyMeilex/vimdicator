@@ -63,7 +63,7 @@ impl NvimHandler {
         glib::idle_add_once(move || {
             let id = delayed_redraw_event_id.replace(None);
             if let Some(ev_id) = id {
-                glib::source_remove(ev_id);
+                ev_id.remove();
             }
         });
     }

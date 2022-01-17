@@ -534,12 +534,12 @@ impl State {
         let alloc = self.drawing_area.allocation();
         // SAFETY: We clamp w to 1 and h to 3
         unsafe {(
-            NonZeroI64::new_unchecked(((alloc.width as f64 / char_width).trunc() as i64).max(1)),
+            NonZeroI64::new_unchecked(((alloc.width() as f64 / char_width).trunc() as i64).max(1)),
             /* Neovim won't resize to below 3 rows, and trying to do this will potentially cause
              * nvim to avoid sending back an autocmd when the resize is processed. So, limit us to
              * at least 3 rows at all times.
              */
-            NonZeroI64::new_unchecked(((alloc.height as f64 / line_height).trunc() as i64).max(3)),
+            NonZeroI64::new_unchecked(((alloc.height() as f64 / line_height).trunc() as i64).max(3)),
         )}
     }
 
@@ -553,13 +553,7 @@ impl State {
             let (x, y, width, height) = ModelRect::point(col, row)
                 .to_area(self.render_state.borrow().font_ctx.cell_metrics());
 
-            self.im_context.set_cursor_location(&gdk::Rectangle {
-                x,
-                y,
-                width,
-                height,
-            });
-
+            self.im_context.set_cursor_location(&gdk::Rectangle::new(x, y, width, height));
             self.im_context.reset();
         }
     }
@@ -1322,12 +1316,7 @@ fn gtk_button_press(
             2 => mouse_input(shell, "middle", "press", ev.state(), ev.position()),
             3 => {
                 let (x, y) = ev.position();
-                menu.set_pointing_to(&gtk::Rectangle {
-                    x: x.round() as i32,
-                    y: y.round() as i32,
-                    width: 0,
-                    height: 0,
-                });
+                menu.set_pointing_to(&gdk::Rectangle::new(x.round() as i32, y.round() as i32, 0, 0));
 
                 // Popping up the menu will trigger a focus event, so handle this in the idle loop
                 // to avoid a double borrow_mut()
@@ -1558,8 +1547,8 @@ fn draw_initializing(state: &State, ctx: &cairo::Context) {
     layout.set_text("Loading->");
     let (width, height) = layout.pixel_size();
 
-    let x = alloc.width as f64 / 2.0 - width as f64 / 2.0;
-    let y = alloc.height as f64 / 2.0 - height as f64 / 2.0;
+    let x = alloc.width() as f64 / 2.0 - width as f64 / 2.0;
+    let y = alloc.height() as f64 / 2.0 - height as f64 / 2.0;
 
     ctx.move_to(x, y);
     ctx.set_source_rgb(fg_color.0, fg_color.1, fg_color.2);
