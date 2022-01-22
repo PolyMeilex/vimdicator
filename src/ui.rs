@@ -548,7 +548,7 @@ fn on_help_about(window: &gtk::ApplicationWindow) {
     about.set_program_name("NeovimGtk");
     about.set_version(Some(crate::GIT_BUILD_VERSION.unwrap_or(env!("CARGO_PKG_VERSION"))));
     about.set_logo_icon_name(Some("org.daa.NeovimGtk"));
-    about.set_authors(&[env!("CARGO_PKG_AUTHORS")]);
+    about.set_authors(env!("CARGO_PKG_AUTHORS").split(":").collect::<Vec<_>>().as_slice());
     about.set_comments(Some(misc::about_comments().as_str()));
 
     about.connect_response(|about, _| about.close());
