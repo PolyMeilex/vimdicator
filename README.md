@@ -60,7 +60,7 @@ Then install the latest rust compiler, best with the
 cargo build --release
 ```
 
-As of writing this (Jan 22, 2021) the packaged rust tools in Fedora also work for building.
+As of writing this (Jan 22, 2022) the packaged rust tools in Fedora also work for building.
 
 ## Windows
 Neovim-gtk can be compiled using MSYS2 GTK packages. In this case use 'windows-gnu' rust toolchain.
