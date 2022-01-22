@@ -1,7 +1,10 @@
 [package]
 name = "nvim-gtk"
 version = "0.3.0"
-authors = ["daa84 <daa84@inbox.ru>"]
+authors = [
+    "daa84 <daa84@inbox.ru>",
+    "Lyude Paul <thatslyude@gmail.com>",
+]
 build = "build.rs"
 edition = "2018"
 license = "GPLv3"
