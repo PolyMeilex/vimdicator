@@ -1,5 +1,11 @@
-# neovim-gtk [![Build status](https://ci.appveyor.com/api/projects/status/l58o28e13f829llx/branch/master?svg=true)](https://ci.appveyor.com/project/daa84/neovim-gtk/branch/master)[![Build status](https://github.com/daa84/neovim-gtk/workflows/Ubuntu/badge.svg)](https://github.com/daa84/neovim-gtk/actions)
-GTK ui for neovim written in rust using gtk-rs bindings. With [ligatures](https://github.com/daa84/neovim-gtk/wiki/Configuration#ligatures) support.
+# neovim-gtk
+
+GTK ui for neovim written in rust using gtk-rs bindings. With
+[ligatures](https://github.com/daa84/neovim-gtk/wiki/Configuration#ligatures) support. This is a
+fork of the original project from @daa84.
+
+Note that I haven't set up the wiki pages for this repo yet, so wiki links still go to daa84's wiki
+repo.
 
 # Screenshot
 ![Main Window](/screenshots/neovimgtk-screen.png?raw=true)
@@ -26,19 +32,14 @@ Or to some custom path:
 make PREFIX=/some/custom/path install
 ```
 
-## archlinux
-AUR package for neovim-gtk https://aur.archlinux.org/packages/neovim-gtk-git
-```shell
-git clone https://aur.archlinux.org/neovim-gtk-git.git
-cd neovim-gtk-git 
-makepkg -si
-```
+## Fedora
+TODO
+## Arch Linux
+TODO
 ## openSUSE
-https://build.opensuse.org/package/show/home:mcepl:neovim/neovim-gtk
-
-## windows
-Windows binaries on appveyor
-[latest build](https://ci.appveyor.com/api/projects/daa84/neovim-gtk/artifacts/nvim-gtk-mingw64.7z?branch=master)
+TODO
+## Windows
+TODO
 
 # Build prerequisites
 ## Linux
@@ -50,7 +51,7 @@ apt install libgtk-3-dev
 
 On Fedora:
 ```bash
-dnf install atk-devel cairo-devel gdk-pixbuf2-devel glib2-devel gtk3-devel pango-devel  
+dnf install atk-devel cairo-devel gdk-pixbuf2-devel glib2-devel gtk3-devel pango-devel
 ```
 
 Then install the latest rust compiler, best with the
@@ -58,6 +59,8 @@ Then install the latest rust compiler, best with the
 ```
 cargo build --release
 ```
+
+As of writing this (Jan 22, 2021) the packaged rust tools in Fedora also work for building.
 
 ## Windows
 Neovim-gtk can be compiled using MSYS2 GTK packages. In this case use 'windows-gnu' rust toolchain.
