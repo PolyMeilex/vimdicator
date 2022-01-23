@@ -1,3 +1,9 @@
+# v0.4.1
+
+## Bug fixes
+
+- Revert default background type back to dark (#21)
+
 # v0.4.0
 
 Note: this is the first version being maintained by Lyude, and as a result I didn't make a thorough
