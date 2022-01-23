@@ -36,7 +36,7 @@ impl HighlightMap {
         let default_hl = Rc::new(Highlight::new());
         HighlightMap {
             highlights: FnvHashMap::default(),
-            background_state: BackgroundState::Light,
+            background_state: BackgroundState::Dark,
             bg_color: None,
             fg_color: None,
             sp_color: None,
