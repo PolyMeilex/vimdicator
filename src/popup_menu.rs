@@ -114,8 +114,10 @@ impl State {
 
         self.item_scroll.set_max_content_width(ctx.max_width);
         self.info_scroll.set_max_content_width(ctx.max_width);
+        self.item_scroll.set_max_content_height(
+            calc_treeview_height(&self.tree, &self.renderer, ctx.menu_items.len())
+        );
         self.update_tree(&ctx);
-        self.item_scroll.set_max_content_height(calc_treeview_height(&self.tree, &self.renderer));
         self.select(ctx.selected);
     }
 
@@ -425,13 +427,15 @@ pub fn update_css(css_provider: &gtk::CssProvider, hl: &HighlightMap) {
     };
 }
 
-pub fn calc_treeview_height(tree: &gtk::TreeView, renderer: &gtk::CellRendererText) -> i32 {
+pub fn calc_treeview_height(
+    tree: &gtk::TreeView,
+    renderer: &gtk::CellRendererText,
+    item_count: usize,
+) -> i32 {
     let (_, natural_size) = renderer.preferred_height(tree);
     let (_, ypad) = renderer.padding();
 
     let row_height = natural_size + ypad;
 
-    let actual_count = tree.model().unwrap().iter_n_children(None);
-
-    row_height * min(actual_count, MAX_VISIBLE_ROWS) as i32
+    row_height * min(item_count, MAX_VISIBLE_ROWS as usize) as i32
 }

@@ -486,16 +486,16 @@ impl CmdLine {
             .set_fixed_width(min(max_item_width, max_width));
         self.wild_scroll.set_max_content_width(max_width);
 
+        // set height
+        let treeview_height =
+            popup_menu::calc_treeview_height(&self.wild_tree, &self.wild_renderer, items.len());
+
         // load data
         let list_store = gtk::ListStore::new(&[glib::Type::STRING; 1]);
         for item in items {
             list_store.insert_with_values(None, &[(0, &item)]);
         }
         self.wild_tree.set_model(Some(&list_store));
-
-        // set height
-        let treeview_height =
-            popup_menu::calc_treeview_height(&self.wild_tree, &self.wild_renderer);
 
         self.wild_scroll.set_max_content_height(treeview_height);
 
