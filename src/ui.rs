@@ -399,6 +399,9 @@ impl Ui {
             NvimCommand::ShowProjectView => {
                 glib::idle_add_once(clone!(projects => move || projects.borrow_mut().show()));
             }
+            NvimCommand::ShowGtkInspector => {
+                comps.borrow().window.as_ref().unwrap().emit_enable_debugging(false);
+            }
             NvimCommand::ToggleSidebar => {
                 let action = sidebar_action.borrow();
                 let state = !bool::from_variant(&action.state().unwrap()).unwrap();

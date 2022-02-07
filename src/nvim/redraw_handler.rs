@@ -124,6 +124,7 @@ fn set_ui_opt(ui: &mut shell::State, opts: &[&str], val: bool) -> Result<(), Str
 pub enum NvimCommand {
     ToggleSidebar,
     ShowProjectView,
+    ShowGtkInspector,
     Transparency(f64, f64),
     PreferDarkTheme(bool),
 }
@@ -159,6 +160,7 @@ pub fn call_gui_event(
             match try_str!(args[0]) {
                 "ToggleSidebar" => ui.on_command(NvimCommand::ToggleSidebar),
                 "ShowProjectView" => ui.on_command(NvimCommand::ShowProjectView),
+                "ShowGtkInspector" => ui.on_command(NvimCommand::ShowGtkInspector),
                 "Transparency" => ui.on_command(NvimCommand::Transparency(
                     try_str!(args.get(1).cloned().unwrap_or_else(|| "1.0".into()))
                         .parse()
