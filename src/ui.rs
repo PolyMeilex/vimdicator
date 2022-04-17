@@ -229,7 +229,7 @@ impl Ui {
 
         let update_title = shell.state.borrow().subscribe(
             SubscriptionKey::from("BufEnter,DirChanged"),
-            &["expand('%:p')", "getcwd()"],
+            &["expand('%:p')", "getcwd()", "win_gettype()", "&buftype"],
             clone!(comps_ref => move |args| update_window_title(&comps_ref, args)),
         );
 
@@ -616,6 +616,18 @@ fn set_background(shell: &RefCell<Shell>, args: Vec<String>) {
 }
 
 fn update_window_title(comps: &Arc<UiMutex<Components>>, args: Vec<String>) {
+    // Ignore certain window types that will never have a title (GH #26)
+    let win_type = &args[2];
+    let buf_type = &args[3];
+    if win_type == "autocmd"
+        || win_type == "command"
+        || win_type == "loclist"
+        || (win_type == "popup" && buf_type != "terminal")
+        || win_type == "preview"
+        || win_type == "quickfix" {
+        return;
+    }
+
     let comps_ref = comps.clone();
     let comps = comps_ref.borrow();
     let window = comps.window.as_ref().unwrap();
