@@ -266,13 +266,7 @@ impl<'a> Iterator for PangoItemPositionIterator<'a> {
         let start_cell = self.styled_line.cell_to_byte[offset];
         let mut end_cell = self.styled_line.cell_to_byte[offset + length - 1];
 
-        // TODO: Replace this with Iterable.is_empty() when that's stable
-        loop {
-            let next_item = match self.iter.peek() {
-                Some(next) => next,
-                None => break,
-            };
-
+        while let Some(next_item) = self.iter.peek() {
             let next_offset = next_item.offset() as usize;
             if self.styled_line.cell_to_byte[next_offset] > end_cell {
                 break;
