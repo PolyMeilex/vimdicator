@@ -16,6 +16,7 @@ use std::{
 use crate::{
     render::*,
     ui::UiMutex,
+    shell::TransparencySettings,
 };
 
 use crate::cmd_line::State;
@@ -157,7 +158,7 @@ impl WidgetImpl for CmdlineViewportObject {
             if let Some(ref cache) = inner.block_cache {
                 snapshot.append_node(cache);
             } else {
-                let cache = snapshot_nvim(font_ctx, &mut block.model_layout.model, hl, 1.0);
+                let cache = snapshot_nvim(font_ctx, &mut block.model_layout.model, hl);
                 snapshot.append_node(&cache);
                 inner.block_cache = Some(cache);
             }
@@ -169,7 +170,7 @@ impl WidgetImpl for CmdlineViewportObject {
             if let Some(ref cache) = inner.level_cache {
                 snapshot.append_node(cache);
             } else {
-                let cache = snapshot_nvim(font_ctx, &mut level.model_layout.model, hl, 1.0);
+                let cache = snapshot_nvim(font_ctx, &mut level.model_layout.model, hl);
                 snapshot.append_node(&cache);
                 inner.level_cache = Some(cache);
             }
@@ -183,6 +184,7 @@ impl WidgetImpl for CmdlineViewportObject {
                     font_ctx,
                     &level.model_layout.model,
                     hl,
+                    TransparencySettings::default() // TODO
                 );
             }
         }
