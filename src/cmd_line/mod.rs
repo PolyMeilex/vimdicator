@@ -17,7 +17,7 @@ use crate::cursor;
 use crate::highlight::{Highlight, HighlightMap};
 use crate::nvim_viewport::NvimViewport;
 use crate::mode;
-use crate::nvim::{self, NeovimClient};
+use crate::nvim::{self, *};
 use crate::popup_menu;
 use crate::render::{self, CellMetrics};
 use crate::shell;
@@ -314,11 +314,11 @@ impl CmdLine {
             .button(1)
             .build();
         controller.connect_pressed(clone!(state => move |controller, _, x, y| {
-            let state = state.borrow();
+            let state = state.borrow_mut();
             let nvim = state.nvim.as_ref().unwrap().nvim();
             let tree = controller.widget().downcast().unwrap();
             if let Some(mut nvim) = nvim {
-                popup_menu::tree_button_press(&tree, x, y, &mut nvim, "");
+                tree_button_press(&tree, x, y, &mut nvim, "");
             }
         }));
         tree.add_controller(&controller);
@@ -450,7 +450,7 @@ impl CmdLine {
 
         self.wild_renderer.set_foreground_rgba(Some(&render_state.hl.pmenu_fg().into()));
 
-        popup_menu::update_css(&self.wild_css_provider, &render_state.hl);
+        popup_menu::update_css(&self.wild_css_provider, &render_state.hl, &render_state.font_ctx);
 
         // set width
         // this calculation produce width more then needed, but this is looks ok :)
@@ -463,7 +463,7 @@ impl CmdLine {
 
         // set height
         let treeview_height =
-            popup_menu::calc_treeview_height(&self.wild_tree, &self.wild_renderer, items.len());
+            calc_treeview_height(&self.wild_tree, &self.wild_renderer, items.len());
 
         // load data
         let list_store = gtk::ListStore::new(&[glib::Type::STRING; 1]);
@@ -573,3 +573,57 @@ impl ToAttributedModelContent for Vec<(u64, String)> {
             .collect()]
     }
 }
+
+pub fn calc_treeview_height(
+    tree: &gtk::TreeView,
+    renderer: &gtk::CellRendererText,
+    item_count: usize,
+) -> i32 {
+    let (_, natural_size) = renderer.preferred_height(tree);
+    let (_, ypad) = renderer.padding();
+
+    let row_height = natural_size + ypad;
+
+    row_height * min(item_count, popup_menu::MAX_VISIBLE_ROWS as usize) as i32
+}
+
+pub fn tree_button_press(
+    tree: &gtk::TreeView,
+    x: f64,
+    y: f64,
+    nvim: &NvimSession,
+    last_command: &str,
+) {
+    let (paths, ..) = tree.selection().selected_rows();
+    let selected_idx = if !paths.is_empty() {
+        let ids = paths[0].indices();
+        if !ids.is_empty() {
+            ids[0]
+        } else {
+            -1
+        }
+    } else {
+        -1
+    };
+
+    if let Some((Some(tree_path), ..)) = tree.path_at_pos(x as i32, y as i32) {
+        let target_idx = tree_path.indices()[0];
+
+        let scroll_count = popup_menu::find_scroll_count(selected_idx, target_idx);
+
+        let apply_command: String = if target_idx > selected_idx {
+            (0..scroll_count)
+                .map(|_| "<C-n>")
+                .chain(iter::once(last_command))
+                .collect()
+        } else {
+            (0..scroll_count)
+                .map(|_| "<C-p>")
+                .chain(iter::once(last_command))
+                .collect()
+        };
+
+        nvim.block_timeout(nvim.input(&apply_command)).report_err();
+    }
+}
+

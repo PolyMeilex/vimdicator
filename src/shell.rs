@@ -1,7 +1,7 @@
 use std;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 use std::num::*;
 use std::mem;
 use std::ops::Deref;
@@ -1735,7 +1735,7 @@ impl State {
 
     pub fn popupmenu_show(
         &mut self,
-        menu: &[CompleteItem],
+        menu: Vec<CompleteItem>,
         selected: i64,
         row: u64,
         col: u64,
@@ -1748,8 +1748,12 @@ impl State {
             nvim: &self.nvim,
             hl: &render_state.hl,
             font_ctx: &render_state.font_ctx,
-            menu_items: &menu,
-            selected,
+            menu_items: menu,
+            selected: if selected != -1 {
+                Some(selected.try_into().expect("Selection index should never be out of range"))
+            } else {
+                None
+            },
             x,
             y,
             width,
@@ -1768,6 +1772,11 @@ impl State {
     }
 
     pub fn popupmenu_select(&mut self, selected: i64) -> RedrawMode {
+        let selected = if selected != -1 {
+            Some(selected.try_into().expect("Selection out of bounds"))
+        } else {
+            None
+        };
         self.popup_menu.select(selected);
         RedrawMode::Nothing
     }

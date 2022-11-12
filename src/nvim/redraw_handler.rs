@@ -1,6 +1,8 @@
-use std::num::ParseFloatError;
-use std::result;
-use std::sync::Arc;
+use std::{
+    result,
+    num::ParseFloatError,
+    sync::Arc,
+};
 
 use nvim_rs::Value;
 
@@ -9,6 +11,7 @@ use crate::nvim::Tabpage;
 use crate::ui::UiMutex;
 
 use rmpv;
+
 use crate::value::ValueMapExt;
 
 use super::handler::NvimHandler;
@@ -32,6 +35,20 @@ macro_rules! try_str {
     ($exp:expr) => {
         $exp.as_str()
             .ok_or_else(|| "Can't convert argument to string".to_owned())?
+    };
+}
+
+macro_rules! try_string {
+    ($exp:expr) => {
+        if let Value::String(s) = $exp {
+            if let Some(s) = s.into_str() {
+                Ok(s)
+            } else {
+                Err("Can't convert to utf8 string".to_owned())
+            }
+        } else {
+            Err("Can't convert to string".to_owned())
+        }
     };
 }
 
@@ -73,6 +90,19 @@ macro_rules! map_array {
                 .map(|$item| $exp)
                 .collect::<Result<Vec<_>, _>>()
         })
+    };
+}
+
+macro_rules! into_array {
+    ($arg:expr, $err:expr, | $item:ident | $exp:expr) => {
+        if let Value::Array(items) = $arg {
+            items
+                .into_iter()
+                .map(|$item| $exp)
+                .collect::<Result<Vec<_>, _>>()
+        } else {
+            Err($err.to_owned())
+        }
     };
 }
 
@@ -266,17 +296,30 @@ pub fn call(
         "busy_start" => ui.on_busy(true),
         "busy_stop" => ui.on_busy(false),
         "popupmenu_show" => {
-            let menu_items = map_array!(args[0], "Error get menu list array", |item| map_array!(
-                item,
-                "Error get menu item array",
-                |col| col.as_str().ok_or("Error get menu column")
-            ))?;
+            /* Complete lists can be enormous, so we want to be careful to avoid duplicating strings
+             * by consuming the argument list */
+            let mut iter = args.into_iter();
+            let menu_items_in = into_array!(
+                iter.next().ok_or("Menu list array is missing")?,
+                "Failed to get menu list array",
+                |item| into_array!(
+                    item,
+                    "Failed to get menu item array",
+                    |col| try_string!(col)
+                )
+            )?;
+
+            // XXX: Use try_collect() when that stabilizes
+            let mut menu_items = Vec::with_capacity(menu_items_in.len());
+            for menu_item in menu_items_in.into_iter() {
+                menu_items.push(CompleteItem::new(menu_item)?);
+            }
 
             ui.popupmenu_show(
-                &CompleteItem::map(&menu_items),
-                try_int!(args[1]),
-                try_uint!(args[2]),
-                try_uint!(args[3]),
+                menu_items,
+                try_int!(iter.next().ok_or("Failed to get selected popupmenu row")?),
+                try_uint!(iter.next().ok_or("Failed to get popupmenu row")?),
+                try_uint!(iter.next().ok_or("Failed to get popupmenu col")?),
             )
         }
         "popupmenu_hide" => ui.popupmenu_hide(),
@@ -375,22 +418,21 @@ pub fn remove_or_delay_uneeded_events(handler: &NvimHandler, params: &mut Vec<Va
     });
 }
 
-pub struct CompleteItem<'a> {
-    pub word: &'a str,
-    pub kind: &'a str,
-    pub menu: &'a str,
-    pub info: &'a str,
+pub struct CompleteItem {
+    pub word: String,
+    pub kind: String,
+    pub menu: String,
+    pub info: String,
 }
 
-impl<'a> CompleteItem<'a> {
-    fn map(menu: &'a [Vec<&str>]) -> Vec<Self> {
-        menu.iter()
-            .map(|menu| CompleteItem {
-                word: menu[0],
-                kind: menu[1],
-                menu: menu[2],
-                info: menu[3],
-            })
-            .collect()
+impl CompleteItem {
+    fn new(menu: Vec<String>) -> Result<Self, String> {
+        let mut iter = menu.into_iter();
+        Ok(CompleteItem {
+            word: iter.next().ok_or("Complete item is missing word")?,
+            kind: iter.next().ok_or("Complete item is missing kind")?,
+            menu: iter.next().ok_or("Complete item is missing menu")?,
+            info: iter.next().ok_or("Complete item is missing info")?,
+        })
     }
 }
