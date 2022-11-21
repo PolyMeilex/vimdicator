@@ -133,16 +133,10 @@ impl ObjectImpl for CompletionListRowObject {
                     let word_label = self.word_label.upgrade().unwrap();
                     word_label.set_label(&row.word);
                     word_label.set_width_request(state.word_col_width);
-                    word_label.set_tooltip_text(
-                        word_label.layout().is_ellipsized().then_some(&row.word)
-                    );
 
                     let kind_label = self.kind_label.upgrade().unwrap();
                     kind_label.set_visible(state.kind_col_width.is_some());
                     kind_label.set_label(&row.kind);
-                    kind_label.set_tooltip_text(
-                        kind_label.layout().is_ellipsized().then_some(&row.kind)
-                    );
                     if let Some(width) = state.kind_col_width {
                         kind_label.set_width_request(width);
                     }
@@ -150,9 +144,6 @@ impl ObjectImpl for CompletionListRowObject {
                     let menu_label = self.menu_label.upgrade().unwrap();
                     menu_label.set_visible(state.menu_col_width.is_some());
                     menu_label.set_label(&row.menu);
-                    menu_label.set_tooltip_text(
-                        menu_label.layout().is_ellipsized().then_some(&row.menu)
-                    );
                     if let Some(width) = state.menu_col_width {
                         menu_label.set_width_request(width);
                     }
