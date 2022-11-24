@@ -63,12 +63,6 @@ impl State {
             .vscrollbar_policy(gtk::PolicyType::Automatic)
             .build();
 
-        // Make sure we don't maintain the scroll position after hiding the completion menu
-        item_scroll.connect_unmap(|item_scroll| {
-            item_scroll.vadjustment().set_value(0.0);
-            item_scroll.hadjustment().set_value(0.0);
-        });
-
         let info_label = gtk::Label::builder()
             .wrap(true)
             .selectable(true)
@@ -322,6 +316,8 @@ impl PopupMenu {
         state_ref.list_view.connect_activate(glib::clone!(@weak state => move |_, idx| {
             list_select(&mut state.borrow_mut(), idx, "<C-y>");
         }));
+        let list_model = state_ref.list_model.clone();
+        state_ref.list_view.connect_unmap(move |_| list_model.set_model(None::<&CompletionModel>));
 
         drop(state_ref);
         PopupMenu {
