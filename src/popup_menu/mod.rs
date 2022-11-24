@@ -126,7 +126,7 @@ impl State {
     }
 
     fn limit_column_widths(&mut self, ctx: &PopupMenuContext) {
-        const DEFAULT_PADDING: i32 = 5;
+        const DEFAULT_PADDING: i32 = 10;
 
         let mut max_word = ("", 0);
         let mut max_kind = ("", 0);
