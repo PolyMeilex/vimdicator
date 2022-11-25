@@ -50,10 +50,14 @@ impl State {
             .single_click_activate(false)
             .model(&list_model)
             .build();
-        let css_provider = gtk::CssProvider::new();
+        list_view.add_css_class("nvim-completion-list");
 
-        let style_context = list_view.style_context();
-        style_context.add_provider(&css_provider, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);
+        let css_provider = gtk::CssProvider::new();
+        gtk::StyleContext::add_provider_for_display(
+            &list_view.display(),
+            &css_provider,
+            gtk::STYLE_PROVIDER_PRIORITY_APPLICATION
+        );
 
         let item_scroll = gtk::ScrolledWindow::builder()
             .propagate_natural_width(true)
@@ -278,21 +282,8 @@ impl PopupMenu {
         let item_factory = gtk::SignalListItemFactory::new();
 
         let list_state_ref = state_ref.list_row_state.clone();
-        let css_provider = state_ref.css_provider.clone();
         item_factory.connect_setup(move |_, list_item| {
-            let row = CompletionListRow::new(&list_state_ref);
-
-            /* Connect the GtkListRowWidget (e.g. this row's parent) to our css provider so nvim can
-             * control the appearance of it */
-            row.connect_parent_notify(glib::clone!(@strong css_provider => move |row| {
-                if let Some(parent) = row.parent() {
-                    parent.style_context().add_provider(
-                        &css_provider, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION
-                    )
-                }
-            }));
-
-            list_item.set_child(Some(&row));
+            list_item.set_child(Some(&CompletionListRow::new(&list_state_ref)));
         });
         item_factory.connect_teardown(|_, list_item| {
             list_item.set_child(Option::<&gtk::Widget>::None);
@@ -427,18 +418,18 @@ pub fn update_css(css_provider: &gtk::CssProvider, hl: &HighlightMap, font_ctx: 
 
     css_provider.load_from_data(
         &format!(
-            ".view {{\
+            "listview.nvim-completion-list {{\
                 background-color: {bg};\
                 font-family: \"{font}\";\
                 font-size: {size}pt;\
                 margin: 0px;\
                 padding: 0px;\
             }}\
-            row {{\
-                padding: {margin}px;
+            listview.nvim-completion-list row {{\
+                padding: {margin}px;\
                 color: {fg};\
             }}\
-            row:selected {{\
+            listview.nvim-completion-list row:selected {{\
                 background-color: {bg_sel};\
                 color: {fg_sel};\
             }}",
