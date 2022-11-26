@@ -56,7 +56,6 @@ impl ObjectImpl for CompletionListRowObject {
         let word_label = gtk::Label::builder()
             .single_line_mode(true)
             .ellipsize(pango::EllipsizeMode::Middle)
-            .hexpand(true)
             .xalign(0.0)
             .build();
         self.word_label.set(Some(&word_label));
@@ -66,7 +65,6 @@ impl ObjectImpl for CompletionListRowObject {
             .visible(false)
             .single_line_mode(true)
             .ellipsize(pango::EllipsizeMode::End)
-            .hexpand(true)
             .xalign(0.0)
             .build();
         self.kind_label.set(Some(&kind_label));
@@ -76,7 +74,6 @@ impl ObjectImpl for CompletionListRowObject {
             .visible(false)
             .single_line_mode(true)
             .ellipsize(pango::EllipsizeMode::Middle)
-            .hexpand(true)
             .xalign(0.0)
             .build();
         self.menu_label.set(Some(&menu_label));
