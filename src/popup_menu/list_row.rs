@@ -34,16 +34,9 @@ impl CompletionListRow {
     }
 }
 
-/// For types that need inner mutability
-#[derive(Default)]
-struct CompletionListRowInner {
-    row: Option<CompleteItemRef>,
-    state: Rc<RefCell<CompletionListRowState>>,
-}
-
 #[derive(Default)]
 pub struct CompletionListRowObject {
-    inner: RefCell<CompletionListRowInner>,
+    state: RefCell<Rc<RefCell<CompletionListRowState>>>,
     word_label: glib::WeakRef<gtk::Label>,
     kind_label: glib::WeakRef<gtk::Label>,
     menu_label: glib::WeakRef<gtk::Label>,
@@ -105,7 +98,7 @@ impl ObjectImpl for CompletionListRowObject {
                     "Row",
                     "A reference to the current row we're displaying",
                     glib::BoxedAnyObject::static_type(),
-                    glib::ParamFlags::READWRITE,
+                    glib::ParamFlags::WRITABLE,
                 ),
             ];
         }
@@ -122,14 +115,12 @@ impl ObjectImpl for CompletionListRowObject {
     ) {
         match pspec.name() {
             "row" => {
-                let row = value
-                    .get_owned::<Option<glib::BoxedAnyObject>>()
-                    .unwrap()
-                    .map(|o| o.borrow::<CompleteItemRef>().clone());
+                let row = value.get_owned::<Option<glib::BoxedAnyObject>>().unwrap();
 
-                if let Some(ref row) = row {
-                    let inner = self.inner.borrow();
-                    let state = inner.state.borrow();
+                if let Some(row) = row {
+                    let row = row.borrow::<CompleteItemRef>();
+                    let state = self.state.borrow();
+                    let state = state.borrow();
                     let word_label = self.word_label.upgrade().unwrap();
                     word_label.set_label(&row.word);
                     word_label.set_width_request(state.word_col_width);
@@ -148,31 +139,14 @@ impl ObjectImpl for CompletionListRowObject {
                         menu_label.set_width_request(width);
                     }
                 }
-
-                self.inner.borrow_mut().row = row;
             },
             "state" => {
-                self.inner.borrow_mut().state = value
+                *self.state.borrow_mut() = value
                     .get_owned::<glib::BoxedAnyObject>()
                     .unwrap()
                     .borrow::<Rc<RefCell<CompletionListRowState>>>()
                     .clone();
             },
-            _ => unreachable!(),
-        }
-    }
-
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
-        match pspec.name() {
-            "row" => {
-                self
-                    .inner
-                    .borrow()
-                    .row
-                    .clone()
-                    .map(|r| glib::BoxedAnyObject::new(r))
-                    .to_value()
-            }
             _ => unreachable!(),
         }
     }
