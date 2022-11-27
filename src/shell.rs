@@ -1722,7 +1722,6 @@ impl State {
         RedrawMode::Nothing
     }
 
-    // TODO: See if we can fix this so that we only return RedrawMode::Cursor
     pub fn on_busy(&mut self, busy: bool) -> RedrawMode {
         if busy {
             self.cursor.as_mut().unwrap().busy_on();
