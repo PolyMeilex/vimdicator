@@ -96,6 +96,10 @@ impl Components {
             title_label.set_label(title);
         }
     }
+
+    pub fn saved_size(&self) -> (i32, i32) {
+        (self.window_state.current_width, self.window_state.current_height)
+    }
 }
 
 impl Ui {
@@ -142,12 +146,12 @@ impl Ui {
         let file_browser_ref = &self.file_browser;
 
         {
+            self.shell.borrow_mut().init(app_cmdline, comps_ref);
+
             // initialize window from comps
             // borrowing of comps must be leaved
             // for event processing
             let mut comps = comps_ref.borrow_mut();
-
-            self.shell.borrow_mut().init(app_cmdline);
 
             comps.window = Some(window.clone());
 

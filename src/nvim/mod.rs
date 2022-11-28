@@ -381,8 +381,8 @@ pub fn start<'a>(
 
 pub async fn post_start_init(
     nvim: NvimSession,
-    cols: NonZeroI64,
-    rows: NonZeroI64,
+    cols: i32,
+    rows: i32,
     input_data: Option<String>,
 ) -> Result<(), NvimInitError> {
     let mut version_info: Vec<(Value, Value)> = vec![
@@ -405,8 +405,8 @@ pub async fn post_start_init(
         .await.map_err(NvimInitError::new_post_init)?;
 
     nvim.timeout(nvim.ui_attach(
-            cols.get(),
-            rows.get(),
+            cols.into(),
+            rows.into(),
             UiAttachOptions::new()
             .set_popupmenu_external(true)
             .set_tabline_external(true)

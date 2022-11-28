@@ -2,7 +2,6 @@ use std;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
-use std::num::*;
 use std::mem;
 use std::ops::Deref;
 use std::rc::Rc;
@@ -60,7 +59,7 @@ use crate::render;
 use crate::render::CellMetrics;
 use crate::subscriptions::{SubscriptionHandle, SubscriptionKey, Subscriptions};
 use crate::tabline::Tabline;
-use crate::ui::UiMutex;
+use crate::ui::{UiMutex, Components};
 
 const DEFAULT_FONT_NAME: &str = "DejaVu Sans Mono 12";
 pub const MINIMUM_SUPPORTED_NVIM_VERSION: &str = "0.3.2";
@@ -117,9 +116,9 @@ impl Default for TransparencySettings {
 pub struct ResizeRequests {
     /// The most recently submitted resize request, if any. This might not have been received by
     /// neovim yet.
-    pub current: Option<(NonZeroI64, NonZeroI64)>,
+    pub current: Option<(i32, i32)>,
     /// The next resize request to submit to neovim, if any.
-    requested: Option<(NonZeroI64, NonZeroI64)>,
+    requested: Option<(i32, i32)>,
     /// Whether there's a resize future active or not
     active: bool,
 }
@@ -501,22 +500,21 @@ impl State {
         }
     }
 
-    fn calc_nvim_size(&self) -> (NonZeroI64, NonZeroI64) {
+    fn calc_nvim_size_from(&self, (w, h): (i32, i32)) -> (i32, i32) {
         let &CellMetrics {
             line_height,
             char_width,
             ..
         } = self.render_state.borrow().font_ctx.cell_metrics();
-        let (w, h) = (self.nvim_viewport.width(), self.nvim_viewport.height());
-        // SAFETY: We clamp w to 1 and h to 3
-        unsafe {(
-            NonZeroI64::new_unchecked(((w as f64 / char_width).trunc() as i64).max(1)),
-            /* Neovim won't resize to below 3 rows, and trying to do this will potentially cause
-             * nvim to avoid sending back an autocmd when the resize is processed. So, limit us to
-             * at least 3 rows at all times.
-             */
-            NonZeroI64::new_unchecked(((h as f64 / line_height).trunc() as i64).max(3)),
-        )}
+
+        (
+            ((w as f64 / char_width).trunc() as i32).max(1),
+            ((h as f64 / line_height).trunc() as i32).max(3),
+        )
+    }
+
+    fn calc_nvim_size(&self) -> (i32, i32) {
+        self.calc_nvim_size_from((self.nvim_viewport.width(), self.nvim_viewport.height()))
     }
 
     fn show_error_area(&self) {
@@ -606,7 +604,7 @@ impl State {
                     ]),
                     Value::Array(vec![
                         "nvim_ui_try_resize".into(),
-                        Value::Array(vec![cols.get().into(), rows.get().into()]),
+                        Value::Array(vec![cols.into(), rows.into()]),
                     ]),
                 ]).await.report_err();
 
@@ -950,7 +948,11 @@ impl Shell {
         state.nvim.is_initialized()
     }
 
-    pub fn init(&mut self, app_cmdline: Arc<Mutex<Option<ApplicationCommandLine>>>) {
+    pub fn init(
+        &mut self,
+        app_cmdline: Arc<Mutex<Option<ApplicationCommandLine>>>,
+        components: &Arc<UiMutex<Components>>,
+    ) {
         self.state.borrow_mut().app_cmdline = app_cmdline.clone();
 
         let state_ref = &self.state;
@@ -1148,7 +1150,9 @@ impl Shell {
                 state.im_commit(ch);
             }));
 
-        state.nvim_viewport.connect_map(clone!(state_ref => move |_| init_nvim(&state_ref)));
+        state.nvim_viewport.connect_map(clone!(state_ref, components => move |_| {
+            init_nvim(&state_ref, &components);
+        }));
     }
 
     fn create_context_menu(&self) -> gtk::PopoverMenu {
@@ -1470,8 +1474,8 @@ fn init_nvim_async(
     state_arc: Arc<UiMutex<State>>,
     nvim_handler: NvimHandler,
     options: ShellOptions,
-    cols: NonZeroI64,
-    rows: NonZeroI64,
+    cols: i32,
+    rows: i32,
 ) {
     // execute nvim
     let (session, io_future) = match nvim::start(
@@ -1551,10 +1555,10 @@ fn set_nvim_initialized(state_arc: Arc<UiMutex<State>>) {
     idle_cb_call!(state_arc.nvim_started_cb());
 }
 
-fn init_nvim(state_ref: &Arc<UiMutex<State>>) {
+fn init_nvim(state_ref: &Arc<UiMutex<State>>, components: &Arc<UiMutex<Components>>) {
     let state = state_ref.borrow_mut();
     if state.start_nvim_initialization() {
-        let (cols, rows) = state.calc_nvim_size();
+        let (cols, rows) = state.calc_nvim_size_from(components.borrow().saved_size());
 
         debug!("Init nvim {}/{}", cols, rows);
 
@@ -1621,10 +1625,7 @@ impl State {
             let mut resize_state = self.resize_status.requests.lock().await;
 
             if resize_state.current.is_none() {
-                resize_state.current = Some((
-                    NonZeroI64::new(columns as i64).unwrap(),
-                    NonZeroI64::new(rows as i64).unwrap(),
-                ));
+                resize_state.current = Some((columns as i32, rows as i32));
             }
         });
 
