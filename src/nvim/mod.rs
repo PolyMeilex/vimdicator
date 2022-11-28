@@ -11,7 +11,6 @@ pub use self::handler::NvimHandler;
 use std::{
     error, fmt, env, result,
     convert::TryFrom,
-    num::*,
     time::Duration,
     pin::Pin,
     process::Stdio,
