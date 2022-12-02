@@ -452,7 +452,7 @@ pub fn shape_dirty(ctx: &context::Context, ui_model: &mut ui_model::UiModel, hl:
                         }
                     }
 
-                    item.set_glyphs(ctx, glyphs);
+                    item.set_glyphs(glyphs);
                 }
             }
 
