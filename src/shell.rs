@@ -1144,8 +1144,9 @@ impl Shell {
         state
             .im_context
             .connect_commit(clone!(ui_state_ref, state_ref => move |_, ch| {
-                let state = state_ref.borrow();
+                let mut state = state_ref.borrow_mut();
 
+                state.cursor.as_mut().unwrap().reset_state();
                 ui_state_ref.borrow_mut().set_cursor_visible(&state.nvim_viewport, false);
                 state.im_commit(ch);
             }));
