@@ -425,11 +425,11 @@ pub fn update_css(css_provider: &gtk::CssProvider, hl: &HighlightMap, font_ctx: 
                 margin: 0px;\
                 padding: 0px;\
             }}\
-            listview.nvim-completion-list row {{\
+            listview.nvim-completion-list > row {{\
                 padding: {margin}px;\
                 color: {fg};\
             }}\
-            listview.nvim-completion-list row:selected {{\
+            listview.nvim-completion-list > row:selected {{\
                 background-color: {bg_sel};\
                 color: {fg_sel};\
             }}",
