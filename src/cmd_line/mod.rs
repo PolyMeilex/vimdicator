@@ -450,7 +450,7 @@ impl CmdLine {
 
         self.wild_renderer.set_foreground_rgba(Some(&render_state.hl.pmenu_fg().into()));
 
-        popup_menu::update_css(&self.wild_css_provider, &render_state.hl, &render_state.font_ctx);
+        update_css(&self.wild_css_provider, &render_state.hl);
 
         // set width
         // this calculation produce width more then needed, but this is looks ok :)
@@ -627,3 +627,18 @@ pub fn tree_button_press(
     }
 }
 
+fn update_css(css_provider: &gtk::CssProvider, hl: &HighlightMap) {
+    let bg = hl.pmenu_bg_sel();
+    let fg = hl.pmenu_fg_sel();
+
+    css_provider.load_from_data(
+        &format!(
+            ".view :selected {{ color: {}; background-color: {};}}\n
+                .view {{ background-color: {}; }}",
+            fg.to_hex(),
+            bg.to_hex(),
+            hl.pmenu_bg().to_hex(),
+        )
+        .as_bytes(),
+    );
+}

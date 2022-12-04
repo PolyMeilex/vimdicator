@@ -413,7 +413,7 @@ pub fn find_scroll_count(selected_idx: i32, target_idx: i32) -> i32 {
     }
 }
 
-pub fn update_css(css_provider: &gtk::CssProvider, hl: &HighlightMap, font_ctx: &render::Context) {
+fn update_css(css_provider: &gtk::CssProvider, hl: &HighlightMap, font_ctx: &render::Context) {
     let font_desc = font_ctx.font_description();
 
     css_provider.load_from_data(
