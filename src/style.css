@@ -7,5 +7,10 @@ popover.nvim-popover > contents {
     background: rgba(0, 0, 0, 0);
 }
 
+listview.nvim-completion-list {
+    margin: 0px;
+    padding: 0px;
+}
+
 /* vim: colorcolumn=100 tw=100 ts=4 sts=4 sw=4 expandtab :
  */

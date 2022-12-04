@@ -422,8 +422,6 @@ pub fn update_css(css_provider: &gtk::CssProvider, hl: &HighlightMap, font_ctx: 
                 background-color: {bg};\
                 font-family: \"{font}\";\
                 font-size: {size}pt;\
-                margin: 0px;\
-                padding: 0px;\
             }}\
             listview.nvim-completion-list > row {{\
                 padding: {margin}px;\
