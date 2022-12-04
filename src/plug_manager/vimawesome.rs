@@ -64,7 +64,7 @@ pub fn build_result_panel<F: Fn(PlugInfo) + 'static>(
     let panel = gtk::ListBox::new();
     let scroll = gtk::ScrolledWindow::builder()
         .child(&panel)
-        .css_classes(vec!["view".to_string()])
+        .vexpand(true)
         .build();
 
     let cb_ref = Rc::new(add_cb);

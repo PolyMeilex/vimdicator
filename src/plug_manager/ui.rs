@@ -42,6 +42,7 @@ impl<'a> Ui<'a> {
         dlg.set_default_size(800, 600);
         dlg.set_modal(true);
         let content = dlg.content_area();
+        content.set_vexpand(true);
 
         let header_bar_title = gtk::Label::builder()
             .label("Plug")
@@ -134,8 +135,8 @@ impl<'a> Ui<'a> {
     fn fill_plugin_list(&self, panel: &gtk::Box, store: &Store) -> gtk::ListBox {
         let plugs_panel = gtk::ListBox::new();
         let scroll = gtk::ScrolledWindow::builder()
-            .css_classes(vec!["view".to_string()])
             .child(&plugs_panel)
+            .vexpand(true)
             .build();
 
         for (idx, plug_info) in store.get_plugs().iter().enumerate() {
@@ -394,7 +395,7 @@ impl SettingsPages {
     pub fn new<F: Fn(&str) + 'static>(row_selected: F) -> Self {
         let content = gtk::Box::new(gtk::Orientation::Horizontal, 5);
         let categories = gtk::ListBox::new();
-        categories.style_context().add_class("view");
+        categories.add_css_class("navigation-sidebar");
         let stack = gtk::Stack::new();
         stack.set_transition_type(gtk::StackTransitionType::Crossfade);
         let rows: Rc<RefCell<Vec<(gtk::ListBoxRow, &'static str)>>> =
