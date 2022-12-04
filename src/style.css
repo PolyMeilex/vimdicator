@@ -1,4 +1,4 @@
-/* CSS stylings for neovim-gtk that need to be applied globally to work */
+/* CSS stylings for neovim-gtk that don't change  */
 popover.nvim-completion > contents {
     padding: 3px;
 }
