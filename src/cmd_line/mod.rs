@@ -245,7 +245,7 @@ impl CmdLine {
         popover.set_autohide(false);
         popover.set_position(gtk::PositionType::Right);
         nvim_viewport.set_ext_cmdline(&popover);
-        popover.add_css_class("nvim-cmdline");
+        popover.add_css_class("nvim-popover");
 
         let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
 

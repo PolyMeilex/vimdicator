@@ -1,9 +1,5 @@
 /* CSS stylings for neovim-gtk that don't change  */
-popover.nvim-completion > contents {
-    padding: 3px;
-}
-
-popover.nvim-cmdline > contents {
+popover.nvim-popover > contents {
     padding: 3px;
 }
 

@@ -268,7 +268,7 @@ impl PopupMenu {
             .autohide(false)
             .can_focus(false)
             .child(&content)
-            .css_classes(vec!["background".into(), "nvim-completion".into()])
+            .css_classes(vec!["background".into(), "nvim-popover".into()])
             .position(gtk::PositionType::Top)
             .build();
 
