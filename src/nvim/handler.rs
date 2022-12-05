@@ -67,13 +67,9 @@ impl NvimHandler {
         });
     }
 
-    async fn nvim_cb(&self, method: String, mut params: Vec<Value>) {
+    async fn nvim_cb(&self, method: String, params: Vec<Value>) {
         match method.as_ref() {
-            "redraw" => {
-                redraw_handler::remove_or_delay_uneeded_events(self, &mut params);
-
-                self.safe_call(move |ui| call_redraw_handler(params, ui));
-            }
+            "redraw" => self.safe_call(move |ui| call_redraw_handler(params, ui)),
             "Gui" => {
                 if !params.is_empty() {
                     let mut params_iter = params.into_iter();

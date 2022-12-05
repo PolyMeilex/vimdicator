@@ -40,8 +40,8 @@ use crate::grid::GridMap;
 use crate::highlight::{HighlightMap, BackgroundState};
 use crate::misc::{decode_uri, escape_filename, split_at_comma};
 use crate::nvim::{
-    self, CompleteItem, ErrorReport, NeovimClient, NvimHandler, RedrawMode, NvimSession, Tabpage,
-    NormalError, CallErrorExt
+    self, CallErrorExt, ErrorReport, NeovimClient, NvimHandler, PendingPopupMenu, RedrawMode,
+    NvimSession, Tabpage, NormalError,
 };
 use crate::settings::{FontSource, Settings};
 use crate::ui_model::ModelRect;
@@ -215,6 +215,7 @@ pub struct State {
     stack: gtk::Stack,
     pub nvim_viewport: NvimViewport,
     pub pending_redraw: RedrawMode,
+    pub pending_popupmenu: Option<PendingPopupMenu>,
     tabs: Tabline,
     im_context: gtk::IMMulticontext,
     error_area: error::ErrorArea,
@@ -282,6 +283,7 @@ impl State {
             stack: gtk::Stack::new(),
             nvim_viewport,
             pending_redraw: RedrawMode::Nothing,
+            pending_popupmenu: None,
             tabs: Tabline::new(),
             im_context: gtk::IMMulticontext::new(),
             error_area: error::ErrorArea::new(),
@@ -1745,42 +1747,42 @@ impl State {
         self.cur_point_area()
     }
 
-    pub fn popupmenu_show(
-        &mut self,
-        menu: Vec<CompleteItem>,
-        selected: i64,
-        row: u64,
-        col: u64,
-    ) -> RedrawMode {
-        let point = ModelRect::point(col as usize, row as usize);
-        let render_state = self.render_state.borrow();
-        let (x, y, width, height) = point.to_area(render_state.font_ctx.cell_metrics());
-
-        let context = popup_menu::PopupMenuContext {
-            nvim: &self.nvim,
-            hl: &render_state.hl,
-            font_ctx: &render_state.font_ctx,
-            menu_items: menu,
-            selected: if selected != -1 {
-                Some(selected.try_into().expect("Selection index should never be out of range"))
-            } else {
-                None
-            },
-            x,
-            y,
-            width,
-            height,
-            max_width: self.max_popup_width(),
-        };
-
-        self.popup_menu.show(context);
-
+    pub fn set_pending_popupmenu(&mut self, pending_popupmenu: PendingPopupMenu) -> RedrawMode {
+        self.pending_popupmenu = Some(pending_popupmenu);
         RedrawMode::Nothing
     }
 
-    pub fn popupmenu_hide(&mut self) -> RedrawMode {
-        self.popup_menu.hide();
-        RedrawMode::Nothing
+    // Hide/show the popupmenu, according to the current pending status
+    pub fn flush_popupmenu(&mut self) {
+        match self.pending_popupmenu.take() {
+            Some(PendingPopupMenu::Show {
+                items: menu_items,
+                selected,
+                pos: (row, col),
+            }) => {
+                let point = ModelRect::point(col as usize, row as usize);
+                let render_state = self.render_state.borrow();
+                let (x, y, width, height) = point.to_area(render_state.font_ctx.cell_metrics());
+
+                let context = popup_menu::PopupMenuContext {
+                    nvim: &self.nvim,
+                    hl: &render_state.hl,
+                    font_ctx: &render_state.font_ctx,
+                    menu_items,
+                    selected,
+                    x,
+                    y,
+                    width,
+                    height,
+                    max_width: self.max_popup_width(),
+                };
+
+                self.popup_menu.show(context);
+            }
+            Some(PendingPopupMenu::Select(selected)) => self.popup_menu.select(selected),
+            Some(PendingPopupMenu::Hide) => self.popup_menu.hide(),
+            None => (),
+        }
     }
 
     pub fn popupmenu_select(&mut self, selected: i64) -> RedrawMode {
@@ -1789,6 +1791,16 @@ impl State {
         } else {
             None
         };
+
+        if let Some(PendingPopupMenu::Show {
+            selected: ref mut pending,
+            ..
+        }) = self.pending_popupmenu {
+            *pending = selected;
+        } else {
+            self.pending_popupmenu = Some(PendingPopupMenu::Select(selected));
+        }
+
         self.popup_menu.select(selected);
         RedrawMode::Nothing
     }

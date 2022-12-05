@@ -1,4 +1,5 @@
 use std::{
+    convert::*,
     result,
     num::ParseFloatError,
     sync::Arc,
@@ -13,8 +14,6 @@ use crate::ui::UiMutex;
 use rmpv;
 
 use crate::value::ValueMapExt;
-
-use super::handler::NvimHandler;
 
 /// Indicates whether we should queue a draw and if so, whether we should invalidate any internal
 /// caches before doing so
@@ -315,14 +314,23 @@ pub fn call(
                 menu_items.push(CompleteItem::new(menu_item)?);
             }
 
-            ui.popupmenu_show(
-                menu_items,
-                try_int!(iter.next().ok_or("Failed to get selected popupmenu row")?),
-                try_uint!(iter.next().ok_or("Failed to get popupmenu row")?),
-                try_uint!(iter.next().ok_or("Failed to get popupmenu col")?),
-            )
+            let selected = try_int!(iter.next().ok_or("Failed to get selected popupmenu row")?);
+            ui.set_pending_popupmenu(PendingPopupMenu::Show {
+                items: menu_items,
+                selected: if selected != -1 {
+                    Some(u32::try_from(selected).map_err(|e| e.to_string())?)
+                } else {
+                    None
+                },
+                pos: (
+                    try_uint!(iter.next().ok_or("Failed to get popupmenu row")?),
+                    try_uint!(iter.next().ok_or("Failed to get popupmenu col")?),
+                ),
+            });
+
+            RedrawMode::Nothing
         }
-        "popupmenu_hide" => ui.popupmenu_hide(),
+        "popupmenu_hide" => ui.set_pending_popupmenu(PendingPopupMenu::Hide),
         "popupmenu_select" => call!(ui->popupmenu_select(args: int)),
         "tabline_update" => {
             let nvim = ui.nvim().ok_or_else(|| "Nvim not initialized".to_owned())?;
@@ -368,6 +376,7 @@ pub fn call(
 
     if flush {
         ui.pending_redraw = RedrawMode::Nothing;
+        ui.flush_popupmenu();
         Ok(repaint_mode)
     } else {
         ui.pending_redraw = ui.pending_redraw.max(repaint_mode);
@@ -375,47 +384,14 @@ pub fn call(
     }
 }
 
-// Here two cases processed:
-//
-// 1. menu content update call popupmenu_hide followed by popupmenu_show in same batch
-// this generates unneeded hide event
-// so in case we get both events, just romove one
-//
-// 2. postpone hide event when "show" event come bit later
-// but in new event batch
-pub fn remove_or_delay_uneeded_events(handler: &NvimHandler, params: &mut Vec<Value>) {
-    let mut show_popup_finded = false;
-    let mut to_remove = Vec::new();
-    let mut delayed_hide_event = None;
-
-    for (idx, val) in params.iter().enumerate().rev() {
-        if let Some(args) = val.as_array() {
-            match args[0].as_str() {
-                Some("popupmenu_show") => {
-                    show_popup_finded = true;
-                    handler.remove_scheduled_redraw_event();
-                }
-                Some("popupmenu_hide") if !show_popup_finded && delayed_hide_event.is_none() => {
-                    to_remove.push(idx);
-                    delayed_hide_event = Some(idx);
-                    handler.remove_scheduled_redraw_event();
-                }
-                Some("popupmenu_hide") => {
-                    to_remove.push(idx);
-                }
-                _ => (),
-            }
-        }
-    }
-
-    to_remove.iter().for_each(|&idx| {
-        let ev = params.remove(idx);
-        if let Some(delayed_hide_event_idx) = delayed_hide_event {
-            if delayed_hide_event_idx == idx {
-                handler.schedule_redraw_event(ev);
-            }
-        }
-    });
+pub enum PendingPopupMenu {
+    Show {
+        items: Vec<CompleteItem>,
+        selected: Option<u32>,
+        pos: (u64, u64),
+    },
+    Select(Option<u32>),
+    Hide,
 }
 
 pub struct CompleteItem {
