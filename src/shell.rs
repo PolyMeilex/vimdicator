@@ -243,9 +243,10 @@ impl State {
 
         let mut render_state = RenderState::new(pango_context);
         render_state.hl.set_use_cterm(options.cterm_colors);
+
+        let popup_menu = PopupMenu::new(&render_state);
         let render_state = Rc::new(RefCell::new(render_state));
 
-        let popup_menu = PopupMenu::new();
         let cmd_line = CmdLine::new(&nvim_viewport, render_state.clone());
 
         let display = Display::default().unwrap();
@@ -1656,8 +1657,18 @@ impl State {
         _: &Value,
         info: Vec<HashMap<String, Value>>,
     ) -> RedrawMode {
-        self.render_state.borrow_mut().hl.set(id, &rgb_attr, &info);
-        RedrawMode::Nothing
+        let mut render_state = self.render_state.borrow_mut();
+        let updated = render_state.hl.set(id, &rgb_attr, &info);
+
+        if updated.pmenu {
+            self.popup_menu.update_css(&render_state.hl, &render_state.font_ctx);
+        }
+
+        if updated.cursor {
+            RedrawMode::Cursor
+        } else {
+            RedrawMode::Nothing
+        }
     }
 
     pub fn default_colors_set(

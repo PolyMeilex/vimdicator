@@ -31,6 +31,12 @@ pub enum BackgroundState {
     Dark,
 }
 
+#[derive(Clone, Copy, Default)]
+pub struct HighlightUpdates {
+    pub pmenu: bool,
+    pub cursor: bool,
+}
+
 impl HighlightMap {
     pub fn new() -> Self {
         let default_hl = Rc::new(Highlight::new());
@@ -121,23 +127,36 @@ impl HighlightMap {
             })
     }
 
-    pub fn set(&mut self, idx: u64, hl: &HashMap<String, Value>, info: &[HashMap<String, Value>]) {
+    #[must_use]
+    pub fn set(
+        &mut self,
+        idx: u64,
+        hl: &HashMap<String, Value>,
+        info: &[HashMap<String, Value>]
+    ) -> HighlightUpdates {
         let hl = Rc::new(Highlight::from_value_map(&hl));
+        let mut updates = HighlightUpdates::default();
 
         for item in info {
             if item.get("kind").unwrap().as_str().unwrap() != "syntax" {
                 continue;
             }
 
-            match item.get("hi_name").and_then(Value::as_str) {
-                Some("Pmenu") => self.pmenu = hl.clone(),
-                Some("PmenuSel") => self.pmenu_sel = hl.clone(),
-                Some("Cursor") => self.cursor = hl.clone(),
-                _ => (),
+            let (updated_ref, hl_ref) = match item.get("hi_name").and_then(Value::as_str) {
+                Some("Pmenu") => (&mut updates.pmenu, &mut self.pmenu),
+                Some("PmenuSel") => (&mut updates.pmenu, &mut self.pmenu_sel),
+                Some("Cursor") => (&mut updates.cursor, &mut self.cursor),
+                _ => continue,
+            };
+
+            if *hl_ref != hl {
+                *updated_ref = true;
+                *hl_ref = hl.clone();
             }
         }
 
         self.highlights.insert(idx, hl);
+        updates
     }
 
     pub fn cell_fg<'a>(&'a self, cell: &'a Cell) -> Option<&'a Color> {
@@ -230,7 +249,7 @@ impl HighlightMap {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct Highlight {
     pub italic: bool,
     pub bold: bool,

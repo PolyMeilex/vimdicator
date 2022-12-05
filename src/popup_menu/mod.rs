@@ -17,6 +17,7 @@ use crate::{
     render::{self, CellMetrics},
     highlight::HighlightMap,
     nvim::{self, ErrorReport, NeovimClient, CompleteItem},
+    shell::RenderState,
 };
 use completion_model::{CompletionModel, CompleteItemRef};
 use list_row::{CompletionListRow, CompletionListRowState, PADDING};
@@ -197,10 +198,39 @@ impl State {
             (((pango_ascent + pango_descent) as f64 / pango::SCALE as f64)
              + (PADDING * 2) as f64).ceil() as i32;
         self.limit_column_widths(&ctx);
-        update_css(&self.css_provider, &ctx.hl, &ctx.font_ctx);
 
         self.items = Rc::new(ctx.menu_items);
         self.list_model.set_model(Some(&CompletionModel::new(&self.items)));
+    }
+
+    fn update_css(&self, hl: &HighlightMap, font_ctx: &render::Context) {
+        let font_desc = font_ctx.font_description();
+
+        self.css_provider.load_from_data(
+            &format!(
+                "listview.nvim-completion-list {{\
+                    background-color: {bg};\
+                    font-family: \"{font}\";\
+                    font-size: {size}pt;\
+                }}\
+                listview.nvim-completion-list > row {{\
+                    padding: {margin}px;\
+                    color: {fg};\
+                }}\
+                listview.nvim-completion-list > row:selected {{\
+                    background-color: {bg_sel};\
+                    color: {fg_sel};\
+                }}",
+                margin = PADDING,
+                fg_sel = hl.pmenu_fg_sel().to_hex(),
+                bg_sel = hl.pmenu_bg_sel().to_hex(),
+                fg = hl.pmenu_fg().to_hex(),
+                bg = hl.pmenu_bg().to_hex(),
+                font = font_desc.family().unwrap().as_str(),
+                size = (font_desc.size() as f64 / pango::SCALE as f64),
+            )
+            .as_bytes(),
+        );
     }
 
     fn select(&mut self, selected: Option<u32>) {
@@ -260,8 +290,9 @@ pub struct PopupMenu {
 }
 
 impl PopupMenu {
-    pub fn new() -> PopupMenu {
+    pub fn new(render_state: &RenderState) -> PopupMenu {
         let state = State::new();
+        state.update_css(&render_state.hl, &render_state.font_ctx);
 
         let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
         let popover = gtk::Popover::builder()
@@ -350,6 +381,10 @@ impl PopupMenu {
     pub fn set_preview(&self, preview: bool) {
         self.state.borrow_mut().set_preview(preview);
     }
+
+    pub fn update_css(&self, hl: &HighlightMap, font_ctx: &render::Context) {
+        self.state.borrow().update_css(hl, font_ctx);
+    }
 }
 
 impl Deref for PopupMenu {
@@ -411,34 +446,4 @@ pub fn find_scroll_count(selected_idx: i32, target_idx: i32) -> i32 {
     } else {
         selected_idx - target_idx
     }
-}
-
-fn update_css(css_provider: &gtk::CssProvider, hl: &HighlightMap, font_ctx: &render::Context) {
-    let font_desc = font_ctx.font_description();
-
-    css_provider.load_from_data(
-        &format!(
-            "listview.nvim-completion-list {{\
-                background-color: {bg};\
-                font-family: \"{font}\";\
-                font-size: {size}pt;\
-            }}\
-            listview.nvim-completion-list > row {{\
-                padding: {margin}px;\
-                color: {fg};\
-            }}\
-            listview.nvim-completion-list > row:selected {{\
-                background-color: {bg_sel};\
-                color: {fg_sel};\
-            }}",
-            margin = PADDING,
-            fg_sel = hl.pmenu_fg_sel().to_hex(),
-            bg_sel = hl.pmenu_bg_sel().to_hex(),
-            fg = hl.pmenu_fg().to_hex(),
-            bg = hl.pmenu_bg().to_hex(),
-            font = font_desc.family().unwrap().as_str(),
-            size = (font_desc.size() as f64 / pango::SCALE as f64),
-        )
-        .as_bytes(),
-    );
 }
