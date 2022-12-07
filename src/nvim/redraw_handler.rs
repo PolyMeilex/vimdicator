@@ -311,7 +311,7 @@ pub fn call(
             // XXX: Use try_collect() when that stabilizes
             let mut menu_items = Vec::with_capacity(menu_items_in.len());
             for menu_item in menu_items_in.into_iter() {
-                menu_items.push(CompleteItem::new(menu_item)?);
+                menu_items.push(PopupMenuItem::new(menu_item)?);
             }
 
             let selected = try_int!(iter.next().ok_or("Failed to get selected popupmenu row")?);
@@ -386,7 +386,7 @@ pub fn call(
 
 pub enum PendingPopupMenu {
     Show {
-        items: Vec<CompleteItem>,
+        items: Vec<PopupMenuItem>,
         selected: Option<u32>,
         pos: (u64, u64),
     },
@@ -394,17 +394,17 @@ pub enum PendingPopupMenu {
     Hide,
 }
 
-pub struct CompleteItem {
+pub struct PopupMenuItem {
     pub word: String,
     pub kind: String,
     pub menu: String,
     pub info: String,
 }
 
-impl CompleteItem {
+impl PopupMenuItem {
     fn new(menu: Vec<String>) -> Result<Self, String> {
         let mut iter = menu.into_iter();
-        Ok(CompleteItem {
+        Ok(PopupMenuItem {
             word: iter.next().ok_or("Complete item is missing word")?,
             kind: iter.next().ok_or("Complete item is missing kind")?,
             menu: iter.next().ok_or("Complete item is missing menu")?,

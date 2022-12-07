@@ -14,38 +14,38 @@ use std::{
     ops::Deref,
 };
 
-use crate::nvim::CompleteItem;
+use crate::nvim::PopupMenuItem;
 
 glib::wrapper! {
-    pub struct CompletionModel(ObjectSubclass<CompletionModelObject>)
+    pub struct PopupMenuModel(ObjectSubclass<PopupMenuModelObject>)
         @implements gio::ListModel;
 }
 
-impl CompletionModel {
-    pub fn new(items: &Rc<Vec<CompleteItem>>) -> Self {
+impl PopupMenuModel {
+    pub fn new(items: &Rc<Vec<PopupMenuItem>>) -> Self {
         glib::Object::new(&[("items", &glib::BoxedAnyObject::new(items.clone()))])
-            .expect("Failed to create NvimCompletionModel")
+            .expect("Failed to create NvimPopupMenuModel")
     }
 }
 
 #[derive(Default)]
-pub struct CompletionModelObject(RefCell<Rc<Vec<CompleteItem>>>);
+pub struct PopupMenuModelObject(RefCell<Rc<Vec<PopupMenuItem>>>);
 
 #[glib::object_subclass]
-impl ObjectSubclass for CompletionModelObject {
-    const NAME: &'static str = "NvimCompletionModel";
-    type Type = CompletionModel;
+impl ObjectSubclass for PopupMenuModelObject {
+    const NAME: &'static str = "NvimPopupMenuModel";
+    type Type = PopupMenuModel;
     type ParentType = glib::Object;
     type Interfaces = (gio::ListModel,);
 }
 
-impl ObjectImpl for CompletionModelObject {
+impl ObjectImpl for PopupMenuModelObject {
     fn properties() -> &'static [glib::ParamSpec] {
         lazy_static! {
             static ref PROPERTIES: Vec<glib::ParamSpec> = vec![
                 glib::ParamSpecObject::new(
                     "items",
-                    "Completion items",
+                    "PopupMenu items",
                     "A reference to the list of completion items",
                     glib::BoxedAnyObject::static_type(),
                     glib::ParamFlags::WRITABLE,
@@ -62,17 +62,17 @@ impl ObjectImpl for CompletionModelObject {
                 *self.0.borrow_mut() = value
                     .get::<glib::BoxedAnyObject>()
                     .unwrap()
-                    .borrow::<Rc<Vec<CompleteItem>>>()
+                    .borrow::<Rc<Vec<PopupMenuItem>>>()
                     .clone(),
             _ => unreachable!(),
         }
     }
 }
 
-impl ListModelImpl for CompletionModelObject {
+impl ListModelImpl for PopupMenuModelObject {
     fn item(&self, _list_model: &Self::Type, position: u32) -> Option<glib::Object> {
         let items = self.0.borrow();
-        CompleteItemRef::new(&items, position as usize).map(|c| {
+        PopupMenuItemRef::new(&items, position as usize).map(|c| {
             glib::BoxedAnyObject::new(c).upcast()
         })
     }
@@ -87,19 +87,19 @@ impl ListModelImpl for CompletionModelObject {
 }
 
 #[derive(Clone, Default)]
-pub struct CompleteItemRef {
-    array: Rc<Vec<CompleteItem>>,
+pub struct PopupMenuItemRef {
+    array: Rc<Vec<PopupMenuItem>>,
     pos: usize,
 }
 
-impl CompleteItemRef {
-    pub fn new(array: &Rc<Vec<CompleteItem>>, pos: usize) -> Option<Self> {
+impl PopupMenuItemRef {
+    pub fn new(array: &Rc<Vec<PopupMenuItem>>, pos: usize) -> Option<Self> {
         array.get(pos).map(|_| Self { array: array.clone(), pos })
     }
 }
 
-impl Deref for CompleteItemRef {
-    type Target = CompleteItem;
+impl Deref for PopupMenuItemRef {
+    type Target = PopupMenuItem;
 
     fn deref(&self) -> &Self::Target {
         // SAFETY: pos is checked at creation time

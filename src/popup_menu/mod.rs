@@ -1,4 +1,4 @@
-mod completion_model;
+mod popupmenu_model;
 mod list_row;
 
 use std::cell::RefCell;
@@ -16,21 +16,21 @@ use gtk::prelude::*;
 use crate::{
     render::{self, CellMetrics},
     highlight::HighlightMap,
-    nvim::{self, ErrorReport, NeovimClient, CompleteItem},
+    nvim::{self, ErrorReport, NeovimClient, PopupMenuItem},
     shell::RenderState,
 };
-use completion_model::{CompletionModel, CompleteItemRef};
-use list_row::{CompletionListRow, CompletionListRowState, PADDING};
+use popupmenu_model::{PopupMenuModel, PopupMenuItemRef};
+use list_row::{PopupMenuListRow, PopupMenuListRowState, PADDING};
 
 pub const MAX_VISIBLE_ROWS: i32 = 10;
 
 #[derive(Default)]
 pub struct State {
     nvim: Option<Rc<nvim::NeovimClient>>,
-    items: Rc<Vec<CompleteItem>>,
+    items: Rc<Vec<PopupMenuItem>>,
     list_view: gtk::ListView,
     list_model: gtk::SingleSelection,
-    list_row_state: Rc<RefCell<CompletionListRowState>>,
+    list_row_state: Rc<RefCell<PopupMenuListRowState>>,
     item_scroll: gtk::ScrolledWindow,
     info_scroll: gtk::ScrolledWindow,
     info_label: gtk::Label,
@@ -51,7 +51,7 @@ impl State {
             .single_click_activate(false)
             .model(&list_model)
             .build();
-        list_view.add_css_class("nvim-completion-list");
+        list_view.add_css_class("nvim-popupmenu-list");
 
         let css_provider = gtk::CssProvider::new();
         gtk::StyleContext::add_provider_for_display(
@@ -97,7 +97,7 @@ impl State {
             css_provider,
             info_label,
             row_height: 0,
-            list_row_state: Rc::new(RefCell::new(CompletionListRowState::default())),
+            list_row_state: Rc::new(RefCell::new(PopupMenuListRowState::default())),
             prev_selected: None,
             preview: true,
         }
@@ -200,7 +200,7 @@ impl State {
         self.limit_column_widths(&ctx);
 
         self.items = Rc::new(ctx.menu_items);
-        self.list_model.set_model(Some(&CompletionModel::new(&self.items)));
+        self.list_model.set_model(Some(&PopupMenuModel::new(&self.items)));
     }
 
     fn update_css(&self, hl: &HighlightMap, font_ctx: &render::Context) {
@@ -208,16 +208,16 @@ impl State {
 
         self.css_provider.load_from_data(
             &format!(
-                "listview.nvim-completion-list {{\
+                "listview.nvim-popupmenu-list {{\
                     background-color: {bg};\
                     font-family: \"{font}\";\
                     font-size: {size}pt;\
                 }}\
-                listview.nvim-completion-list > row {{\
+                listview.nvim-popupmenu-list > row {{\
                     padding: {margin}px;\
                     color: {fg};\
                 }}\
-                listview.nvim-completion-list > row:selected {{\
+                listview.nvim-popupmenu-list > row:selected {{\
                     background-color: {bg_sel};\
                     color: {fg_sel};\
                 }}",
@@ -314,24 +314,24 @@ impl PopupMenu {
 
         let list_state_ref = state_ref.list_row_state.clone();
         item_factory.connect_setup(move |_, list_item| {
-            list_item.set_child(Some(&CompletionListRow::new(&list_state_ref)));
+            list_item.set_child(Some(&PopupMenuListRow::new(&list_state_ref)));
         });
         item_factory.connect_teardown(|_, list_item| {
             list_item.set_child(Option::<&gtk::Widget>::None);
         });
         item_factory.connect_bind(|_, list_item| {
-            let row: CompletionListRow = list_item.child().unwrap().downcast().unwrap();
+            let row: PopupMenuListRow = list_item.child().unwrap().downcast().unwrap();
             row.set_row(list_item.item().map(|obj| {
                 obj
                     .downcast::<glib::BoxedAnyObject>()
                     .unwrap()
-                    .borrow::<CompleteItemRef>()
+                    .borrow::<PopupMenuItemRef>()
                     .clone()
             }).as_ref());
         });
         item_factory.connect_unbind(|_, list_item| {
-            let row: CompletionListRow = list_item.child().unwrap().downcast().unwrap();
-            row.set_row(Option::<&CompleteItemRef>::None);
+            let row: PopupMenuListRow = list_item.child().unwrap().downcast().unwrap();
+            row.set_row(Option::<&PopupMenuItemRef>::None);
         });
 
         state_ref.list_view.set_factory(Some(&item_factory));
@@ -339,7 +339,7 @@ impl PopupMenu {
             list_select(&mut state.borrow_mut(), idx, "<C-y>");
         }));
         let list_model = state_ref.list_model.clone();
-        state_ref.list_view.connect_unmap(move |_| list_model.set_model(None::<&CompletionModel>));
+        state_ref.list_view.connect_unmap(move |_| list_model.set_model(None::<&PopupMenuModel>));
 
         drop(state_ref);
         PopupMenu {
@@ -399,7 +399,7 @@ pub struct PopupMenuContext<'a> {
     pub nvim: &'a Rc<NeovimClient>,
     pub hl: &'a HighlightMap,
     pub font_ctx: &'a render::Context,
-    pub menu_items: Vec<nvim::CompleteItem>,
+    pub menu_items: Vec<nvim::PopupMenuItem>,
     pub selected: Option<u32>,
     pub x: i32,
     pub y: i32,

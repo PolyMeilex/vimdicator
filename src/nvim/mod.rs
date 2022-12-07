@@ -3,7 +3,7 @@ mod handler;
 mod redraw_handler;
 mod ext;
 
-pub use self::redraw_handler::{CompleteItem, NvimCommand, RedrawMode, PendingPopupMenu};
+pub use self::redraw_handler::{PopupMenuItem, NvimCommand, RedrawMode, PendingPopupMenu};
 pub use self::client::NeovimClient;
 pub use self::ext::*;
 pub use self::handler::NvimHandler;

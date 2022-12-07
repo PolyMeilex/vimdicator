@@ -1,4 +1,4 @@
-use super::completion_model::CompleteItemRef;
+use super::popupmenu_model::PopupMenuItemRef;
 
 use std::{
     cell::RefCell,
@@ -18,38 +18,38 @@ use glib;
 pub const PADDING: i32 = 2;
 
 glib::wrapper! {
-    pub struct CompletionListRow(ObjectSubclass<CompletionListRowObject>)
+    pub struct PopupMenuListRow(ObjectSubclass<PopupMenuListRowObject>)
         @extends gtk::Box, gtk::Widget,
         @implements gtk::Accessible;
 }
 
-impl CompletionListRow {
-    pub fn new(state: &Rc<RefCell<CompletionListRowState>>) -> Self {
+impl PopupMenuListRow {
+    pub fn new(state: &Rc<RefCell<PopupMenuListRowState>>) -> Self {
         glib::Object::new(&[("state", &glib::BoxedAnyObject::new(state.clone()))])
-            .expect("Failed to create CompletionListRow")
+            .expect("Failed to create PopupMenuListRow")
     }
 
-    pub fn set_row(&self, row: Option<&CompleteItemRef>) {
+    pub fn set_row(&self, row: Option<&PopupMenuItemRef>) {
         self.set_property("row", row.cloned().map(|r| glib::BoxedAnyObject::new(r)));
     }
 }
 
 #[derive(Default)]
-pub struct CompletionListRowObject {
-    state: RefCell<Rc<RefCell<CompletionListRowState>>>,
+pub struct PopupMenuListRowObject {
+    state: RefCell<Rc<RefCell<PopupMenuListRowState>>>,
     word_label: glib::WeakRef<gtk::Label>,
     kind_label: glib::WeakRef<gtk::Label>,
     menu_label: glib::WeakRef<gtk::Label>,
 }
 
 #[glib::object_subclass]
-impl ObjectSubclass for CompletionListRowObject {
-    const NAME: &'static str = "NvimCompletionListRow";
-    type Type = CompletionListRow;
+impl ObjectSubclass for PopupMenuListRowObject {
+    const NAME: &'static str = "NvimPopupMenuListRow";
+    type Type = PopupMenuListRow;
     type ParentType = gtk::Box;
 }
 
-impl ObjectImpl for CompletionListRowObject {
+impl ObjectImpl for PopupMenuListRowObject {
     fn constructed(&self, obj: &Self::Type) {
         self.parent_constructed(obj);
 
@@ -85,8 +85,8 @@ impl ObjectImpl for CompletionListRowObject {
             static ref PROPERTIES: Vec<glib::ParamSpec> = vec![
                 glib::ParamSpecObject::new(
                     "state",
-                    "Completion list row state",
-                    "A reference to the shared state structure for all CompletionListRow widgets",
+                    "Popup menu list row state",
+                    "A reference to the shared state structure for all PopupMenuListRow widgets",
                     glib::BoxedAnyObject::static_type(),
                     glib::ParamFlags::WRITABLE,
                 ),
@@ -115,7 +115,7 @@ impl ObjectImpl for CompletionListRowObject {
                 let row = value.get_owned::<Option<glib::BoxedAnyObject>>().unwrap();
 
                 if let Some(row) = row {
-                    let row = row.borrow::<CompleteItemRef>();
+                    let row = row.borrow::<PopupMenuItemRef>();
                     let state = self.state.borrow();
                     let state = state.borrow();
                     let word_label = self.word_label.upgrade().unwrap();
@@ -141,7 +141,7 @@ impl ObjectImpl for CompletionListRowObject {
                 *self.state.borrow_mut() = value
                     .get_owned::<glib::BoxedAnyObject>()
                     .unwrap()
-                    .borrow::<Rc<RefCell<CompletionListRowState>>>()
+                    .borrow::<Rc<RefCell<PopupMenuListRowState>>>()
                     .clone();
             },
             _ => unreachable!(),
@@ -149,13 +149,13 @@ impl ObjectImpl for CompletionListRowObject {
     }
 }
 
-impl WidgetImpl for CompletionListRowObject {}
-impl BoxImpl for CompletionListRowObject {}
+impl WidgetImpl for PopupMenuListRowObject {}
+impl BoxImpl for PopupMenuListRowObject {}
 
-/// A state struct that is shared across all CompletionListRow widgets. It is provided at
+/// A state struct that is shared across all PopupMenuListRow widgets. It is provided at
 /// construction
 #[derive(Default)]
-pub struct CompletionListRowState {
+pub struct PopupMenuListRowState {
     pub word_col_width: i32,
     pub kind_col_width: Option<i32>,
     pub menu_col_width: Option<i32>,

@@ -7,7 +7,7 @@ popover.nvim-popover > contents {
     background: rgba(0, 0, 0, 0);
 }
 
-listview.nvim-completion-list {
+listview.nvim-popupmenu-list {
     margin: 0px;
     padding: 0px;
 }
