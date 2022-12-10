@@ -1451,24 +1451,34 @@ fn gtk_motion_notify(
     ui_state.set_cursor_visible(&shell.nvim_viewport, true);
 }
 
-fn show_nvim_start_error(err: &nvim::NvimInitError, state_arc: Arc<UiMutex<State>>) {
+fn show_nvim_start_error(
+    err: &nvim::NvimInitError,
+    state_arc: Arc<UiMutex<State>>,
+    comps: Arc<UiMutex<Components>>,
+) {
     let source = err.source();
     let cmd = err.cmd().unwrap().to_owned();
 
     glib::idle_add_once(move || {
         let state = state_arc.borrow();
         state.nvim.set_error();
+        comps.borrow().window().remove_css_class("nvim-background");
         state.error_area.show_nvim_start_error(&source, &cmd);
         state.show_error_area();
     });
 }
 
-fn show_nvim_init_error(err: &nvim::NvimInitError, state_arc: Arc<UiMutex<State>>) {
+fn show_nvim_init_error(
+    err: &nvim::NvimInitError,
+    state_arc: Arc<UiMutex<State>>,
+    comps: Arc<UiMutex<Components>>,
+) {
     let source = err.source();
 
     glib::idle_add_once(move || {
         let state = state_arc.borrow();
         state.nvim.set_error();
+        comps.borrow().window().remove_css_class("nvim-background");
         state.error_area.show_nvim_init_error(&source);
         state.show_error_area();
     });
@@ -1476,6 +1486,7 @@ fn show_nvim_init_error(err: &nvim::NvimInitError, state_arc: Arc<UiMutex<State>
 
 fn init_nvim_async(
     state_arc: Arc<UiMutex<State>>,
+    comps: Arc<UiMutex<Components>>,
     nvim_handler: NvimHandler,
     options: ShellOptions,
     cols: i32,
@@ -1490,7 +1501,7 @@ fn init_nvim_async(
     ) {
         Ok(session) => session,
         Err(err) => {
-            show_nvim_start_error(&err, state_arc);
+            show_nvim_start_error(&err, state_arc, comps);
             return;
         }
     };
@@ -1519,7 +1530,7 @@ fn init_nvim_async(
     session.clone().spawn(async move {
         match nvim::post_start_init(session, cols, rows, input_data).await {
             Ok(_) => set_nvim_initialized(state_arc),
-            Err(ref e) => show_nvim_init_error(e, state_arc),
+            Err(ref e) => show_nvim_init_error(e, state_arc, comps),
         }
     });
 }
@@ -1567,10 +1578,11 @@ fn init_nvim(state_ref: &Arc<UiMutex<State>>, components: &Arc<UiMutex<Component
         debug!("Init nvim {}/{}", cols, rows);
 
         let state_arc = state_ref.clone();
+        let comps = components.clone();
         let nvim_handler = NvimHandler::new(state_ref.clone(), state.resize_status());
         let options = state.options.borrow_mut().input_data();
         thread::spawn(move || init_nvim_async(
-            state_arc, nvim_handler, options, cols, rows
+            state_arc, comps, nvim_handler, options, cols, rows
         ));
     }
 }
