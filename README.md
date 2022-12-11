@@ -1,8 +1,14 @@
 # neovim-gtk
 
 GTK ui for neovim written in rust using gtk-rs bindings. With
-[ligatures](https://github.com/daa84/neovim-gtk/wiki/Configuration#ligatures) support. This is a
-fork of the original project from @daa84.
+[ligatures](https://github.com/daa84/neovim-gtk/wiki/Configuration#ligatures) support. This project
+began as a fork of @daa84's neovim-gtk.
+
+There are a very large number of improvements from @daa84's version, including:
+
+* Lots of bugfixes
+* We're fully ported to GTK4, and have a Snapshot based renderer instead of a cairo based renderer
+* _Smooth_ resizing
 
 Note that I haven't set up the wiki pages for this repo yet, so wiki links still go to daa84's wiki
 repo.
@@ -46,12 +52,12 @@ TODO
 First install the GTK development packages. On Debian/Ubuntu derivatives
 this can be done as follows:
 ``` shell
-apt install libgtk-3-dev
+apt install libgtk-4-dev
 ```
 
 On Fedora:
 ```bash
-dnf install atk-devel cairo-devel gdk-pixbuf2-devel glib2-devel gtk3-devel pango-devel
+dnf install atk-devel glib2-devel pango-devel gtk4-devel
 ```
 
 Then install the latest rust compiler, best with the
@@ -60,7 +66,7 @@ Then install the latest rust compiler, best with the
 cargo build --release
 ```
 
-As of writing this (Jan 22, 2022) the packaged rust tools in Fedora also work for building.
+As of writing this (Dec 16, 2022) the packaged rust tools in Fedora also work for building.
 
 ## Windows
 Neovim-gtk can be compiled using MSYS2 GTK packages. In this case use 'windows-gnu' rust toolchain.
