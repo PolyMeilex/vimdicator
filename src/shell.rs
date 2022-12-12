@@ -1050,7 +1050,7 @@ impl Shell {
         click_controller.connect_released(clone!(
             state_ref, ui_state_ref => move |controller, _, x, y| {
                 gtk_button_release(
-                    &mut *state_ref.borrow_mut(),
+                    &state_ref.borrow(),
                     &mut *ui_state_ref.borrow_mut(),
                     get_button(controller),
                     x,
@@ -1068,7 +1068,7 @@ impl Shell {
         long_tap_controller.connect_pressed(clone!(
             state_ref, ui_state_ref => move |controller, x, y| {
                 gtk_button_press(
-                    &mut *state_ref.borrow_mut(),
+                    &state_ref.borrow(),
                     &ui_state_ref,
                     3,
                     x,
@@ -1343,7 +1343,7 @@ fn gtk_scroll_event(
 }
 
 fn gtk_button_press(
-    shell: &mut State,
+    shell: &State,
     ui_state: &Rc<RefCell<UiState>>,
     button: u32,
     x: f64,
@@ -1409,7 +1409,7 @@ fn mouse_coordinates_to_nvim(shell: &State, position: (f64, f64)) -> (u64, u64) 
 }
 
 fn gtk_button_release(
-    shell: &mut State,
+    shell: &State,
     ui_state: &mut UiState,
     button: u32,
     x: f64,
