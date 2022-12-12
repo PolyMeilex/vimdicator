@@ -1,6 +1,6 @@
 use std::{
+    mem, result,
     convert::*,
-    result,
     num::ParseFloatError,
     sync::Arc,
 };
@@ -278,7 +278,7 @@ pub fn call(
     ui: &mut shell::State,
     method: &str,
     args: Vec<Value>,
-) -> result::Result<RedrawMode, String> {
+) -> result::Result<(RedrawMode, PendingPopupMenu), String> {
     let mut flush = false;
     let repaint_mode = match method {
         "grid_line" => call!(ui->grid_line(args: uint, uint, uint, ext)),
@@ -374,13 +374,15 @@ pub fn call(
 
     if flush {
         ui.pending_redraw = RedrawMode::Nothing;
-        Ok(repaint_mode)
+        Ok((repaint_mode, ui.pending_popupmenu.take()))
     } else {
         ui.pending_redraw = ui.pending_redraw.max(repaint_mode);
-        Ok(RedrawMode::Nothing)
+        Ok((RedrawMode::Nothing, PendingPopupMenu::None))
     }
 }
 
+/// Represents the next pending popup menu action before we've actually received a flush event
+#[derive(Clone, Debug, Default, PartialEq)]
 pub enum PendingPopupMenu {
     Show {
         items: Vec<PopupMenuItem>,
@@ -389,8 +391,32 @@ pub enum PendingPopupMenu {
     },
     Select(Option<u32>),
     Hide,
+    #[default]
+    None,
 }
 
+impl PendingPopupMenu {
+    pub fn update(&mut self, other: Self) {
+        if other == Self::None {
+            return;
+        }
+
+        if let Self::Show { ref mut selected, .. } = self {
+            if let Self::Select(new_selected) = other {
+                *selected = new_selected;
+                return;
+            }
+        }
+
+        *self = other;
+    }
+
+    pub fn take(&mut self) -> Self {
+        mem::take(self)
+    }
+}
+
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct PopupMenuItem {
     pub word: String,
     pub kind: String,
@@ -407,5 +433,44 @@ impl PopupMenuItem {
             menu: iter.next().ok_or("Complete item is missing menu")?,
             info: iter.next().ok_or("Complete item is missing info")?,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_pending_popupmenu() {
+        const SHOW: PendingPopupMenu = PendingPopupMenu::Show {
+            items: vec![],
+            selected: None,
+            pos: (0, 0),
+        };
+
+        let mut test_val = PendingPopupMenu::Select(None);
+        test_val.update(SHOW.clone());
+        assert_eq!(test_val, SHOW);
+
+        test_val.update(PendingPopupMenu::None);
+        assert_eq!(test_val, SHOW);
+
+        test_val.update(PendingPopupMenu::Select(Some(1)));
+        assert_eq!(
+            test_val,
+            PendingPopupMenu::Show { items: vec![], selected: Some(1), pos: (0, 0) }
+        );
+
+        test_val.update(PendingPopupMenu::Show { items: vec![], selected: None, pos: (1, 2) });
+        assert_eq!(
+            test_val,
+            PendingPopupMenu::Show { items: vec![], selected: None, pos: (1, 2) }
+        );
+
+        test_val.update(PendingPopupMenu::Hide);
+        assert_eq!(test_val, PendingPopupMenu::Hide);
+
+        assert_eq!(test_val.take(), PendingPopupMenu::Hide);
+        assert_eq!(test_val, PendingPopupMenu::None);
     }
 }

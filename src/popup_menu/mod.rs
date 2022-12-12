@@ -28,8 +28,6 @@ pub const MAX_VISIBLE_ROWS: i32 = 10;
 #[derive(Default)]
 pub struct State {
     nvim: Option<Rc<nvim::NeovimClient>>,
-    /// Incomplete (as in, we have received no flush yet) popup menu state
-    pending: Option<PendingPopupMenu>,
     items: Rc<Vec<PopupMenuItem>>,
     list_view: gtk::ListView,
     list_model: gtk::SingleSelection,
@@ -93,7 +91,6 @@ impl State {
 
         State {
             nvim: None,
-            pending: None,
             items: Rc::default(),
             list_view,
             list_model,
@@ -286,16 +283,6 @@ impl State {
     fn set_preview(&mut self, preview: bool) {
         self.preview = preview;
     }
-
-    fn set_pending(&mut self, new_pending: PendingPopupMenu) {
-        if let Some(PendingPopupMenu::Show { ref mut selected, .. }) = self.pending {
-            if let PendingPopupMenu::Select(new_selected) = new_pending {
-                *selected = new_selected;
-                return;
-            }
-        }
-        self.pending = Some(new_pending);
-    }
 }
 
 pub struct PopupMenu {
@@ -401,19 +388,21 @@ impl PopupMenu {
         self.state.borrow().update_css(hl, font_ctx);
     }
 
-    pub fn set_pending(&self, new_pending: PendingPopupMenu) {
-        self.state.borrow_mut().set_pending(new_pending)
-    }
-
     // Hide/show the popupmenu, according to the current pending status
-    pub fn flush(&self, nvim: &Rc<NeovimClient>, render_state: &RenderState, max_popup_width: i32) {
-        let pending = self.state.borrow_mut().pending.take();
+    pub fn flush(
+        &self,
+        pending: PendingPopupMenu,
+        nvim: &Rc<NeovimClient>,
+        render_state: &Rc<RefCell<RenderState>>,
+        max_popup_width: i32
+    ) {
         match pending {
-            Some(PendingPopupMenu::Show {
+            PendingPopupMenu::Show {
                 items: menu_items,
                 selected,
                 pos: (row, col),
-            }) => {
+            } => {
+                let render_state = render_state.borrow();
                 let point = ModelRect::point(col as usize, row as usize);
                 let (x, y, width, height) = point.to_area(render_state.font_ctx.cell_metrics());
 
@@ -432,9 +421,9 @@ impl PopupMenu {
 
                 self.show(context);
             }
-            Some(PendingPopupMenu::Select(selected)) => self.select(selected),
-            Some(PendingPopupMenu::Hide) => self.hide(),
-            None => (),
+            PendingPopupMenu::Select(selected) => self.select(selected),
+            PendingPopupMenu::Hide => self.hide(),
+            PendingPopupMenu::None => (),
         }
     }
 }

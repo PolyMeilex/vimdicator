@@ -16,7 +16,7 @@ use crate::shell;
 use crate::nvim::{NvimWriter, Neovim};
 use glib;
 
-use super::redraw_handler::{self, RedrawMode};
+use super::redraw_handler::{self, RedrawMode, PendingPopupMenu};
 
 pub struct NvimHandler {
     shell: Arc<UiMutex<shell::State>>,
@@ -173,7 +173,9 @@ fn call_redraw_handler(
     ui: &Arc<UiMutex<shell::State>>,
 ) -> result::Result<(), String> {
     let mut repaint_mode = RedrawMode::Nothing;
+    let mut pending_popupmenu = PendingPopupMenu::None;
 
+    let mut ui_ref = ui.borrow_mut();
     for ev in params {
         let ev_args = match ev {
             Value::Array(args) => args,
@@ -201,30 +203,25 @@ fn call_redraw_handler(
             },
         };
 
-        let mut ui_ref = ui.borrow_mut();
         for local_args in args_iter {
             let args = match local_args {
                 Value::Array(ar) => ar,
                 _ => vec![],
             };
 
-            let call_repaint_mode = match redraw_handler::call(&mut ui_ref, ev_name, args) {
-                Ok(mode) => mode,
-                Err(desc) => return Err(format!("Event {}\n{}", ev_name, desc)),
-            };
+            let (call_repaint_mode, call_popupmenu) =
+                match redraw_handler::call(&mut ui_ref, ev_name, args) {
+                    Ok(mode) => mode,
+                    Err(desc) => return Err(format!("Event {}\n{}", ev_name, desc)),
+                };
             repaint_mode = repaint_mode.max(call_repaint_mode);
+            pending_popupmenu.update(call_popupmenu);
         }
-
-        /* We can potentially get a movement event here from GTK when the cursor changes surfaces as
-         * a result of the popup being hidden while the cursor is over it. Movement events need to
-         * at least be able to read the global UI state, so we must take care to ensure we don't
-         * hold a mutable reference to said state so the event may be handled safely.
-         */
-        drop(ui_ref);
-        ui.borrow().popupmenu_flush();
     }
 
-    ui.borrow_mut().queue_draw(repaint_mode);
+    ui_ref.queue_draw(repaint_mode);
+    drop(ui_ref);
+    ui.borrow().popupmenu_flush(pending_popupmenu);
     Ok(())
 }
 

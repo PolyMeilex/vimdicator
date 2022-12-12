@@ -215,7 +215,7 @@ pub struct State {
     stack: gtk::Stack,
     pub nvim_viewport: NvimViewport,
     pub pending_redraw: RedrawMode,
-    pub pending_popupmenu: Option<PendingPopupMenu>,
+    pub pending_popupmenu: PendingPopupMenu,
     tabs: Tabline,
     im_context: gtk::IMMulticontext,
     error_area: error::ErrorArea,
@@ -283,7 +283,7 @@ impl State {
             stack: gtk::Stack::new(),
             nvim_viewport,
             pending_redraw: RedrawMode::Nothing,
-            pending_popupmenu: None,
+            pending_popupmenu: PendingPopupMenu::None,
             tabs: Tabline::new(),
             im_context: gtk::IMMulticontext::new(),
             error_area: error::ErrorArea::new(),
@@ -1759,8 +1759,8 @@ impl State {
         self.cur_point_area()
     }
 
-    pub fn set_pending_popupmenu(&mut self, pending_popupmenu: PendingPopupMenu) -> RedrawMode {
-        self.popup_menu.set_pending(pending_popupmenu);
+    pub fn set_pending_popupmenu(&mut self, new_pending: PendingPopupMenu) -> RedrawMode {
+        self.pending_popupmenu.update(new_pending);
         RedrawMode::Nothing
     }
 
@@ -1774,8 +1774,13 @@ impl State {
         self.set_pending_popupmenu(PendingPopupMenu::Select(selected))
     }
 
-    pub fn popupmenu_flush(&self) {
-        self.popup_menu.flush(&self.nvim, &self.render_state.borrow(), self.max_popup_width());
+    pub fn popupmenu_flush(&self, pending: PendingPopupMenu) {
+        self.popup_menu.flush(
+            pending,
+            &self.nvim,
+            &self.render_state,
+            self.max_popup_width()
+        );
     }
 
     pub fn tabline_update(
