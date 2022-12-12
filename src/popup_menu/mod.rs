@@ -16,8 +16,9 @@ use gtk::prelude::*;
 use crate::{
     render::{self, CellMetrics},
     highlight::HighlightMap,
-    nvim::{self, ErrorReport, NeovimClient, PopupMenuItem},
+    nvim::{self, ErrorReport, NeovimClient, PopupMenuItem, PendingPopupMenu},
     shell::RenderState,
+    ui_model::ModelRect,
 };
 use popupmenu_model::{PopupMenuModel, PopupMenuItemRef};
 use list_row::{PopupMenuListRow, PopupMenuListRowState, PADDING};
@@ -27,6 +28,8 @@ pub const MAX_VISIBLE_ROWS: i32 = 10;
 #[derive(Default)]
 pub struct State {
     nvim: Option<Rc<nvim::NeovimClient>>,
+    /// Incomplete (as in, we have received no flush yet) popup menu state
+    pending: Option<PendingPopupMenu>,
     items: Rc<Vec<PopupMenuItem>>,
     list_view: gtk::ListView,
     list_model: gtk::SingleSelection,
@@ -35,6 +38,7 @@ pub struct State {
     info_scroll: gtk::ScrolledWindow,
     info_label: gtk::Label,
     css_provider: gtk::CssProvider,
+    open: bool,
     row_height: i32,
     prev_selected: Option<u32>,
     preview: bool,
@@ -89,6 +93,7 @@ impl State {
 
         State {
             nvim: None,
+            pending: None,
             items: Rc::default(),
             list_view,
             list_model,
@@ -98,6 +103,7 @@ impl State {
             info_label,
             row_height: 0,
             list_row_state: Rc::new(RefCell::new(PopupMenuListRowState::default())),
+            open: false,
             prev_selected: None,
             preview: true,
         }
@@ -280,11 +286,20 @@ impl State {
     fn set_preview(&mut self, preview: bool) {
         self.preview = preview;
     }
+
+    fn set_pending(&mut self, new_pending: PendingPopupMenu) {
+        if let Some(PendingPopupMenu::Show { ref mut selected, .. }) = self.pending {
+            if let PendingPopupMenu::Select(new_selected) = new_pending {
+                *selected = new_selected;
+                return;
+            }
+        }
+        self.pending = Some(new_pending);
+    }
 }
 
 pub struct PopupMenu {
     popover: gtk::Popover,
-    open: bool,
 
     state: Rc<RefCell<State>>,
 }
@@ -345,16 +360,16 @@ impl PopupMenu {
         PopupMenu {
             popover,
             state,
-            open: false,
         }
     }
 
     pub fn is_open(&self) -> bool {
-        self.open
+        self.state.borrow().open
     }
 
-    pub fn show(&mut self, ctx: PopupMenuContext) {
-        self.open = true;
+    pub fn show(&self, ctx: PopupMenuContext) {
+        let mut state = self.state.borrow_mut();
+        state.open = true;
 
         self.popover.set_pointing_to(Some(&gdk::Rectangle::new(
             ctx.x,
@@ -362,19 +377,16 @@ impl PopupMenu {
             ctx.width,
             ctx.height
         )));
-        self.state.borrow_mut().before_show(ctx);
+        state.before_show(ctx);
         self.popover.popup();
     }
 
-    pub fn hide(&mut self) {
-        let popover = &self.popover;
-        self.open = false;
-        glib::idle_add_local_once(clone!(popover => move || {
-            // popdown() in case of fast hide/show
-            // situation does not work and just close popup window
-            // so hide() is important here
-            popover.hide();
-        }));
+    pub fn hide(& self) {
+        self.state.borrow_mut().open = false;
+        // popdown() in case of fast hide/show
+        // situation does not work and just close popup window
+        // so hide() is important here
+        self.popover.hide();
     }
 
     pub fn select(&self, selected: Option<u32>) {
@@ -387,6 +399,43 @@ impl PopupMenu {
 
     pub fn update_css(&self, hl: &HighlightMap, font_ctx: &render::Context) {
         self.state.borrow().update_css(hl, font_ctx);
+    }
+
+    pub fn set_pending(&self, new_pending: PendingPopupMenu) {
+        self.state.borrow_mut().set_pending(new_pending)
+    }
+
+    // Hide/show the popupmenu, according to the current pending status
+    pub fn flush(&self, nvim: &Rc<NeovimClient>, render_state: &RenderState, max_popup_width: i32) {
+        let pending = self.state.borrow_mut().pending.take();
+        match pending {
+            Some(PendingPopupMenu::Show {
+                items: menu_items,
+                selected,
+                pos: (row, col),
+            }) => {
+                let point = ModelRect::point(col as usize, row as usize);
+                let (x, y, width, height) = point.to_area(render_state.font_ctx.cell_metrics());
+
+                let context = PopupMenuContext {
+                    nvim,
+                    hl: &render_state.hl,
+                    font_ctx: &render_state.font_ctx,
+                    menu_items,
+                    selected,
+                    x,
+                    y,
+                    width,
+                    height,
+                    max_width: max_popup_width,
+                };
+
+                self.show(context);
+            }
+            Some(PendingPopupMenu::Select(selected)) => self.select(selected),
+            Some(PendingPopupMenu::Hide) => self.hide(),
+            None => (),
+        }
     }
 }
 

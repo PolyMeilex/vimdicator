@@ -54,7 +54,7 @@ use crate::input;
 use crate::input::keyval_to_input_string;
 use crate::mode;
 use crate::nvim_viewport::NvimViewport;
-use crate::popup_menu::{self, PopupMenu};
+use crate::popup_menu::PopupMenu;
 use crate::render;
 use crate::render::CellMetrics;
 use crate::subscriptions::{SubscriptionHandle, SubscriptionKey, Subscriptions};
@@ -985,7 +985,7 @@ impl Shell {
         motion_controller.connect_motion(clone!(
             state_ref, ui_state_ref => move |controller, x, y| {
                 gtk_motion_notify(
-                    &mut *state_ref.borrow_mut(),
+                    &state_ref.borrow(),
                     &mut *ui_state_ref.borrow_mut(),
                     (x, y),
                     controller.current_event_state()
@@ -995,7 +995,7 @@ impl Shell {
         motion_controller.connect_enter(clone!(
             state_ref, ui_state_ref => move |controller, x, y| {
                 gtk_motion_notify(
-                    &mut *state_ref.borrow_mut(),
+                    &state_ref.borrow(),
                     &mut *ui_state_ref.borrow_mut(),
                     (x, y),
                     controller.current_event_state()
@@ -1377,7 +1377,7 @@ fn gtk_button_press(
 }
 
 fn mouse_input(
-    shell: &mut State,
+    shell: &State,
     button: &str,
     action: &str,
     state: ModifierType,
@@ -1431,7 +1431,7 @@ fn gtk_button_release(
 }
 
 fn gtk_motion_notify(
-    shell: &mut State,
+    shell: &State,
     ui_state: &mut UiState,
     position: (f64, f64),
     modifier_state: ModifierType,
@@ -1760,41 +1760,8 @@ impl State {
     }
 
     pub fn set_pending_popupmenu(&mut self, pending_popupmenu: PendingPopupMenu) -> RedrawMode {
-        self.pending_popupmenu = Some(pending_popupmenu);
+        self.popup_menu.set_pending(pending_popupmenu);
         RedrawMode::Nothing
-    }
-
-    // Hide/show the popupmenu, according to the current pending status
-    pub fn flush_popupmenu(&mut self) {
-        match self.pending_popupmenu.take() {
-            Some(PendingPopupMenu::Show {
-                items: menu_items,
-                selected,
-                pos: (row, col),
-            }) => {
-                let point = ModelRect::point(col as usize, row as usize);
-                let render_state = self.render_state.borrow();
-                let (x, y, width, height) = point.to_area(render_state.font_ctx.cell_metrics());
-
-                let context = popup_menu::PopupMenuContext {
-                    nvim: &self.nvim,
-                    hl: &render_state.hl,
-                    font_ctx: &render_state.font_ctx,
-                    menu_items,
-                    selected,
-                    x,
-                    y,
-                    width,
-                    height,
-                    max_width: self.max_popup_width(),
-                };
-
-                self.popup_menu.show(context);
-            }
-            Some(PendingPopupMenu::Select(selected)) => self.popup_menu.select(selected),
-            Some(PendingPopupMenu::Hide) => self.popup_menu.hide(),
-            None => (),
-        }
     }
 
     pub fn popupmenu_select(&mut self, selected: i64) -> RedrawMode {
@@ -1804,17 +1771,11 @@ impl State {
             None
         };
 
-        if let Some(PendingPopupMenu::Show {
-            selected: ref mut pending,
-            ..
-        }) = self.pending_popupmenu {
-            *pending = selected;
-        } else {
-            self.pending_popupmenu = Some(PendingPopupMenu::Select(selected));
-        }
+        self.set_pending_popupmenu(PendingPopupMenu::Select(selected))
+    }
 
-        self.popup_menu.select(selected);
-        RedrawMode::Nothing
+    pub fn popupmenu_flush(&self) {
+        self.popup_menu.flush(&self.nvim, &self.render_state.borrow(), self.max_popup_width());
     }
 
     pub fn tabline_update(

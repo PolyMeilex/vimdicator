@@ -172,7 +172,6 @@ fn call_redraw_handler(
     params: Vec<Value>,
     ui: &Arc<UiMutex<shell::State>>,
 ) -> result::Result<(), String> {
-    let ui = &mut ui.borrow_mut();
     let mut repaint_mode = RedrawMode::Nothing;
 
     for ev in params {
@@ -202,21 +201,30 @@ fn call_redraw_handler(
             },
         };
 
+        let mut ui_ref = ui.borrow_mut();
         for local_args in args_iter {
             let args = match local_args {
                 Value::Array(ar) => ar,
                 _ => vec![],
             };
 
-            let call_repaint_mode = match redraw_handler::call(ui, ev_name, args) {
+            let call_repaint_mode = match redraw_handler::call(&mut ui_ref, ev_name, args) {
                 Ok(mode) => mode,
                 Err(desc) => return Err(format!("Event {}\n{}", ev_name, desc)),
             };
             repaint_mode = repaint_mode.max(call_repaint_mode);
         }
+
+        /* We can potentially get a movement event here from GTK when the cursor changes surfaces as
+         * a result of the popup being hidden while the cursor is over it. Movement events need to
+         * at least be able to read the global UI state, so we must take care to ensure we don't
+         * hold a mutable reference to said state so the event may be handled safely.
+         */
+        drop(ui_ref);
+        ui.borrow().popupmenu_flush();
     }
 
-    ui.queue_draw(repaint_mode);
+    ui.borrow_mut().queue_draw(repaint_mode);
     Ok(())
 }
 

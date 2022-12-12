@@ -326,9 +326,7 @@ pub fn call(
                     try_uint!(iter.next().ok_or("Failed to get popupmenu row")?),
                     try_uint!(iter.next().ok_or("Failed to get popupmenu col")?),
                 ),
-            });
-
-            RedrawMode::Nothing
+            })
         }
         "popupmenu_hide" => ui.set_pending_popupmenu(PendingPopupMenu::Hide),
         "popupmenu_select" => call!(ui->popupmenu_select(args: int)),
@@ -376,7 +374,6 @@ pub fn call(
 
     if flush {
         ui.pending_redraw = RedrawMode::Nothing;
-        ui.flush_popupmenu();
         Ok(repaint_mode)
     } else {
         ui.pending_redraw = ui.pending_redraw.max(repaint_mode);
