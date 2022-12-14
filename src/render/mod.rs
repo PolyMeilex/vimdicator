@@ -296,19 +296,26 @@ fn snapshot_undercurl(
     let CellMetrics {
         char_width,
         underline_position,
-        underline_thickness,
         ..
     } = *cell_metrics;
 
-    let rect = underline_rect(cell_metrics, (x, y), len);
-    let width = (char_width / 6.0).min(underline_thickness);
-    let seg_rect = Rect::new(
-        (x - (width / 2.0)) as f32,
-        (y + underline_position) as f32,
-        width as f32,
-        underline_thickness as f32
+    let diameter = char_width / 6.0;
+    /* We want the undercurl placed in the center of where underlines would normally be */
+    let undercurl_position = underline_position - (diameter / 2.0);
+
+    let rect = Rect::new(
+        x as f32,
+        (y + undercurl_position) as f32,
+        len as f32,
+        diameter as f32
     );
-    let mut dot = gsk::RoundedRect::from_rect(seg_rect, (underline_thickness / 2.0) as f32);
+    let seg_rect = Rect::new(
+        (x - (diameter / 2.0)) as f32,
+        (y + undercurl_position) as f32,
+        diameter as f32,
+        diameter as f32
+    );
+    let mut dot = gsk::RoundedRect::from_rect(seg_rect, (diameter / 2.0) as f32);
 
     snapshot.push_repeat(&rect, None);
     snapshot.push_rounded_clip(&dot);
