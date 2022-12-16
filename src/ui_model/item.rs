@@ -13,7 +13,13 @@ pub struct Item {
     pub item: pango::Item,
     pub cells_count: usize,
     glyphs: RefCell<Option<pango::GlyphString>>,
-    render_node: RefCell<Option<gsk::TextNode>>,
+    /**
+     * The cached render node for this cell. Note we also need to cache when an item fails to
+     * generate a valid render node, as pointed out by this testcase:
+     * https://github.com/Lyude/neovim-gtk/issues/8#issuecomment-1353840913
+     * Hence the double Option<…>
+     */
+    render_node: RefCell<Option<Option<gsk::TextNode>>>,
     font: pango::Font,
 }
 
@@ -39,27 +45,29 @@ impl Item {
         *self.render_node.borrow_mut() = None;
     }
 
-    pub fn render_node(&self, color: &color::Color, (x, y): (f32, f32)) -> gsk::TextNode {
+    pub fn render_node(&self, color: &color::Color, (x, y): (f32, f32)) -> Option<gsk::TextNode> {
         let mut render_node = self.render_node.borrow_mut();
-        if render_node.is_none() {
-            *render_node = gsk::TextNode::new(
+        if let Some(ref render_node) = *render_node {
+            render_node.clone()
+        } else {
+            let new_render_node = gsk::TextNode::new(
                 &self.font,
                 self.glyphs.borrow_mut().as_mut().unwrap(),
                 &color.into(),
                 &graphene::Point::new(x, y)
             );
+            *render_node = Some(new_render_node.clone());
+            new_render_node
         }
-
-        render_node.as_ref().expect("Failed to create render node").clone()
     }
 
-    pub fn new_render_node(&self, color: &color::Color, (x, y): (f32, f32)) -> gsk::TextNode {
+    pub fn new_render_node(&self, color: &color::Color, (x, y): (f32, f32)) -> Option<gsk::TextNode> {
         gsk::TextNode::new(
             &self.font,
             &mut self.glyphs().as_ref().unwrap().clone(),
             &color.into(),
             &graphene::Point::new(x, y)
-        ).expect("Failed to create render node")
+        )
     }
 
     pub fn font(&self) -> &pango::Font {

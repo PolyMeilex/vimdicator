@@ -217,9 +217,11 @@ pub fn snapshot_cursor<C: Cursor>(
         let cell_start_line_x = cell_start_col as f64 * char_width;
         for item in &*cursor_line.item_line[cell_start_col as usize] {
             if item.glyphs().is_some() {
-                snapshot.append_node(item.new_render_node(
+                if let Some(ref render_node) = item.new_render_node(
                     &fg, (cell_start_line_x as f32, (y + ascent) as f32)
-                ));
+                ) {
+                    snapshot.append_node(render_node);
+                }
             }
         }
 
@@ -436,9 +438,11 @@ fn snapshot_cell(
         let fg = hl.actual_cell_fg(cell);
 
         if item.glyphs().is_some() {
-            snapshot.append_node(item.render_node(
+            if let Some(render_node) = item.render_node(
                 fg.into(), (x as f32, (y + cell_metrics.ascent) as f32)
-            ));
+            ) {
+                snapshot.append_node(render_node);
+            }
         }
     }
 }
