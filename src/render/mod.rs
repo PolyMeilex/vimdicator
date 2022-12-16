@@ -294,24 +294,33 @@ fn snapshot_undercurl(
     len: f64,
 ) {
     let CellMetrics {
-        char_width,
         underline_position,
+        char_height,
         ..
     } = *cell_metrics;
 
-    let diameter = char_width / 6.0;
-    /* We want the undercurl placed in the center of where underlines would normally be */
-    let undercurl_position = underline_position - (diameter / 2.0);
+    /* Ideally we always want to make sure that the undercurl comes out as a distinct set of
+     * repeating dots, always equally spaced, and as large as possible within the descent area
+     * starting from the underline position to the bottom of the line..
+     */
+    let diameter = char_height - underline_position;
+
+    /* We also want to make sure that each dot starts on an X coordinate that's a multiple of it's
+     * own width, in order to avoid the spacing between dots of different colors from ever looking
+     * inconsistent. This can mean we'll sometimes only draw a portion of a dot, but that generally
+     * looks nicer then the inconsistent alternative.
+     */
+    let start_x = x - (x % diameter);
 
     let rect = Rect::new(
         x as f32,
-        (y + undercurl_position) as f32,
+        (y + underline_position) as f32,
         len as f32,
         diameter as f32
     );
     let seg_rect = Rect::new(
-        (x - (diameter / 2.0)) as f32,
-        (y + undercurl_position) as f32,
+        start_x as f32,
+        (y + underline_position) as f32,
         diameter as f32,
         diameter as f32
     );

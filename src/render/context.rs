@@ -167,6 +167,8 @@ impl FontMetrix {
 pub struct CellMetrics {
     pub line_height: f64,
     pub char_width: f64,
+    /// (line_height but without the line spacing)
+    pub char_height: f64,
     pub ascent: f64,
     pub descent: f64,
     pub underline_position: f64,
@@ -205,6 +207,7 @@ impl CellMetrics {
             ascent,
             descent,
             line_height: ascent + descent + f64::from(line_space),
+            char_height: ascent + descent,
             char_width: f64::from(font_metrics.approximate_char_width()) / f64::from(pango::SCALE),
             underline_position: ascent - underline_position + underline_thickness / 2.0,
             underline_thickness,
@@ -223,6 +226,7 @@ impl CellMetrics {
             descent: 0.0,
             line_height,
             char_width,
+            char_height: 0.0,
             underline_position: 0.0,
             underline_thickness: 0.0,
             strikethrough_position: 0.0,
