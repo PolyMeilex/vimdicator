@@ -1,6 +1,5 @@
 mod context;
 mod itemize;
-mod model_clip_iterator;
 
 pub use self::context::{CellMetrics, Context, FontFeatures};
 
