@@ -12,7 +12,10 @@ use crate::{
 };
 
 use pango;
-use gtk::graphene::Rect;
+use gtk::{
+    prelude::*,
+    graphene::Rect,
+};
 use gsk;
 
 /// A single step in a render plan

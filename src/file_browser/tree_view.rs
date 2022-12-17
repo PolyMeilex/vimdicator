@@ -15,7 +15,7 @@ glib::wrapper! {
 /// A popup-aware TreeView widget for the file browser pane
 impl TreeView {
     pub fn new() -> Self {
-        glib::Object::new(&[]).expect("Failed to create FileBrowserTreeView")
+        glib::Object::new::<Self>(&[])
     }
 
     pub fn set_context_menu(&self, context_menu: &gtk::PopoverMenu) {
@@ -36,7 +36,7 @@ impl ObjectSubclass for TreeViewObject {
 }
 
 impl ObjectImpl for TreeViewObject {
-    fn dispose(&self, _obj: &Self::Type) {
+    fn dispose(&self) {
         if let Some(context_menu) = self.context_menu.upgrade() {
             context_menu.unparent();
         }
@@ -60,11 +60,11 @@ impl ObjectImpl for TreeViewObject {
 
     fn set_property(
         &self,
-        obj: &Self::Type,
         _id: usize,
         value: &glib::Value,
         pspec: &glib::ParamSpec
     ) {
+        let obj = self.obj();
         match pspec.name() {
             "context-menu" => {
                 if let Some(context_menu) = self.context_menu.upgrade() {
@@ -72,14 +72,14 @@ impl ObjectImpl for TreeViewObject {
                 }
 
                 let context_menu: gtk::PopoverMenu = value.get().unwrap();
-                context_menu.set_parent(obj);
+                context_menu.set_parent(&*obj);
                 self.context_menu.set(Some(&context_menu));
             },
             _ => unimplemented!(),
         }
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "context-menu" => self.context_menu.upgrade().to_value(),
             _ => unimplemented!(),
@@ -88,8 +88,8 @@ impl ObjectImpl for TreeViewObject {
 }
 
 impl WidgetImpl for TreeViewObject {
-    fn size_allocate(&self, widget: &Self::Type, width: i32, height: i32, baseline: i32) {
-        self.parent_size_allocate(widget, width, height, baseline);
+    fn size_allocate(&self, width: i32, height: i32, baseline: i32) {
+        self.parent_size_allocate(width, height, baseline);
         self.context_menu.upgrade().unwrap().present();
     }
 }

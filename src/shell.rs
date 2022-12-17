@@ -240,7 +240,7 @@ impl State {
         let nvim_viewport = NvimViewport::new();
 
         let pango_context = nvim_viewport.create_pango_context();
-        pango_context.set_font_description(&FontDescription::from_string(DEFAULT_FONT_NAME));
+        pango_context.set_font_description(Some(&FontDescription::from_string(DEFAULT_FONT_NAME)));
 
         let mut render_state = RenderState::new(pango_context);
         render_state.hl.set_use_cterm(options.cterm_colors);
@@ -378,7 +378,7 @@ impl State {
         }
 
         let pango_context = self.nvim_viewport.create_pango_context();
-        pango_context.set_font_description(&font_description);
+        pango_context.set_font_description(Some(&font_description));
 
         self.render_state
             .borrow_mut()

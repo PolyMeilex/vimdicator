@@ -54,7 +54,7 @@ impl Context {
                     offset,
                     len,
                     &line.attr_list,
-                    attr_iter.as_ref(),
+                    Some(&attr_iter),
                 );
 
                 if !res.avoid_break || first_res.len() == 1 {
@@ -72,7 +72,7 @@ impl Context {
                 let extra_fonts = first_res
                     .iter()
                     .filter_map(|i| {
-                        let font = i.analysis().font().describe().unwrap();
+                        let font = i.analysis().font().describe();
                         if font != *our_font {
                             Some(font)
                         } else {
@@ -90,7 +90,7 @@ impl Context {
                         continue;
                     }
 
-                    pango_context.set_font_description(&font_desc);
+                    pango_context.set_font_description(Some(&font_desc));
                     let res = pango::itemize(
                         pango_context,
                         &line.line_str,
@@ -110,7 +110,7 @@ impl Context {
                     seen.insert(font_desc);
                 }
 
-                pango_context.set_font_description(&our_font);
+                pango_context.set_font_description(Some(&our_font));
                 new_res.unwrap_or(first_res)
             })
             .collect()
@@ -137,7 +137,7 @@ impl Context {
             .pango_context
             .list_families()
             .iter()
-            .filter_map(|f| f.name())
+            .map(|f| f.name())
             .collect()
     }
 }
@@ -150,9 +150,8 @@ struct FontMetrix {
 
 impl FontMetrix {
     pub fn new(pango_context: pango::Context, line_space: i32) -> Self {
-        let font_metrics = pango_context
-            .metrics(None, Some(&pango::Language::from_string("en_US")))
-            .unwrap();
+        let font_metrics =
+            pango_context.metrics(None, Some(&pango::Language::from_string("en_US")));
         let font_desc = pango_context.font_description().unwrap();
 
         FontMetrix {

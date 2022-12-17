@@ -23,8 +23,7 @@ glib::wrapper! {
 
 impl PopupMenuModel {
     pub fn new(items: &Rc<Vec<PopupMenuItem>>) -> Self {
-        glib::Object::new(&[("items", &glib::BoxedAnyObject::new(items.clone()))])
-            .expect("Failed to create NvimPopupMenuModel")
+        glib::Object::new::<Self>(&[("items", &glib::BoxedAnyObject::new(items.clone()))])
     }
 }
 
@@ -56,7 +55,7 @@ impl ObjectImpl for PopupMenuModelObject {
         PROPERTIES.as_ref()
     }
 
-    fn set_property(&self, _obj: &Self::Type, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "items" =>
                 *self.0.borrow_mut() = value
@@ -70,18 +69,18 @@ impl ObjectImpl for PopupMenuModelObject {
 }
 
 impl ListModelImpl for PopupMenuModelObject {
-    fn item(&self, _list_model: &Self::Type, position: u32) -> Option<glib::Object> {
+    fn item(&self, position: u32) -> Option<glib::Object> {
         let items = self.0.borrow();
         PopupMenuItemRef::new(&items, position as usize).map(|c| {
             glib::BoxedAnyObject::new(c).upcast()
         })
     }
 
-    fn n_items(&self, _list_model: &Self::Type) -> u32 {
+    fn n_items(&self) -> u32 {
         self.0.borrow().len().try_into().unwrap()
     }
 
-    fn item_type(&self, _list_model: &Self::Type) -> glib::Type {
+    fn item_type(&self) -> glib::Type {
         glib::BoxedAnyObject::static_type()
     }
 }

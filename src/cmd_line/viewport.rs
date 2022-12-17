@@ -29,7 +29,7 @@ glib::wrapper! {
 
 impl CmdlineViewport {
     pub fn new() -> Self {
-        glib::Object::new(&[]).expect("Failed to create CmdlineViewport")
+        glib::Object::new::<Self>(&[])
     }
 
     pub fn set_state(&self, state: &Arc<UiMutex<State>>) {
@@ -92,7 +92,6 @@ impl ObjectImpl for CmdlineViewportObject {
 
     fn set_property(
         &self,
-        _obj: &Self::Type,
         _id: usize,
         value: &glib::Value,
         pspec: &glib::ParamSpec
@@ -117,7 +116,7 @@ impl ObjectImpl for CmdlineViewportObject {
         }
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "snapshot-cached" => {
                 let inner = self.inner.borrow();
@@ -129,7 +128,8 @@ impl ObjectImpl for CmdlineViewportObject {
 }
 
 impl WidgetImpl for CmdlineViewportObject {
-    fn snapshot(&self, widget: &Self::Type, snapshot: &gtk::Snapshot) {
+    fn snapshot(&self, snapshot: &gtk::Snapshot) {
+        let obj = self.obj();
         let mut inner = self.inner.borrow_mut();
         let state = match inner.state.upgrade() {
             Some(state) => state,
@@ -143,13 +143,13 @@ impl WidgetImpl for CmdlineViewportObject {
 
         snapshot.append_color(
             &hl.bg().into(),
-            &Rect::new(0.0, 0.0, widget.width() as f32, widget.height() as f32)
+            &Rect::new(0.0, 0.0, obj.width() as f32, obj.height() as f32)
         );
 
         snapshot.save();
 
         let preferred_height = state.preferred_height();
-        let gap = widget.height() - preferred_height;
+        let gap = obj.height() - preferred_height;
         if gap > 0 {
             snapshot.translate(&Point::new(0.0, (gap / 2) as f32));
         }

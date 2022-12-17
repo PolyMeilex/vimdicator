@@ -439,7 +439,7 @@ impl Ui {
                 let comps = comps.borrow();
                 let window = comps.window.as_ref().unwrap();
 
-                let display = window.display();
+                let display = gtk::prelude::WidgetExt::display(window);
                 if display.is_composited() {
                     shell.set_transparency(background_alpha, filled_alpha);
                 } else {

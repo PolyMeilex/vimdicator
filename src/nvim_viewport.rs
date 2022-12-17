@@ -27,7 +27,7 @@ glib::wrapper! {
 
 impl NvimViewport {
     pub fn new() -> Self {
-        glib::Object::new(&[]).expect("Failed to create NvimViewport")
+        glib::Object::new::<Self>(&[])
     }
 
     pub fn set_shell_state(&self, state: &Arc<UiMutex<State>>) {
@@ -80,7 +80,7 @@ impl ObjectSubclass for NvimViewportObject {
 }
 
 impl ObjectImpl for NvimViewportObject {
-    fn dispose(&self, _obj: &Self::Type) {
+    fn dispose(&self) {
         if let Some(popover_menu) = self.context_menu.upgrade() {
             popover_menu.unparent();
         }
@@ -137,13 +137,8 @@ impl ObjectImpl for NvimViewportObject {
         PROPERTIES.as_ref()
     }
 
-    fn set_property(
-        &self,
-        obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
+        let obj = self.obj();
         match pspec.name() {
             "shell-state" => {
                 let mut inner = self.inner.borrow_mut();
@@ -164,7 +159,7 @@ impl ObjectImpl for NvimViewportObject {
                 }
                 let context_menu: gtk::PopoverMenu = value.get().unwrap();
 
-                context_menu.set_parent(obj);
+                context_menu.set_parent(&*obj);
                 self.context_menu.set(Some(&context_menu));
             },
             "completion-popover" => {
@@ -173,7 +168,7 @@ impl ObjectImpl for NvimViewportObject {
                 }
                 let popover: gtk::Popover = value.get().unwrap();
 
-                popover.set_parent(obj);
+                popover.set_parent(&*obj);
                 self.completion_popover.set(Some(&popover));
             },
             "ext-cmdline" => {
@@ -183,7 +178,7 @@ impl ObjectImpl for NvimViewportObject {
                 let ext_cmdline: Option<gtk::Popover> = value.get().unwrap();
 
                 if let Some(ref ext_cmdline) = ext_cmdline {
-                    ext_cmdline.set_parent(obj);
+                    ext_cmdline.set_parent(&*obj);
                 }
                 self.ext_cmdline.set(ext_cmdline.as_ref());
             },
@@ -191,7 +186,7 @@ impl ObjectImpl for NvimViewportObject {
         }
     }
 
-    fn property(&self, _obj: &Self::Type, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
+    fn property(&self, _id: usize, pspec: &glib::ParamSpec) -> glib::Value {
         match pspec.name() {
             "snapshot-cached" => self.inner.borrow().snapshot_cache.is_some().to_value(),
             "context-menu" => self.context_menu.upgrade().to_value(),
@@ -203,9 +198,8 @@ impl ObjectImpl for NvimViewportObject {
 }
 
 impl WidgetImpl for NvimViewportObject {
-    fn size_allocate(&self, widget: &Self::Type, width: i32, height: i32, baseline: i32) {
-        self.parent_size_allocate(widget, width, height, baseline);
-
+    fn size_allocate(&self, width: i32, height: i32, baseline: i32) {
+        self.parent_size_allocate(width, height, baseline);
         if let Some(context_menu) = self.context_menu.upgrade() {
             context_menu.present();
         }
@@ -222,7 +216,8 @@ impl WidgetImpl for NvimViewportObject {
         }
     }
 
-    fn snapshot(&self, widget: &Self::Type, snapshot_in: &gtk::Snapshot) {
+    fn snapshot(&self, snapshot_in: &gtk::Snapshot) {
+        let obj = self.obj();
         let mut inner = self.inner.borrow_mut();
         let state = match inner.state.upgrade() {
             Some(state) => state,
@@ -236,7 +231,7 @@ impl WidgetImpl for NvimViewportObject {
         let transparency = state.transparency();
         snapshot_in.append_color(
             &hl.bg().to_rgbo(transparency.background_alpha),
-            &Rect::new(0.0, 0.0, widget.width() as f32, widget.height() as f32)
+            &Rect::new(0.0, 0.0, obj.width() as f32, obj.height() as f32)
         );
 
         if state.nvim_clone().is_initialized() {
@@ -269,7 +264,7 @@ impl WidgetImpl for NvimViewportObject {
                 }
             }
         } else {
-            self.snapshot_initializing(widget, snapshot_in, &render_state);
+            self.snapshot_initializing(snapshot_in, &render_state);
         }
     }
 }
@@ -277,11 +272,11 @@ impl WidgetImpl for NvimViewportObject {
 impl NvimViewportObject {
     fn snapshot_initializing(
         &self,
-        widget: &<Self as ObjectSubclass>::Type,
         snapshot: &gtk::Snapshot,
         render_state: &RenderState,
     ) {
-        let layout = widget.create_pango_layout(Some("Loading…"));
+        let obj = self.obj();
+        let layout = obj.create_pango_layout(Some("Loading…"));
 
         let attr_list = pango::AttrList::new();
         attr_list.insert(render_state.hl.fg().to_pango_fg());
@@ -289,9 +284,9 @@ impl NvimViewportObject {
 
         let (width, height) = layout.pixel_size();
         snapshot.render_layout(
-            &widget.style_context(),
-            widget.allocated_width() as f64 / 2.0 - width as f64 / 2.0,
-            widget.allocated_height() as f64 / 2.0 - height as f64 / 2.0,
+            &obj.style_context(),
+            obj.allocated_width() as f64 / 2.0 - width as f64 / 2.0,
+            obj.allocated_height() as f64 / 2.0 - height as f64 / 2.0,
             &layout,
         );
     }

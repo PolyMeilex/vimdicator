@@ -25,8 +25,7 @@ glib::wrapper! {
 
 impl PopupMenuListRow {
     pub fn new(state: &Rc<RefCell<PopupMenuListRowState>>) -> Self {
-        glib::Object::new(&[("state", &glib::BoxedAnyObject::new(state.clone()))])
-            .expect("Failed to create PopupMenuListRow")
+        glib::Object::new::<Self>(&[("state", &glib::BoxedAnyObject::new(state.clone()))])
     }
 
     pub fn set_row(&self, row: Option<&PopupMenuItemRef>) {
@@ -50,8 +49,9 @@ impl ObjectSubclass for PopupMenuListRowObject {
 }
 
 impl ObjectImpl for PopupMenuListRowObject {
-    fn constructed(&self, obj: &Self::Type) {
-        self.parent_constructed(obj);
+    fn constructed(&self) {
+        self.parent_constructed();
+        let obj = self.obj();
 
         let word_label = gtk::Label::builder()
             .single_line_mode(true)
@@ -103,13 +103,7 @@ impl ObjectImpl for PopupMenuListRowObject {
         PROPERTIES.as_ref()
     }
 
-    fn set_property(
-        &self,
-        _obj: &Self::Type,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "row" => {
                 let row = value.get_owned::<Option<glib::BoxedAnyObject>>().unwrap();

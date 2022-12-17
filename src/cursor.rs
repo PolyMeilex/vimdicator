@@ -1,5 +1,8 @@
 use glib;
-use gtk::graphene::Rect;
+use gtk::{
+    prelude::*,
+    graphene::Rect,
+};
 
 use std::{
     sync::{Arc, Weak},
