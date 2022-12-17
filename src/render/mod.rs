@@ -294,7 +294,7 @@ fn snapshot_undercurl(
     snapshot: &gtk::Snapshot,
     cell_metrics: &CellMetrics,
     color: &color::Color,
-    (x, y): (f64, f64),
+    (x, mut y): (f64, f64),
     len: f64,
 ) {
     let CellMetrics {
@@ -309,36 +309,29 @@ fn snapshot_undercurl(
      */
     let diameter = char_height - underline_position;
 
-    /* We also want to make sure that each dot starts on an X coordinate that's a multiple of it's
-     * own width, in order to avoid the spacing between dots of different colors from ever looking
-     * inconsistent. This can mean we'll sometimes only draw a portion of a dot, but that generally
-     * looks nicer then the inconsistent alternative.
+    /* We also want to make sure that each dot starts on an X coordinate that's a multiple of the
+     * width of the segment that we'll be repeating, in order to avoid the spacing between dots of
+     * different colors from ever looking inconsistent. This can mean we'll sometimes only draw a
+     * portion of a dot, but that generally looks nicer then the inconsistent alternative.
      */
-    let start_x = x - (x % diameter);
+    let start_x = x - (x % (diameter * 2.0));
 
-    let rect = Rect::new(
-        x as f32,
-        (y + underline_position) as f32,
-        len as f32,
-        diameter as f32
-    );
-    let seg_rect = Rect::new(
-        start_x as f32,
-        (y + underline_position) as f32,
-        diameter as f32,
-        diameter as f32
-    );
-    let mut dot = gsk::RoundedRect::from_rect(seg_rect, (diameter / 2.0) as f32);
+    y += underline_position;
 
-    snapshot.push_repeat(&rect, None);
+    let rect = Rect::new(x as f32, y as f32, len as f32, diameter as f32);
+    snapshot.push_repeat(
+        &rect,
+        Some(&Rect::new(start_x as f32, y as f32, (diameter * 2.0) as f32, diameter as f32))
+    );
+
+    let dot = gsk::RoundedRect::from_rect(
+        Rect::new(start_x as f32, y as f32, diameter as f32, diameter as f32),
+        (diameter / 2.0) as f32
+    );
     snapshot.push_rounded_clip(&dot);
     snapshot.append_color(&color.into(), dot.bounds());
     snapshot.pop();
 
-    // TODO: figure out if we can get rid of this, we really just need some way to express
-    // that we want to repeat an area of (2x, y)
-    dot.offset(dot.bounds().width(), 0.0);
-    snapshot.append_color(&gdk::RGBA::new(0.0, 0.0, 0.0, 0.0), dot.bounds());
     snapshot.pop();
 }
 
