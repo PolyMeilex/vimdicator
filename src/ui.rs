@@ -465,11 +465,13 @@ impl Ui {
             .css_classes(vec!["title".to_string()])
             .vexpand(true)
             .valign(gtk::Align::Center)
+            .ellipsize(pango::EllipsizeMode::Middle)
             .build();
         let header_bar_subtitle = gtk::Label::builder()
             .css_classes(vec!["subtitle".to_string()])
             .vexpand(true)
             .valign(gtk::Align::Center)
+            .ellipsize(pango::EllipsizeMode::Middle)
             .build();
         let header_bar_box = gtk::Box::builder()
             .orientation(Orientation::Vertical)
