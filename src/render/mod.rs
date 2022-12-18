@@ -211,10 +211,10 @@ pub fn snapshot_cursor<C: Cursor>(
     }
 
     let cell_start_col = cursor_line.cell_to_item(cursor_col);
+    let fg = hl.actual_cell_fg(cell).fade(hl.bg(), fade_percentage);
+
     if cell_start_col >= 0 {
         snapshot.push_clip(&clip_rect);
-
-        let fg = hl.actual_cell_fg(cell).fade(hl.bg(), fade_percentage);
 
         let cell_start_line_x = cell_start_col as f64 * char_width;
         for item in &*cursor_line.item_line[cell_start_col as usize] {
@@ -228,28 +228,28 @@ pub fn snapshot_cursor<C: Cursor>(
         }
 
         snapshot.pop();
+    }
 
-        if cell.hl.strikethrough {
-            snapshot_strikethrough(snapshot, cell_metrics, &fg, (x, y), clip_width);
-        }
+    if cell.hl.strikethrough {
+        snapshot_strikethrough(snapshot, cell_metrics, &fg, (x, y), clip_width);
+    }
 
-        if cell.hl.undercurl {
-            snapshot_undercurl(
-                snapshot,
-                cell_metrics,
-                &undercurl_color(cell, hl).fade(hl.bg(), fade_percentage),
-                (x, y),
-                clip_width
-            );
-        } else if cell.hl.underline {
-            snapshot_underline(
-                snapshot,
-                cell_metrics,
-                &underline_color(cell, hl).fade(hl.bg(), fade_percentage),
-                (x, y),
-                clip_width
-            );
-        }
+    if cell.hl.undercurl {
+        snapshot_undercurl(
+            snapshot,
+            cell_metrics,
+            &undercurl_color(cell, hl).fade(hl.bg(), fade_percentage),
+            (x, y),
+            clip_width
+        );
+    } else if cell.hl.underline {
+        snapshot_underline(
+            snapshot,
+            cell_metrics,
+            &underline_color(cell, hl).fade(hl.bg(), fade_percentage),
+            (x, y),
+            clip_width
+        );
     }
 }
 
