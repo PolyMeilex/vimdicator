@@ -132,7 +132,7 @@ impl HighlightMap {
         &mut self,
         idx: u64,
         hl: &HashMap<String, Value>,
-        info: &[HashMap<String, Value>]
+        info: &[HashMap<String, Value>],
     ) -> HighlightUpdates {
         let hl = Rc::new(Highlight::from_value_map(&hl));
         let mut updates = HighlightUpdates::default();
@@ -300,7 +300,7 @@ impl Highlight {
                 "standout" => {
                     model_attrs.bold = true;
                     model_attrs.reverse = true;
-                },
+                }
                 "reverse" => model_attrs.reverse = true,
                 "bold" => model_attrs.bold = true,
                 "italic" => model_attrs.italic = true,

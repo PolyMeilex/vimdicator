@@ -1,9 +1,6 @@
 use std::collections::HashSet;
 
-use pango::{
-    self,
-    prelude::*,
-};
+use pango::{self, prelude::*};
 
 use crate::sys::pango as sys_pango;
 
@@ -69,16 +66,14 @@ impl Context {
                  * fallback to the original (likely incorrect) itemization result.
                  */
                 let our_font = self.font_description();
-                let extra_fonts = first_res
-                    .iter()
-                    .filter_map(|i| {
-                        let font = i.analysis().font().describe();
-                        if font != *our_font {
-                            Some(font)
-                        } else {
-                            None
-                        }
-                    });
+                let extra_fonts = first_res.iter().filter_map(|i| {
+                    let font = i.analysis().font().describe();
+                    if font != *our_font {
+                        Some(font)
+                    } else {
+                        None
+                    }
+                });
 
                 // We do res.len() - 2 so that in the likely event that most of the Cell rendered
                 // with our_font, and the rest with another, we're able to skip allocating the

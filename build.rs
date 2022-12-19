@@ -4,11 +4,11 @@ extern crate phf_codegen;
 #[cfg(windows)]
 extern crate winres;
 
-use std::process::Command;
 use std::env;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 fn main() {
     let out_dir = &env::var("OUT_DIR").unwrap();
@@ -72,7 +72,10 @@ fn main() {
     );
 
     if let Ok(output) = Command::new("git").args(&["rev-parse", "HEAD"]).output() {
-        println!("cargo:rustc-env=GIT_COMMIT={}", String::from_utf8(output.stdout).unwrap());
+        println!(
+            "cargo:rustc-env=GIT_COMMIT={}",
+            String::from_utf8(output.stdout).unwrap()
+        );
     }
 }
 

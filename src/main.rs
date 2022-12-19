@@ -27,6 +27,7 @@ mod highlight;
 mod input;
 mod misc;
 mod nvim;
+mod nvim_viewport;
 mod plug_manager;
 mod popup_menu;
 mod project;
@@ -36,7 +37,6 @@ mod shell;
 mod shell_dlg;
 mod subscriptions;
 mod tabline;
-mod nvim_viewport;
 
 use gio::prelude::*;
 use gio::ApplicationCommandLine;
@@ -46,8 +46,8 @@ use std::sync::{Arc, Mutex};
 #[cfg(unix)]
 use unix_daemonize::{daemonize_redirect, ChdirMode};
 
-use crate::ui::Ui;
 use crate::shell::ShellOptions;
+use crate::ui::Ui;
 
 use clap::{App, Arg, ArgMatches};
 
@@ -103,13 +103,19 @@ fn main() {
     if matches.is_present("diff-mode") {
         if let Some(files) = matches.values_of("files") {
             if files.len() < 2 {
-                clap::Error::with_description("Diff mode (-d) requires 2 or more files",
-                                              clap::ErrorKind::TooFewValues).exit();
+                clap::Error::with_description(
+                    "Diff mode (-d) requires 2 or more files",
+                    clap::ErrorKind::TooFewValues,
+                )
+                .exit();
             }
         } else {
-            clap::Error::with_description("Diff mode (-d) specified but no files provided. 2 or \
+            clap::Error::with_description(
+                "Diff mode (-d) specified but no files provided. 2 or \
                                            more files must be provided",
-                                          clap::ErrorKind::MissingRequiredArgument).exit();
+                clap::ErrorKind::MissingRequiredArgument,
+            )
+            .exit();
         }
     }
 
@@ -117,12 +123,7 @@ fn main() {
     {
         // fork to background by default
         if !matches.is_present("no-fork") {
-            daemonize_redirect(
-                None::<String>,
-                None::<String>,
-                ChdirMode::NoChdir,
-            )
-            .unwrap();
+            daemonize_redirect(None::<String>, None::<String>, ChdirMode::NoChdir).unwrap();
         }
     }
 
@@ -162,7 +163,12 @@ fn main() {
                     .unwrap_or_default()
                     .map(str::to_owned)
                     .collect::<Vec<String>>();
-                open(app, files.into_boxed_slice(), &matches_copy, app_cmdline_copy.clone());
+                open(
+                    app,
+                    files.into_boxed_slice(),
+                    &matches_copy,
+                    app_cmdline_copy.clone(),
+                );
             }
         }
         0
@@ -172,7 +178,9 @@ fn main() {
     let css_provider = gtk::CssProvider::new();
     css_provider.load_from_data(include_bytes!("style.css"));
     gtk::StyleContext::add_provider_for_display(
-        gdk::Display::default().as_ref().expect("Cannot find default GDK Display"),
+        gdk::Display::default()
+            .as_ref()
+            .expect("Cannot find default GDK Display"),
         &css_provider,
         gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
     );
@@ -199,11 +207,7 @@ fn open(
     matches: &ArgMatches,
     app_cmdline: Arc<Mutex<Option<ApplicationCommandLine>>>,
 ) {
-
-    let mut ui = Ui::new(
-        ShellOptions::new(matches, None),
-        files,
-    );
+    let mut ui = Ui::new(ShellOptions::new(matches, None), files);
 
     ui.init(app, !matches.is_present("disable-win-restore"), app_cmdline);
 }

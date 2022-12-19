@@ -3,7 +3,7 @@ use std::error::Error;
 
 use nvim_rs::error::CallError;
 
-use crate::nvim::{SessionError, NvimSession};
+use crate::nvim::{NvimSession, SessionError};
 
 pub trait CallErrorExt {
     fn print(&self);
@@ -73,7 +73,10 @@ impl<'a> NormalError<'a> {
         if let Self::Message { message, .. } = self {
             // TODO: Figure out timeout situation, in the mean time just disable timeouts here
             if let Err(e) = nvim.err_writeln(message).await {
-                error!("Failed to print error message \"{:?}\" in nvim: {}", self, e);
+                error!(
+                    "Failed to print error message \"{:?}\" in nvim: {}",
+                    self, e
+                );
             }
         }
     }
@@ -114,7 +117,11 @@ impl<'a> TryFrom<&'a CallError> for NormalError<'a> {
                     None => return Err(()),
                 };
 
-                return Ok(Self::Message { source, message, code });
+                return Ok(Self::Message {
+                    source,
+                    message,
+                    code,
+                });
             }
         }
 

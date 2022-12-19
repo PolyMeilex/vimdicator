@@ -2,27 +2,23 @@ mod tree_view;
 
 use std::cell::RefCell;
 use std::cmp::Ordering;
-use std::io;
 use std::fs;
 use std::fs::DirEntry;
+use std::io;
+use std::ops::Deref;
 use std::path::{Component, Path, PathBuf};
 use std::rc::Rc;
-use std::ops::Deref;
 use std::sync::Arc;
 
+use gdk;
 use gio;
 use gio::prelude::*;
-use gtk::{
-    self,
-    prelude::*,
-    Inhibit,
-};
-use gdk;
+use gtk::{self, prelude::*, Inhibit};
 
 use crate::misc::escape_filename;
 use crate::nvim::NvimSession;
-use crate::spawn_timeout;
 use crate::shell;
+use crate::spawn_timeout;
 use crate::subscriptions::SubscriptionKey;
 use crate::ui::UiMutex;
 
@@ -86,11 +82,8 @@ impl FileBrowserWidget {
             .build();
         widget.style_context().add_class("view");
 
-        let dir_list_model = gtk::TreeStore::new(&[
-            glib::Type::STRING,
-            glib::Type::STRING,
-            glib::Type::STRING,
-        ]);
+        let dir_list_model =
+            gtk::TreeStore::new(&[glib::Type::STRING, glib::Type::STRING, glib::Type::STRING]);
         let dir_list = gtk::ComboBox::builder()
             .can_focus(false)
             .focus_on_click(false)
@@ -187,7 +180,9 @@ impl FileBrowserWidget {
                 context_menu,
                 cd_action: gio::SimpleAction::new("cd", None),
                 show_hidden_action: gio::SimpleAction::new_stateful(
-                    "show-hidden", None, &false.to_variant()
+                    "show-hidden",
+                    None,
+                    &false.to_variant(),
                 ),
             },
             state: Rc::new(RefCell::new(State {
@@ -216,38 +211,40 @@ impl FileBrowserWidget {
 
         let store = &self.store;
         let state_ref = &self.state;
-        self.tree.connect_test_expand_row(clone!(store, state_ref => move |_, iter, _| {
-            store.set(&iter, &[(Column::IconName as u32, &ICON_FOLDER_OPEN)]);
-            // We cannot recursively populate all directories. Instead, we have prepared a single
-            // empty child entry for all non-empty directories, so the row will be expandable. Now,
-            // when a directory is expanded, populate its children.
-            let state = state_ref.borrow();
-            if let Some(child) = store.iter_children(Some(iter)) {
-                let filename = store.get_value(&child, Column::Filename as i32);
-                if filename.get::<&str>().is_err() {
-                    store.remove(&child);
-                    let dir: String = store.get(&iter, Column::Path as i32);
-                    populate_tree_nodes(&store, &state, &dir, Some(iter));
-                } else {
-                    // This directory is already populated, i.e. it has been expanded and collapsed
-                    // again. Rows further down the tree might have been silently collapsed without
-                    // getting an event. Update their folder icon.
-                    let mut tree_path = store.path(&child);
-                    while let Some(iter) = store.iter(&tree_path) {
-                        tree_path.next();
-                        let file_type: u8 = store.get(&iter, Column::FileType as i32);
-                        if file_type == FileType::Dir as u8 {
-                            store.set(&iter, &[(Column::IconName as u32, &ICON_FOLDER_CLOSED)]);
+        self.tree
+            .connect_test_expand_row(clone!(store, state_ref => move |_, iter, _| {
+                store.set(&iter, &[(Column::IconName as u32, &ICON_FOLDER_OPEN)]);
+                // We cannot recursively populate all directories. Instead, we have prepared a single
+                // empty child entry for all non-empty directories, so the row will be expandable. Now,
+                // when a directory is expanded, populate its children.
+                let state = state_ref.borrow();
+                if let Some(child) = store.iter_children(Some(iter)) {
+                    let filename = store.get_value(&child, Column::Filename as i32);
+                    if filename.get::<&str>().is_err() {
+                        store.remove(&child);
+                        let dir: String = store.get(&iter, Column::Path as i32);
+                        populate_tree_nodes(&store, &state, &dir, Some(iter));
+                    } else {
+                        // This directory is already populated, i.e. it has been expanded and collapsed
+                        // again. Rows further down the tree might have been silently collapsed without
+                        // getting an event. Update their folder icon.
+                        let mut tree_path = store.path(&child);
+                        while let Some(iter) = store.iter(&tree_path) {
+                            tree_path.next();
+                            let file_type: u8 = store.get(&iter, Column::FileType as i32);
+                            if file_type == FileType::Dir as u8 {
+                                store.set(&iter, &[(Column::IconName as u32, &ICON_FOLDER_CLOSED)]);
+                            }
                         }
                     }
                 }
-            }
-            Inhibit(false)
-        }));
+                Inhibit(false)
+            }));
 
-        self.tree.connect_row_collapsed(clone!(store => move |_, iter, _| {
-            store.set(&iter, &[(Column::IconName as u32, &ICON_FOLDER_CLOSED)]);
-        }));
+        self.tree
+            .connect_row_collapsed(clone!(store => move |_, iter, _| {
+                store.set(&iter, &[(Column::IconName as u32, &ICON_FOLDER_CLOSED)]);
+            }));
 
         // Further initialization.
         self.init_actions();
@@ -341,8 +338,8 @@ impl FileBrowserWidget {
         let state_ref = &self.state;
         let shell_state_ref = &self.shell_state;
 
-        self.tree.connect_row_activated(
-            clone!(store, shell_state_ref => move |tree, path, _| {
+        self.tree
+            .connect_row_activated(clone!(store, shell_state_ref => move |tree, path, _| {
                 let iter = store.iter(path).unwrap();
                 let file_type: u8 = store.get(&iter, Column::FileType as i32);
                 let file_path: String = store.get(&iter, Column::Path as i32);
@@ -359,26 +356,26 @@ impl FileBrowserWidget {
 
                     shell_state_ref.borrow().open_file(&file_path);
                 }
-            })
-        );
+            }));
 
         // Connect directory list.
         let dir_list_model = &self.comps.dir_list_model;
         self.comps.dir_list.connect_changed(
             clone!(state_ref, dir_list_model, store => move |dir_list| {
-                if let Some(iter) = dir_list.active_iter() {
-                    let dir: String = dir_list.model().unwrap().get(&iter, 2);
-                    let mut state_ref = state_ref.borrow_mut();
-                    let current_dir = &mut state_ref.current_dir;
+                    if let Some(iter) = dir_list.active_iter() {
+                        let dir: String = dir_list.model().unwrap().get(&iter, 2);
+                        let mut state_ref = state_ref.borrow_mut();
+                        let current_dir = &mut state_ref.current_dir;
 
-                    if dir != *current_dir {
-                        *current_dir = dir.to_owned();
-                        update_dir_list(&dir, &dir_list_model, &dir_list);
-                        tree_reload(&store, &*state_ref);
+                        if dir != *current_dir {
+                            *current_dir = dir.to_owned();
+                            update_dir_list(&dir, &dir_list_model, &dir_list);
+                            tree_reload(&store, &*state_ref);
+                        }
                     }
                 }
-            }
-        ));
+            ),
+        );
 
         let context_menu = &self.comps.context_menu;
         let cd_action = &self.comps.cd_action;
@@ -430,9 +427,8 @@ fn open_context_menu<E>(
     store: &gtk::TreeStore,
     context_menu: &gtk::PopoverMenu,
     cd_action: &gio::SimpleAction,
-)
-where
-    E: glib::IsA<gtk::EventController>
+) where
+    E: glib::IsA<gtk::EventController>,
 {
     // Open context menu on right click.
     context_menu.set_pointing_to(Some(&gdk::Rectangle::new(
@@ -466,7 +462,8 @@ fn cmp_dirs_first(lhs: &DirEntry, rhs: &DirEntry) -> io::Result<Ordering> {
     let lhs_metadata = fs::metadata(lhs.path())?;
     let rhs_metadata = fs::metadata(rhs.path())?;
     if lhs_metadata.is_dir() == rhs_metadata.is_dir() {
-        Ok(lhs.path()
+        Ok(lhs
+            .path()
             .to_string_lossy()
             .to_lowercase()
             .cmp(&rhs.path().to_string_lossy().to_lowercase()))
@@ -529,22 +526,14 @@ fn update_dir_list(dir: &str, dir_list_model: &gtk::TreeStore, dir_list: &gtk::C
             // Update dir_list entry.
             dir_list_model.set(
                 &current_iter,
-                &[
-                    (0, &dir_name),
-                    (1, &ICON_FOLDER_CLOSED),
-                    (2, &path_str)
-                ],
+                &[(0, &dir_name), (1, &ICON_FOLDER_CLOSED), (2, &path_str)],
             );
         } else {
             // We reached the last component of the new cwd path. Set the active entry of dir_list
             // to this one.
             dir_list_model.set(
                 &current_iter,
-                &[
-                    (0, &dir_name),
-                    (1, &ICON_FOLDER_OPEN),
-                    (2, &path_str),
-                ],
+                &[(0, &dir_name), (1, &ICON_FOLDER_OPEN), (2, &path_str)],
             );
             dir_list.set_active_iter(Some(&current_iter));
         };

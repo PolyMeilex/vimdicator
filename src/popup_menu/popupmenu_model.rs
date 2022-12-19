@@ -1,18 +1,9 @@
 use lazy_static::lazy_static;
 
-use gio::{
-    self,
-    prelude::*,
-    subclass::prelude::*,
-};
+use gio::{self, prelude::*, subclass::prelude::*};
 use glib;
 
-use std::{
-    cell::RefCell,
-    convert::*,
-    rc::Rc,
-    ops::Deref,
-};
+use std::{cell::RefCell, convert::*, ops::Deref, rc::Rc};
 
 use crate::nvim::PopupMenuItem;
 
@@ -41,15 +32,13 @@ impl ObjectSubclass for PopupMenuModelObject {
 impl ObjectImpl for PopupMenuModelObject {
     fn properties() -> &'static [glib::ParamSpec] {
         lazy_static! {
-            static ref PROPERTIES: Vec<glib::ParamSpec> = vec![
-                glib::ParamSpecObject::new(
-                    "items",
-                    "PopupMenu items",
-                    "A reference to the list of completion items",
-                    glib::BoxedAnyObject::static_type(),
-                    glib::ParamFlags::WRITABLE,
-                )
-            ];
+            static ref PROPERTIES: Vec<glib::ParamSpec> = vec![glib::ParamSpecObject::new(
+                "items",
+                "PopupMenu items",
+                "A reference to the list of completion items",
+                glib::BoxedAnyObject::static_type(),
+                glib::ParamFlags::WRITABLE,
+            )];
         }
 
         PROPERTIES.as_ref()
@@ -57,12 +46,13 @@ impl ObjectImpl for PopupMenuModelObject {
 
     fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
-            "items" =>
+            "items" => {
                 *self.0.borrow_mut() = value
                     .get::<glib::BoxedAnyObject>()
                     .unwrap()
                     .borrow::<Rc<Vec<PopupMenuItem>>>()
-                    .clone(),
+                    .clone()
+            }
             _ => unreachable!(),
         }
     }
@@ -71,9 +61,8 @@ impl ObjectImpl for PopupMenuModelObject {
 impl ListModelImpl for PopupMenuModelObject {
     fn item(&self, position: u32) -> Option<glib::Object> {
         let items = self.0.borrow();
-        PopupMenuItemRef::new(&items, position as usize).map(|c| {
-            glib::BoxedAnyObject::new(c).upcast()
-        })
+        PopupMenuItemRef::new(&items, position as usize)
+            .map(|c| glib::BoxedAnyObject::new(c).upcast())
     }
 
     fn n_items(&self) -> u32 {
@@ -93,7 +82,10 @@ pub struct PopupMenuItemRef {
 
 impl PopupMenuItemRef {
     pub fn new(array: &Rc<Vec<PopupMenuItem>>, pos: usize) -> Option<Self> {
-        array.get(pos).map(|_| Self { array: array.clone(), pos })
+        array.get(pos).map(|_| Self {
+            array: array.clone(),
+            pos,
+        })
     }
 }
 

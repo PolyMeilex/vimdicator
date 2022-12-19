@@ -2,10 +2,7 @@ use std::cell::*;
 
 use crate::color;
 
-use gsk::{
-    self,
-    graphene,
-};
+use gsk::{self, graphene};
 use pango;
 
 #[derive(Clone)]
@@ -54,19 +51,23 @@ impl Item {
                 &self.font,
                 self.glyphs.borrow_mut().as_mut().unwrap(),
                 &color.into(),
-                &graphene::Point::new(x, y)
+                &graphene::Point::new(x, y),
             );
             *render_node = Some(new_render_node.clone());
             new_render_node
         }
     }
 
-    pub fn new_render_node(&self, color: &color::Color, (x, y): (f32, f32)) -> Option<gsk::TextNode> {
+    pub fn new_render_node(
+        &self,
+        color: &color::Color,
+        (x, y): (f32, f32),
+    ) -> Option<gsk::TextNode> {
         gsk::TextNode::new(
             &self.font,
             &mut self.glyphs().as_ref().unwrap().clone(),
             &color.into(),
-            &graphene::Point::new(x, y)
+            &graphene::Point::new(x, y),
         )
     }
 

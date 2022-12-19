@@ -1,43 +1,42 @@
 mod client;
+mod ext;
 mod handler;
 mod redraw_handler;
-mod ext;
 
-pub use self::redraw_handler::{PopupMenuItem, NvimCommand, RedrawMode, PendingPopupMenu};
 pub use self::client::NeovimClient;
 pub use self::ext::*;
 pub use self::handler::NvimHandler;
+pub use self::redraw_handler::{NvimCommand, PendingPopupMenu, PopupMenuItem, RedrawMode};
 
 use std::{
-    error, fmt, env, result,
     convert::TryFrom,
-    time::Duration,
+    env, error, fmt,
+    future::Future,
+    ops::{Deref, DerefMut},
     pin::Pin,
     process::Stdio,
-    task::{Context, Poll},
-    ops::{Deref, DerefMut},
-    future::Future,
+    result,
     sync::Arc,
+    task::{Context, Poll},
+    time::Duration,
 };
 
 use tokio::{
     io::{self, AsyncWrite},
-    process::{Command, ChildStdin},
-    time::{timeout, error::Elapsed},
-    task::JoinHandle,
+    process::{ChildStdin, Command},
     runtime::Runtime,
+    task::JoinHandle,
+    time::{error::Elapsed, timeout},
 };
 use tokio_util::compat::*;
 
-use futures::future::{
-    FutureExt, BoxFuture,
-};
+use futures::future::{BoxFuture, FutureExt};
 
 use nvim_rs::{
     self,
-    UiAttachOptions, Value,
-    error::{LoopError, CallError, DecodeError},
     compat::tokio::Compat,
+    error::{CallError, DecodeError, LoopError},
+    UiAttachOptions, Value,
 };
 
 use crate::nvim_config::NvimConfig;
@@ -150,7 +149,7 @@ impl AsyncWrite for NvimWriter {
     fn poll_write(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-        buf: &[u8]
+        buf: &[u8],
     ) -> Poll<io::Result<usize>> {
         match *self {
             Self::ChildProcess(ref mut stdin) => Pin::new(stdin).poll_write(cx, buf),
@@ -188,20 +187,24 @@ impl NvimSession {
         handler: NvimHandler,
         timeout: Duration,
     ) -> Result<(NvimSession, BoxFuture<'a, Result<(), Box<LoopError>>>), NvimInitError> {
-        let runtime = Arc::new(
-            Runtime::new().map_err(|e| NvimInitError::new(&cmd, e))?
-        );
-        let mut child = runtime.block_on(async move {
-            cmd.spawn().map_err(|e| NvimInitError::new(&cmd, e))
-        })?;
+        let runtime = Arc::new(Runtime::new().map_err(|e| NvimInitError::new(&cmd, e))?);
+        let mut child = runtime
+            .block_on(async move { cmd.spawn().map_err(|e| NvimInitError::new(&cmd, e)) })?;
 
         let (nvim, io_future) = Neovim::new(
             child.stdout.take().unwrap().compat(),
             NvimWriter::from(child.stdin.take().unwrap()).compat_write(),
-            handler
+            handler,
         );
 
-        Ok((Self { nvim, timeout, runtime }, io_future.boxed()))
+        Ok((
+            Self {
+                nvim,
+                timeout,
+                runtime,
+            },
+            io_future.boxed(),
+        ))
     }
 
     /// Wrap a future from an RPC call to neovim within a timeout
@@ -242,20 +245,18 @@ impl NvimSession {
     #[doc(hidden)]
     pub fn spawn_timeout<F, T>(&self, f: F) -> JoinHandle<()>
     where
-        F: Future<Output = Result<T, Box<CallError>>> + Send + 'static
+        F: Future<Output = Result<T, Box<CallError>>> + Send + 'static,
     {
         let nvim = self.clone();
 
-        self.spawn(async move {
-            nvim.timeout(f).await.report_err()
-        })
+        self.spawn(async move { nvim.timeout(f).await.report_err() })
     }
 
     #[doc(hidden)]
     pub fn spawn_timeout_user_err<F, T>(&self, f: F) -> JoinHandle<()>
     where
         F: Future<Output = Result<T, Box<CallError>>> + Send + 'static,
-        T: Send
+        T: Send,
     {
         let nvim = self.clone();
 
@@ -274,7 +275,9 @@ impl NvimSession {
     /// Shutdown this neovim session by executing the relevant autocommands, and then closing our
     /// RPC channel with the Neovim instance.
     pub async fn shutdown(&self) {
-        self.timeout(self.command("doau VimLeavePre|doau VimLeave")).await.report_err();
+        self.timeout(self.command("doau VimLeavePre|doau VimLeave"))
+            .await
+            .report_err();
 
         let chan = self
             .timeout(self.get_api_info())
@@ -283,7 +286,9 @@ impl NvimSession {
             .and_then(|v| v[0].as_i64())
             .expect("Couldn't retrieve current channel for closing");
 
-        let res = self.timeout(self.command(&format!("cal chanclose({})", chan))).await;
+        let res = self
+            .timeout(self.command(&format!("cal chanclose({})", chan)))
+            .await;
         if let Err(ref e) = res {
             if let SessionError::CallError(ref e) = *e {
                 if let CallError::DecodeError(ref e, _) = **e {
@@ -321,7 +326,8 @@ impl DerefMut for NvimSession {
 
 /// Wrap a future with a timeout, and spawn it on this session's tokio runtime, then report any
 /// resulting errors to the console.
-#[macro_export] macro_rules! spawn_timeout {
+#[macro_export]
+macro_rules! spawn_timeout {
     ($nvim:ident.$fn:ident($( $a:expr ),*)) => {
         let nvim = $nvim.clone();
         $nvim.spawn_timeout(async move { nvim.$fn($( $a ),*).await })
@@ -331,7 +337,8 @@ impl DerefMut for NvimSession {
 /// Wrap a future with a timeout, and spawn it on this session's tokio runtime, then report any
 /// non-normal (see `NormalError` for more info) errors to the console. Any normal errors will be
 /// printed as error messages in Neovim.
-#[macro_export] macro_rules! spawn_timeout_user_err {
+#[macro_export]
+macro_rules! spawn_timeout_user_err {
     ($nvim:ident.$fn:ident($( $a:expr ),*)) => {
         let nvim = $nvim.clone();
         $nvim.spawn_timeout_user_err(async move { nvim.$fn($( $a ),*).await })
@@ -356,8 +363,10 @@ pub fn start<'a>(
         .arg("--cmd")
         .arg("let g:GtkGuiLoaded = 1")
         .arg("--cmd")
-        .arg(&format!("let &rtp.=',{}'",
-                      env::var("NVIM_GTK_RUNTIME_PATH").unwrap_or(env!("RUNTIME_PATH").into())))
+        .arg(&format!(
+            "let &rtp.=',{}'",
+            env::var("NVIM_GTK_RUNTIME_PATH").unwrap_or(env!("RUNTIME_PATH").into())
+        ))
         .stderr(Stdio::inherit())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped());
@@ -398,25 +407,29 @@ pub async fn post_start_init(
         version_info,
         "ui",
         vec![],
-        vec![
-            ("license".into(), env!("CARGO_PKG_LICENSE").into()),
-        ]))
-        .await.map_err(NvimInitError::new_post_init)?;
+        vec![("license".into(), env!("CARGO_PKG_LICENSE").into())],
+    ))
+    .await
+    .map_err(NvimInitError::new_post_init)?;
 
-    nvim.timeout(nvim.ui_attach(
+    nvim.timeout(
+        nvim.ui_attach(
             cols.into(),
             rows.into(),
             UiAttachOptions::new()
-            .set_popupmenu_external(true)
-            .set_tabline_external(true)
-            .set_linegrid_external(true)
-            .set_hlstate_external(true)
-            .set_termcolors_external(true)
-        ))
+                .set_popupmenu_external(true)
+                .set_tabline_external(true)
+                .set_linegrid_external(true)
+                .set_hlstate_external(true)
+                .set_termcolors_external(true),
+        ),
+    )
+    .await
+    .map_err(NvimInitError::new_post_init)?;
+
+    nvim.timeout(nvim.command("runtime! ginit.vim"))
         .await
         .map_err(NvimInitError::new_post_init)?;
-
-    nvim.timeout(nvim.command("runtime! ginit.vim")).await.map_err(NvimInitError::new_post_init)?;
 
     if let Some(input_data) = input_data {
         let buf = nvim.timeout(nvim.get_current_buf()).await.ok_and_report();
@@ -426,8 +439,10 @@ pub async fn post_start_init(
                 0,
                 0,
                 true,
-                input_data.lines().map(|l| l.to_owned()).collect()
-            )).await.report_err();
+                input_data.lines().map(|l| l.to_owned()).collect(),
+            ))
+            .await
+            .report_err();
         }
     }
 

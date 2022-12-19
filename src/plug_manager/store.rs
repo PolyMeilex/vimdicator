@@ -1,7 +1,7 @@
 use toml;
 
-use crate::settings::SettingsLoader;
 use super::vim_plug;
+use crate::settings::SettingsLoader;
 
 #[derive(Default)]
 pub struct Store {
@@ -18,7 +18,9 @@ impl Store {
     }
 
     pub fn load() -> Self {
-        Store { settings: Settings::load() }
+        Store {
+            settings: Settings::load(),
+        }
     }
 
     pub fn load_from_plug(vim_plug: &vim_plug::Manager) -> Self {
@@ -65,9 +67,11 @@ impl Store {
 
     pub fn add_plug(&mut self, plug: PlugInfo) -> bool {
         let path = plug.get_plug_path();
-        if self.settings.plugs.iter().any(|p| {
-            p.get_plug_path() == path || p.name == plug.name
-        })
+        if self
+            .settings
+            .plugs
+            .iter()
+            .any(|p| p.get_plug_path() == path || p.name == plug.name)
         {
             return false;
         }
@@ -81,10 +85,9 @@ impl Store {
 
     pub fn move_item(&mut self, idx: usize, offset: i32) {
         let plug = self.settings.plugs.remove(idx);
-        self.settings.plugs.insert(
-            (idx as i32 + offset) as usize,
-            plug,
-        );
+        self.settings
+            .plugs
+            .insert((idx as i32 + offset) as usize, plug);
     }
 }
 
@@ -138,7 +141,8 @@ impl PlugInfo {
 
     pub fn get_plug_path(&self) -> String {
         if self.url.contains("github.com") {
-            let mut path_comps: Vec<&str> = self.url
+            let mut path_comps: Vec<&str> = self
+                .url
                 .trim_end_matches(".git")
                 .rsplit('/')
                 .take(2)

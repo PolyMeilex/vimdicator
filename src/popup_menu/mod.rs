@@ -1,11 +1,11 @@
-mod popupmenu_model;
 mod list_row;
+mod popupmenu_model;
 
 use std::cell::RefCell;
 use std::convert::*;
 use std::iter;
-use std::rc::Rc;
 use std::ops::Deref;
+use std::rc::Rc;
 
 use unicode_width::*;
 
@@ -14,14 +14,14 @@ use gtk;
 use gtk::prelude::*;
 
 use crate::{
-    render::{self, CellMetrics},
     highlight::HighlightMap,
-    nvim::{self, ErrorReport, NeovimClient, PopupMenuItem, PendingPopupMenu},
+    nvim::{self, ErrorReport, NeovimClient, PendingPopupMenu, PopupMenuItem},
+    render::{self, CellMetrics},
     shell::RenderState,
     ui_model::ModelRect,
 };
-use popupmenu_model::{PopupMenuModel, PopupMenuItemRef};
 use list_row::{PopupMenuListRow, PopupMenuListRowState, PADDING};
+use popupmenu_model::{PopupMenuItemRef, PopupMenuModel};
 
 pub const MAX_VISIBLE_ROWS: i32 = 10;
 
@@ -59,7 +59,7 @@ impl State {
         gtk::StyleContext::add_provider_for_display(
             &list_view.display(),
             &css_provider,
-            gtk::STYLE_PROVIDER_PRIORITY_APPLICATION
+            gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
         );
 
         let item_scroll = gtk::ScrolledWindow::builder()
@@ -121,7 +121,8 @@ impl State {
 
         self.info_scroll.set_max_content_width(max_width);
         self.item_scroll.set_max_content_width(max_width);
-        self.item_scroll.set_max_content_height(self.row_height as i32 * MAX_VISIBLE_ROWS);
+        self.item_scroll
+            .set_max_content_height(self.row_height as i32 * MAX_VISIBLE_ROWS);
         self.item_scroll.hadjustment().set_value(0.0);
 
         self.select(selected);
@@ -179,9 +180,8 @@ impl State {
         }
 
         if !max_menu.is_empty() {
-            let space_left = ctx.max_width
-                - row_state.word_col_width
-                - row_state.kind_col_width.unwrap_or(0);
+            let space_left =
+                ctx.max_width - row_state.word_col_width - row_state.kind_col_width.unwrap_or(0);
 
             layout.set_text(&max_menu);
             row_state.menu_col_width =
@@ -196,7 +196,11 @@ impl State {
             return;
         }
 
-        let CellMetrics { pango_ascent, pango_descent, .. } = ctx.font_ctx.cell_metrics();
+        let CellMetrics {
+            pango_ascent,
+            pango_descent,
+            ..
+        } = ctx.font_ctx.cell_metrics();
 
         // FIXME: We're still doing something with with what we do for calculating
         // CellMetrics.char_height, since using it here doesn't seem to get the right value for
@@ -207,7 +211,8 @@ impl State {
         self.limit_column_widths(&ctx);
 
         self.items = Rc::new(ctx.menu_items);
-        self.list_model.set_model(Some(&PopupMenuModel::new(&self.items)));
+        self.list_model
+            .set_model(Some(&PopupMenuModel::new(&self.items)));
     }
 
     fn update_css(&self, hl: &HighlightMap, font_ctx: &render::Context) {
@@ -327,13 +332,17 @@ impl PopupMenu {
         });
         item_factory.connect_bind(|_, list_item| {
             let row: PopupMenuListRow = list_item.child().unwrap().downcast().unwrap();
-            row.set_row(list_item.item().map(|obj| {
-                obj
-                    .downcast::<glib::BoxedAnyObject>()
-                    .unwrap()
-                    .borrow::<PopupMenuItemRef>()
-                    .clone()
-            }).as_ref());
+            row.set_row(
+                list_item
+                    .item()
+                    .map(|obj| {
+                        obj.downcast::<glib::BoxedAnyObject>()
+                            .unwrap()
+                            .borrow::<PopupMenuItemRef>()
+                            .clone()
+                    })
+                    .as_ref(),
+            );
         });
         item_factory.connect_unbind(|_, list_item| {
             let row: PopupMenuListRow = list_item.child().unwrap().downcast().unwrap();
@@ -341,17 +350,18 @@ impl PopupMenu {
         });
 
         state_ref.list_view.set_factory(Some(&item_factory));
-        state_ref.list_view.connect_activate(glib::clone!(@weak state => move |_, idx| {
-            list_select(&mut state.borrow_mut(), idx, "<C-y>");
-        }));
+        state_ref
+            .list_view
+            .connect_activate(glib::clone!(@weak state => move |_, idx| {
+                list_select(&mut state.borrow_mut(), idx, "<C-y>");
+            }));
         let list_model = state_ref.list_model.clone();
-        state_ref.list_view.connect_unmap(move |_| list_model.set_model(None::<&PopupMenuModel>));
+        state_ref
+            .list_view
+            .connect_unmap(move |_| list_model.set_model(None::<&PopupMenuModel>));
 
         drop(state_ref);
-        PopupMenu {
-            popover,
-            state,
-        }
+        PopupMenu { popover, state }
     }
 
     pub fn is_open(&self) -> bool {
@@ -363,16 +373,13 @@ impl PopupMenu {
         state.open = true;
 
         self.popover.set_pointing_to(Some(&gdk::Rectangle::new(
-            ctx.x,
-            ctx.y,
-            ctx.width,
-            ctx.height
+            ctx.x, ctx.y, ctx.width, ctx.height,
         )));
         state.before_show(ctx);
         self.popover.popup();
     }
 
-    pub fn hide(& self) {
+    pub fn hide(&self) {
         self.state.borrow_mut().open = false;
         // popdown() in case of fast hide/show
         // situation does not work and just close popup window
@@ -398,7 +405,7 @@ impl PopupMenu {
         pending: PendingPopupMenu,
         nvim: &Rc<NeovimClient>,
         render_state: &Rc<RefCell<RenderState>>,
-        max_popup_width: i32
+        max_popup_width: i32,
     ) {
         match pending {
             PendingPopupMenu::Show {
@@ -453,11 +460,7 @@ pub struct PopupMenuContext<'a> {
     pub max_width: i32,
 }
 
-pub fn list_select(
-    state: &mut State,
-    idx: u32,
-    last_command: &str
-) {
+pub fn list_select(state: &mut State, idx: u32, last_command: &str) {
     if let Some(nvim) = state.nvim.as_ref().unwrap().nvim() {
         let prev = state.prev_selected.map(|p| p as i32).unwrap_or(-1); // TODO: verify this is right
         let idx = idx.try_into().unwrap();

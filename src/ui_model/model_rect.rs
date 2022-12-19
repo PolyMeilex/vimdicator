@@ -246,5 +246,4 @@ mod tests {
         assert_eq!(2, rect.bot);
         assert_eq!(2, rect.right);
     }
-
 }

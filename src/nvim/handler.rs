@@ -4,19 +4,16 @@ use std::{
     time::Duration,
 };
 
-use nvim_rs::{
-    Handler, Value,
-    compat::tokio::Compat,
-};
+use nvim_rs::{compat::tokio::Compat, Handler, Value};
 
 use async_trait::async_trait;
 
-use crate::ui::UiMutex;
+use crate::nvim::{Neovim, NvimWriter};
 use crate::shell;
-use crate::nvim::{NvimWriter, Neovim};
+use crate::ui::UiMutex;
 use glib;
 
-use super::redraw_handler::{self, RedrawMode, PendingPopupMenu};
+use super::redraw_handler::{self, PendingPopupMenu, RedrawMode};
 
 pub struct NvimHandler {
     shell: Arc<UiMutex<shell::State>>,
@@ -26,10 +23,7 @@ pub struct NvimHandler {
 }
 
 impl NvimHandler {
-    pub fn new(
-        shell: Arc<UiMutex<shell::State>>,
-        resize_status: Arc<shell::ResizeState>,
-    ) -> Self {
+    pub fn new(shell: Arc<UiMutex<shell::State>>, resize_status: Arc<shell::ResizeState>) -> Self {
         NvimHandler {
             shell,
             resize_status,
@@ -188,19 +182,23 @@ fn call_redraw_handler(
         let ev_name = match args_iter.next() {
             Some(ev_name) => ev_name,
             None => {
-                error!("No name provided with redraw event, args: {:?}", args_iter.as_slice());
+                error!(
+                    "No name provided with redraw event, args: {:?}",
+                    args_iter.as_slice()
+                );
                 continue;
-            },
+            }
         };
         let ev_name = match ev_name.as_str() {
             Some(ev_name) => ev_name,
             None => {
                 error!(
                     "Expected event name to be str, instead got {:?}. Args: {:?}",
-                    ev_name, args_iter.as_slice()
+                    ev_name,
+                    args_iter.as_slice()
                 );
                 continue;
-            },
+            }
         };
 
         for local_args in args_iter {
@@ -237,8 +235,7 @@ where
     });
 }
 
-impl Clone for NvimHandler
-{
+impl Clone for NvimHandler {
     fn clone(&self) -> Self {
         NvimHandler {
             shell: self.shell.clone(),
@@ -260,7 +257,7 @@ impl Handler for NvimHandler {
         &self,
         name: String,
         args: Vec<Value>,
-        _: Neovim
+        _: Neovim,
     ) -> result::Result<Value, Value> {
         self.nvim_cb_req(name, args)
     }

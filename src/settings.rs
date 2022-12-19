@@ -1,5 +1,5 @@
-use std::rc::{Rc, Weak};
 use std::cell::RefCell;
+use std::rc::{Rc, Weak};
 
 use crate::shell::Shell;
 #[cfg(unix)]
@@ -31,7 +31,9 @@ impl State {
 
     #[cfg(target_os = "windows")]
     pub fn new() -> State {
-        State { font_source: FontSource::Default }
+        State {
+            font_source: FontSource::Default,
+        }
     }
 
     #[cfg(unix)]
@@ -67,9 +69,9 @@ impl Settings {
     pub fn init(&mut self) {
         let shell = Weak::upgrade(self.shell.as_ref().unwrap()).unwrap();
         let state = self.state.clone();
-        self.state.borrow_mut().update_font(
-            &mut *shell.borrow_mut(),
-        );
+        self.state
+            .borrow_mut()
+            .update_font(&mut *shell.borrow_mut());
         self.state
             .borrow()
             .gnome_interface_settings
@@ -94,12 +96,12 @@ fn monospace_font_changed(mut shell: &mut Shell, state: &mut State) {
     }
 }
 
-use std::path::Path;
 use std::fs::File;
 use std::io::prelude::*;
+use std::path::Path;
 
-use toml;
 use serde;
+use toml;
 
 use crate::dirs;
 
@@ -139,9 +141,8 @@ fn load_from_file<T: SettingsLoader>(path: &Path) -> Result<T, String> {
     if path.exists() {
         let mut file = File::open(path).map_err(|e| format!("{}", e))?;
         let mut contents = String::new();
-        file.read_to_string(&mut contents).map_err(
-            |e| format!("{}", e),
-        )?;
+        file.read_to_string(&mut contents)
+            .map_err(|e| format!("{}", e))?;
         T::from_str(&contents)
     } else {
         Ok(Default::default())
@@ -153,7 +154,6 @@ fn load_err<T: SettingsLoader>() -> Result<T, String> {
     toml_path.push(T::SETTINGS_FILE);
     load_from_file(&toml_path)
 }
-
 
 fn save_err<T: SettingsLoader>(sl: &T) -> Result<(), String> {
     let mut toml_path = dirs::get_app_config_dir_create()?;

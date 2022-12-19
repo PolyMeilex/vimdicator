@@ -128,7 +128,7 @@ pub fn im_input(nvim: &NvimSession, input: &str) {
 pub fn gtk_key_press(
     nvim: &NvimSession,
     keyval: gdk::Key,
-    modifiers: gdk::ModifierType
+    modifiers: gdk::ModifierType,
 ) -> Inhibit {
     if let Some(input) = convert_key(keyval, modifiers) {
         debug!("nvim_input -> {}", input);

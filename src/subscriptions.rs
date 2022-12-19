@@ -2,9 +2,7 @@ use std::collections::HashMap;
 
 use nvim_rs::Value;
 
-use crate::{
-    nvim::NvimSession, spawn_timeout,
-};
+use crate::{nvim::NvimSession, spawn_timeout};
 
 /// A subscription to a Neovim autocmd event.
 struct Subscription {
@@ -166,7 +164,8 @@ impl Subscriptions {
                 arg.as_str()
                     .map(str::to_owned)
                     .or_else(|| arg.as_u64().map(|uint| uint.to_string()))
-            }).collect::<Option<Vec<String>>>()
+            })
+            .collect::<Option<Vec<String>>>()
             .ok_or("Error reading args")?;
         self.on_notify(&key, index, args);
         Ok(())
@@ -189,7 +188,8 @@ impl Subscriptions {
                         .map(str::to_owned)
                         .or_else(|| val.as_u64().map(|uint: u64| format!("{}", uint)))
                 })
-            }).collect::<Option<Vec<String>>>();
+            })
+            .collect::<Option<Vec<String>>>();
         if let Some(args) = args {
             self.on_notify(&handle.key, handle.index, args);
         } else {

@@ -1,14 +1,9 @@
-use std::{
-    mem, result,
-    convert::*,
-    num::ParseFloatError,
-    sync::Arc,
-};
+use std::{convert::*, mem, num::ParseFloatError, result, sync::Arc};
 
 use nvim_rs::Value;
 
-use crate::shell;
 use crate::nvim::Tabpage;
+use crate::shell;
 use crate::ui::UiMutex;
 
 use rmpv;
@@ -156,10 +151,13 @@ macro_rules! call {
 }
 
 fn set_ui_opt(ui: &mut shell::State, opts: &[&str], val: bool) -> Result<(), String> {
-    let nvim = ui.nvim().ok_or_else(|| "Nvim should be initialized by now, but isn't".to_owned())?;
+    let nvim = ui
+        .nvim()
+        .ok_or_else(|| "Nvim should be initialized by now, but isn't".to_owned())?;
 
     for opt in opts {
-        nvim.block_timeout(nvim.ui_set_option(opt, val.into())).map_err(|e| e.to_string())?;
+        nvim.block_timeout(nvim.ui_set_option(opt, val.into()))
+            .map_err(|e| e.to_string())?;
     }
     Ok(())
 }
@@ -195,8 +193,12 @@ pub fn call_gui_event(
 
                 set_ui_opt(ui, &["ext_tabline"], arg)?;
                 ui.set_tabline(arg);
-            },
-            "Cmdline" => set_ui_opt(ui, &["ext_cmdline", "ext_wildmenu"], try_uint!(args[1]) == 1)?,
+            }
+            "Cmdline" => set_ui_opt(
+                ui,
+                &["ext_cmdline", "ext_wildmenu"],
+                try_uint!(args[1]) == 1,
+            )?,
             opt => error!("Unknown option {}", opt),
         },
         "Command" => {
@@ -213,11 +215,14 @@ pub fn call_gui_event(
                         .map_err(|e: ParseFloatError| e.to_string())?,
                 )),
                 "PreferDarkTheme" => {
-                    let prefer_dark_theme =
-                        match try_str!(args.get(1).cloned().unwrap_or_else(|| Value::from("off"))) {
-                            "on" => true,
-                            _ => false,
-                        };
+                    let prefer_dark_theme = match try_str!(args
+                        .get(1)
+                        .cloned()
+                        .unwrap_or_else(|| Value::from("off")))
+                    {
+                        "on" => true,
+                        _ => false,
+                    };
 
                     ui.on_command(NvimCommand::PreferDarkTheme(prefer_dark_theme))
                 }
@@ -301,11 +306,9 @@ pub fn call(
             let menu_items_in = into_array!(
                 iter.next().ok_or("Menu list array is missing")?,
                 "Failed to get menu list array",
-                |item| into_array!(
-                    item,
-                    "Failed to get menu item array",
-                    |col| try_string!(col)
-                )
+                |item| into_array!(item, "Failed to get menu item array", |col| try_string!(
+                    col
+                ))
             )?;
 
             // XXX: Use try_collect() when that stabilizes
@@ -365,7 +368,7 @@ pub fn call(
             debug!("Flush ({:?})", ui.pending_redraw);
             flush = true;
             ui.pending_redraw
-        },
+        }
         _ => {
             warn!("Event {}({:?})", method, args);
             RedrawMode::Nothing
@@ -401,7 +404,10 @@ impl PendingPopupMenu {
             return;
         }
 
-        if let Self::Show { ref mut selected, .. } = self {
+        if let Self::Show {
+            ref mut selected, ..
+        } = self
+        {
             if let Self::Select(new_selected) = other {
                 *selected = new_selected;
                 return;
@@ -458,13 +464,25 @@ mod tests {
         test_val.update(PendingPopupMenu::Select(Some(1)));
         assert_eq!(
             test_val,
-            PendingPopupMenu::Show { items: vec![], selected: Some(1), pos: (0, 0) }
+            PendingPopupMenu::Show {
+                items: vec![],
+                selected: Some(1),
+                pos: (0, 0)
+            }
         );
 
-        test_val.update(PendingPopupMenu::Show { items: vec![], selected: None, pos: (1, 2) });
+        test_val.update(PendingPopupMenu::Show {
+            items: vec![],
+            selected: None,
+            pos: (1, 2),
+        });
         assert_eq!(
             test_val,
-            PendingPopupMenu::Show { items: vec![], selected: None, pos: (1, 2) }
+            PendingPopupMenu::Show {
+                items: vec![],
+                selected: None,
+                pos: (1, 2)
+            }
         );
 
         test_val.update(PendingPopupMenu::Hide);

@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
+use super::store::{PlugInfo, Store};
 use super::vim_plug;
-use super::store::{Store, PlugInfo};
 
 use crate::nvim::NeovimClient;
 

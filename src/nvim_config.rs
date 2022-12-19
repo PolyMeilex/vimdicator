@@ -1,6 +1,6 @@
-use std::path::PathBuf;
 use std::fs::{remove_file, OpenOptions};
 use std::io::Write;
+use std::path::PathBuf;
 
 use crate::dirs;
 use crate::plug_manager;
@@ -57,9 +57,8 @@ impl NvimConfig {
         let content = &self.plug_config.as_ref().unwrap().source;
         if !content.is_empty() {
             debug!("{}", content);
-            file.write_all(content.as_bytes()).map_err(
-                |e| format!("{}", e),
-            )?;
+            file.write_all(content.as_bytes())
+                .map_err(|e| format!("{}", e))?;
         }
 
         file.sync_all().map_err(|e| format!("{}", e))?;

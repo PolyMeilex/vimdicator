@@ -11,19 +11,16 @@ use crate::{
     ui_model,
 };
 
-use pango;
-use gtk::{
-    prelude::*,
-    graphene::Rect,
-};
 use gsk;
+use gtk::{graphene::Rect, prelude::*};
+use pango;
 
 /// A single step in a render plan
 #[derive(Clone, Copy)]
 struct RenderStep<'a> {
     color: &'a color::Color,
     kind: RenderStepKind,
-    len: usize, // (in cells)
+    len: usize,          // (in cells)
     pos: (usize, usize), // (rows, cols)
 }
 
@@ -33,7 +30,7 @@ impl<'a> RenderStep<'a> {
             color,
             kind,
             pos,
-            len: 1
+            len: 1,
         }
     }
 
@@ -59,11 +56,7 @@ impl<'a> RenderStep<'a> {
     }
 
     #[inline]
-    pub fn extend(
-        &mut self,
-        kind: RenderStepKind,
-        color: &'a color::Color,
-    ) -> bool {
+    pub fn extend(&mut self, kind: RenderStepKind, color: &'a color::Color) -> bool {
         if kind == self.kind && *color == *self.color {
             self.len += 1;
             true
@@ -117,7 +110,12 @@ pub fn snapshot_nvim(
             // us. Additionally, all optimizations are limited to each row. We do not for instance,
             // combine the background nodes of multiple identical adjacent rows.
             plan_and_snapshot_cell_bg(
-                &snapshot, &mut pending_bg, hl, cell, cell_metrics, (row, col)
+                &snapshot,
+                &mut pending_bg,
+                hl,
+                cell,
+                cell_metrics,
+                (row, col),
             );
             plan_underline_strikethrough(
                 &mut pending_strikethrough,
@@ -137,7 +135,14 @@ pub fn snapshot_nvim(
 
     for (row, line) in model.iter().enumerate() {
         for (col, cell) in line.line.iter().enumerate() {
-            snapshot_cell(&snapshot, &line.item_line[col], hl, cell, (row, col), cell_metrics);
+            snapshot_cell(
+                &snapshot,
+                &line.item_line[col],
+                hl,
+                cell,
+                (row, col),
+                cell_metrics,
+            );
         }
     }
 
@@ -162,9 +167,7 @@ pub fn snapshot_cursor<C: Cursor>(
 
     let cell_metrics = font_ctx.cell_metrics();
     let CellMetrics {
-        ascent,
-        char_width,
-        ..
+        ascent, char_width, ..
     } = *cell_metrics;
     let (cursor_row, cursor_col) = ui_model.get_cursor();
     let (x, y) = cell_metrics.get_coords((cursor_row, cursor_col));
@@ -221,9 +224,9 @@ pub fn snapshot_cursor<C: Cursor>(
         let cell_start_line_x = cell_start_col as f64 * char_width;
         for item in &*cursor_line.item_line[cell_start_col as usize] {
             if item.glyphs().is_some() {
-                if let Some(ref render_node) = item.new_render_node(
-                    &fg, (cell_start_line_x as f32, (y + ascent) as f32)
-                ) {
+                if let Some(ref render_node) =
+                    item.new_render_node(&fg, (cell_start_line_x as f32, (y + ascent) as f32))
+                {
                     snapshot.append_node(render_node);
                 }
             }
@@ -242,7 +245,7 @@ pub fn snapshot_cursor<C: Cursor>(
             cell_metrics,
             &undercurl_color(cell, hl).fade(hl.bg(), fade_percentage),
             (x, y),
-            clip_width
+            clip_width,
         );
     } else if cell.hl.underline {
         snapshot_underline(
@@ -250,7 +253,7 @@ pub fn snapshot_cursor<C: Cursor>(
             cell_metrics,
             &underline_color(cell, hl).fade(hl.bg(), fade_percentage),
             (x, y),
-            clip_width
+            clip_width,
         );
     }
 }
@@ -268,8 +271,8 @@ fn snapshot_strikethrough(
             x as f32,
             (y + cell_metrics.strikethrough_position) as f32,
             len as f32,
-            cell_metrics.strikethrough_thickness as f32
-        )
+            cell_metrics.strikethrough_thickness as f32,
+        ),
     )
 }
 
@@ -278,7 +281,7 @@ fn underline_rect(cell_metrics: &CellMetrics, (x, y): (f64, f64), len: f64) -> R
         x as f32,
         (y + cell_metrics.underline_position) as f32,
         len as f32,
-        cell_metrics.underline_thickness as f32
+        cell_metrics.underline_thickness as f32,
     )
 }
 
@@ -323,12 +326,17 @@ fn snapshot_undercurl(
     let rect = Rect::new(x as f32, y as f32, len as f32, diameter as f32);
     snapshot.push_repeat(
         &rect,
-        Some(&Rect::new(start_x as f32, y as f32, (diameter * 2.0) as f32, diameter as f32))
+        Some(&Rect::new(
+            start_x as f32,
+            y as f32,
+            (diameter * 2.0) as f32,
+            diameter as f32,
+        )),
     );
 
     let dot = gsk::RoundedRect::from_rect(
         Rect::new(start_x as f32, y as f32, diameter as f32, diameter as f32),
-        (diameter / 2.0) as f32
+        (diameter / 2.0) as f32,
     );
     snapshot.push_rounded_clip(&dot);
     snapshot.append_color(&color.into(), dot.bounds());
@@ -352,7 +360,11 @@ fn plan_and_snapshot_cell_bg<'a>(
             }
             cur_pending_bg.to_snapshot(snapshot, cell_metrics);
         }
-        *pending_bg = Some(RenderStep::new(RenderStepKind::Background, cell_bg, (row, col)));
+        *pending_bg = Some(RenderStep::new(
+            RenderStepKind::Background,
+            cell_bg,
+            (row, col),
+        ));
     } else if let Some(pending_bg) = pending_bg.take() {
         pending_bg.to_snapshot(snapshot, cell_metrics);
     }
@@ -417,7 +429,12 @@ fn snapshot_bg(
 ) {
     snapshot.append_color(
         &color.into(),
-        &Rect::new(x as f32, y as f32, len as f32, cell_metrics.line_height as f32)
+        &Rect::new(
+            x as f32,
+            y as f32,
+            len as f32,
+            cell_metrics.line_height as f32,
+        ),
     )
 }
 
@@ -435,9 +452,9 @@ fn snapshot_cell(
         let fg = hl.actual_cell_fg(cell);
 
         if item.glyphs().is_some() {
-            if let Some(render_node) = item.render_node(
-                fg.into(), (x as f32, (y + cell_metrics.ascent) as f32)
-            ) {
+            if let Some(render_node) =
+                item.render_node(fg.into(), (x as f32, (y + cell_metrics.ascent) as f32))
+            {
                 snapshot.append_node(render_node);
             }
         }

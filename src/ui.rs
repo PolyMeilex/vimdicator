@@ -9,9 +9,8 @@ use gio::prelude::*;
 use gio::{ApplicationCommandLine, Menu, MenuItem, SimpleAction};
 use glib::variant::FromVariant;
 use gtk::{
-    self,
-    prelude::*,
-    AboutDialog, ApplicationWindow, Button, HeaderBar, Orientation, Paned, Inhibit
+    self, prelude::*, AboutDialog, ApplicationWindow, Button, HeaderBar, Inhibit, Orientation,
+    Paned,
 };
 
 use toml;
@@ -23,7 +22,7 @@ use crate::nvim::*;
 use crate::plug_manager;
 use crate::project::Projects;
 use crate::settings::{Settings, SettingsLoader};
-use crate::shell::{self, Shell, ShellOptions, HeaderBarButtons, StartMode};
+use crate::shell::{self, HeaderBarButtons, Shell, ShellOptions, StartMode};
 use crate::shell_dlg;
 use crate::subscriptions::{SubscriptionHandle, SubscriptionKey};
 
@@ -98,7 +97,10 @@ impl Components {
     }
 
     pub fn saved_size(&self) -> (i32, i32) {
-        (self.window_state.current_width, self.window_state.current_height)
+        (
+            self.window_state.current_width,
+            self.window_state.current_height,
+        )
     }
 }
 
@@ -127,7 +129,12 @@ impl Ui {
         }
     }
 
-    pub fn init(&mut self, app: &gtk::Application, restore_win_state: bool, app_cmdline: Arc<Mutex<Option<ApplicationCommandLine>>>) {
+    pub fn init(
+        &mut self,
+        app: &gtk::Application,
+        restore_win_state: bool,
+        app_cmdline: Arc<Mutex<Option<ApplicationCommandLine>>>,
+    ) {
         if self.initialized {
             return;
         }
@@ -211,7 +218,7 @@ impl Ui {
                     file_browser_ref.borrow().set_visible(is_active);
                     comps_ref.borrow_mut().window_state.show_sidebar = is_active;
                 }
-            })
+            }),
         );
         app.add_action(&show_sidebar_action);
 
@@ -300,7 +307,9 @@ impl Ui {
             (options.post_config_cmds(), options.mode)
         };
 
-        state_ref.borrow().set_action_widgets(header_bar, file_browser_ref.borrow().clone());
+        state_ref
+            .borrow()
+            .set_action_widgets(header_bar, file_browser_ref.borrow().clone());
 
         shell.set_nvim_started_cb(Some(clone!(file_browser_ref => move || {
             Ui::nvim_started(
@@ -358,10 +367,10 @@ impl Ui {
                 commands.push(format!(
                     r"try|ar {}|cat /^Vim(\a\+):E325:/|endt",
                     files_list
-                    .iter()
-                    .map(|f| misc::escape_filename(f))
-                    .collect::<Box<_>>()
-                    .join(" ")
+                        .iter()
+                        .map(|f| misc::escape_filename(f))
+                        .collect::<Box<_>>()
+                        .join(" ")
                 ));
             } else {
                 commands.reserve(files_list.len() + post_config_cmds.len());
@@ -379,7 +388,9 @@ impl Ui {
         }
 
         commands.extend(
-            post_config_cmds.iter().map(|cmd| format!(r#"exec "{}""#, misc::viml_escape(cmd)))
+            post_config_cmds
+                .iter()
+                .map(|cmd| format!(r#"exec "{}""#, misc::viml_escape(cmd))),
         );
         debug!("{:?}", commands);
 
@@ -428,7 +439,12 @@ impl Ui {
                 glib::idle_add_once(clone!(projects => move || projects.borrow_mut().show()));
             }
             NvimCommand::ShowGtkInspector => {
-                comps.borrow().window.as_ref().unwrap().emit_enable_debugging(false);
+                comps
+                    .borrow()
+                    .window
+                    .as_ref()
+                    .unwrap()
+                    .emit_enable_debugging(false);
             }
             NvimCommand::ToggleSidebar => {
                 let action = sidebar_action.borrow();
@@ -459,7 +475,7 @@ impl Ui {
 
     fn create_header_bar(
         &self,
-        app: &gtk::Application
+        app: &gtk::Application,
     ) -> (SubscriptionHandle, Box<HeaderBarButtons>) {
         let header_bar_title = gtk::Label::builder()
             .css_classes(vec!["title".to_string()])
@@ -555,8 +571,7 @@ impl Ui {
             .build();
 
         // Make sure the child button isn't focusable either
-        btn
-            .first_child()
+        btn.first_child()
             .unwrap()
             .downcast::<gtk::ToggleButton>()
             .unwrap()
@@ -617,9 +632,16 @@ fn on_help_about(window: &gtk::ApplicationWindow) {
     let about = AboutDialog::new();
     about.set_transient_for(Some(window));
     about.set_program_name(Some("NeovimGtk"));
-    about.set_version(Some(crate::GIT_BUILD_VERSION.unwrap_or(env!("CARGO_PKG_VERSION"))));
+    about.set_version(Some(
+        crate::GIT_BUILD_VERSION.unwrap_or(env!("CARGO_PKG_VERSION")),
+    ));
     about.set_logo_icon_name(Some("org.daa.NeovimGtk"));
-    about.set_authors(env!("CARGO_PKG_AUTHORS").split(":").collect::<Vec<_>>().as_slice());
+    about.set_authors(
+        env!("CARGO_PKG_AUTHORS")
+            .split(":")
+            .collect::<Vec<_>>()
+            .as_slice(),
+    );
     about.set_comments(Some(misc::about_comments().as_str()));
     about.set_modal(true);
 
@@ -651,10 +673,12 @@ fn gtk_window_resize(
 ) {
     if !app_window.is_maximized() {
         match orientation {
-            gtk::Orientation::Horizontal =>
-                comps.window_state.current_width = app_window.size(gtk::Orientation::Horizontal),
-            gtk::Orientation::Vertical =>
-                comps.window_state.current_height = app_window.size(gtk::Orientation::Vertical),
+            gtk::Orientation::Horizontal => {
+                comps.window_state.current_width = app_window.size(gtk::Orientation::Horizontal)
+            }
+            gtk::Orientation::Vertical => {
+                comps.window_state.current_height = app_window.size(gtk::Orientation::Vertical)
+            }
             _ => unreachable!(),
         }
     }
@@ -680,7 +704,9 @@ fn set_background(shell: &RefCell<Shell>, args: Vec<String>) {
     state.borrow().set_background(background);
 
     // Neovim won't send us a redraw to update the default colors on the screen, so do it ourselves
-    glib::idle_add_once(clone!(state => move || state.borrow_mut().queue_draw(RedrawMode::ClearCache)));
+    glib::idle_add_once(
+        clone!(state => move || state.borrow_mut().queue_draw(RedrawMode::ClearCache)),
+    );
 }
 
 fn update_window_title(comps: &Arc<UiMutex<Components>>, args: Vec<String>) {
@@ -692,7 +718,8 @@ fn update_window_title(comps: &Arc<UiMutex<Components>>, args: Vec<String>) {
         || win_type == "loclist"
         || (win_type == "popup" && buf_type != "terminal")
         || win_type == "preview"
-        || win_type == "quickfix" {
+        || win_type == "quickfix"
+    {
         return;
     }
 

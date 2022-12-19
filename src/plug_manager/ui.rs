@@ -5,11 +5,7 @@ use std::sync::Arc;
 
 use crate::ui::UiMutex;
 
-use gtk::{
-    self,
-    prelude::*,
-    Inhibit,
-};
+use gtk::{self, prelude::*, Inhibit};
 
 use super::manager;
 use super::plugin_settings_dlg;
@@ -53,9 +49,7 @@ impl<'a> Ui<'a> {
             .build();
 
         let add_plug_btn = gtk::Button::with_label("Add..");
-        add_plug_btn
-            .style_context()
-            .add_class("suggested-action");
+        add_plug_btn.style_context().add_class("suggested-action");
         header_bar.pack_end(&add_plug_btn);
 
         let enable_swc = gtk::Switch::new();
@@ -206,13 +200,15 @@ fn populate_get_plugins(
         let panel = get_plugins.borrow();
         while let Some(ref child) = panel.first_child() {
             panel.remove(child);
-        };
+        }
         match res {
             Ok(list) => {
                 let result = vimawesome::build_result_panel(&list, move |new_plug| {
-                    glib::MainContext::new().spawn_local(clone!(manager, plugs_panel => async move {
-                        add_plugin(&manager, &*plugs_panel.borrow(), new_plug).await;
-                    }));
+                    glib::MainContext::new().spawn_local(
+                        clone!(manager, plugs_panel => async move {
+                            add_plugin(&manager, &*plugs_panel.borrow(), new_plug).await;
+                        }),
+                    );
                 });
                 panel.append(&result);
             }

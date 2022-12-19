@@ -1,7 +1,4 @@
-use std::{
-    cell::Cell,
-    sync::RwLock,
-};
+use std::{cell::Cell, sync::RwLock};
 
 use crate::nvim::NvimSession;
 

@@ -6,18 +6,18 @@ use std::iter;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use glib;
 use gtk;
 use gtk::prelude::*;
-use glib;
 use pango;
 
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::cursor;
 use crate::highlight::{Highlight, HighlightMap};
-use crate::nvim_viewport::NvimViewport;
 use crate::mode;
 use crate::nvim::{self, *};
+use crate::nvim_viewport::NvimViewport;
 use crate::popup_menu;
 use crate::render::{self, CellMetrics};
 use crate::shell;
@@ -240,7 +240,10 @@ pub struct CmdLine {
 }
 
 impl CmdLine {
-    pub fn new(nvim_viewport: &NvimViewport, render_state: Rc<RefCell<shell::RenderState>>) -> Self {
+    pub fn new(
+        nvim_viewport: &NvimViewport,
+        render_state: Rc<RefCell<shell::RenderState>>,
+    ) -> Self {
         let popover = gtk::Popover::new();
         popover.set_autohide(false);
         popover.set_position(gtk::PositionType::Right);
@@ -310,9 +313,7 @@ impl CmdLine {
 
         scroll.set_child(Some(&tree));
 
-        let controller = gtk::GestureClick::builder()
-            .button(1)
-            .build();
+        let controller = gtk::GestureClick::builder().button(1).build();
         controller.connect_pressed(clone!(state => move |controller, _, x, y| {
             let state = state.borrow_mut();
             let nvim = state.nvim.as_ref().unwrap().nvim();
@@ -349,7 +350,7 @@ impl CmdLine {
         if !self.displayed {
             self.displayed = true;
             self.popover.set_pointing_to(Some(&gdk::Rectangle::new(
-                ctx.x, ctx.y, ctx.width, ctx.height
+                ctx.x, ctx.y, ctx.width, ctx.height,
             )));
             self.popover.popup();
             state.cursor.as_mut().unwrap().start();
@@ -448,7 +449,8 @@ impl CmdLine {
                 .as_str(),
         ));
 
-        self.wild_renderer.set_foreground_rgba(Some(&render_state.hl.pmenu_fg().into()));
+        self.wild_renderer
+            .set_foreground_rgba(Some(&render_state.hl.pmenu_fg().into()));
 
         update_css(&self.wild_css_provider, &render_state.hl);
 
@@ -487,7 +489,13 @@ impl CmdLine {
             glib::idle_add_local_once(move || {
                 let selected_path = gtk::TreePath::from_string(&format!("{}", selected)).unwrap();
                 wild_tree.selection().select_path(&selected_path);
-                wild_tree.scroll_to_cell(Some(&selected_path), Option::<&gtk::TreeViewColumn>::None, false, 0.0, 0.0);
+                wild_tree.scroll_to_cell(
+                    Some(&selected_path),
+                    Option::<&gtk::TreeViewColumn>::None,
+                    false,
+                    0.0,
+                    0.0,
+                );
             });
         } else {
             self.wild_tree.selection().unselect_all();

@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use nvim_rs::Value;
+use std::collections::HashMap;
 
 #[derive(Clone, PartialEq)]
 pub enum NvimMode {
@@ -50,7 +50,6 @@ impl Mode {
     }
 }
 
-
 #[derive(Debug, PartialEq, Clone)]
 pub enum CursorShape {
     Block,
@@ -94,8 +93,13 @@ impl ModeInfo {
 
         Ok(ModeInfo {
             cursor_shape,
-            cell_percentage: mode_info_map.get("cell_percentage").and_then(|cp| cp.as_u64()),
-            blinkwait: mode_info_map.get("blinkwait").and_then(|cp| cp.as_u64()).map(|v| v as u32),
+            cell_percentage: mode_info_map
+                .get("cell_percentage")
+                .and_then(|cp| cp.as_u64()),
+            blinkwait: mode_info_map
+                .get("blinkwait")
+                .and_then(|cp| cp.as_u64())
+                .map(|v| v as u32),
         })
     }
 

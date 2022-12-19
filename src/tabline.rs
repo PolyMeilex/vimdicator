@@ -1,6 +1,6 @@
+use std::cell::RefCell;
 use std::ops::Deref;
 use std::rc::Rc;
-use std::cell::RefCell;
 
 use gtk;
 use gtk::prelude::*;
@@ -34,7 +34,8 @@ impl State {
         let target = &self.data[idx as usize];
         if Some(target) != self.selected.as_ref() {
             if let Some(nvim) = self.nvim.as_ref().unwrap().nvim() {
-                nvim.block_timeout(nvim.set_current_tabpage(&target)).report_err();
+                nvim.block_timeout(nvim.set_current_tabpage(&target))
+                    .report_err();
             }
         }
     }
@@ -137,8 +138,7 @@ impl Tabline {
                 let tabs = self.tabs.clone();
                 let state_ref = Rc::clone(&self.state);
                 close_btn.connect_clicked(move |btn| {
-                    let current_label = btn
-                        .parent().unwrap();
+                    let current_label = btn.parent().unwrap();
                     for i in 0..tabs.n_pages() {
                         let page = tabs.nth_page(Some(i)).unwrap();
                         let label = tabs.tab_label(&page).unwrap();
@@ -156,7 +156,8 @@ impl Tabline {
 
         for (idx, tab) in tabs.iter().enumerate() {
             let tab_child = self.tabs.nth_page(Some(idx as u32));
-            let tab_label = self.tabs
+            let tab_label = self
+                .tabs
                 .tab_label(&tab_child.unwrap())
                 .unwrap()
                 .downcast::<gtk::Box>()

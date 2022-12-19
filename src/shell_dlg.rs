@@ -1,24 +1,19 @@
-use std::{
-    rc::Rc,
-    convert::*,
-    cell::RefCell,
-    sync::Arc,
-};
+use std::{cell::RefCell, convert::*, rc::Rc, sync::Arc};
 
+use glib;
 use gtk;
 use gtk::prelude::*;
 use gtk::{ButtonsType, MessageDialog, MessageType};
-use glib;
 
-use nvim_rs::Value;
-use crate::nvim::{NvimSession, SessionError, NeovimClient, NormalError};
+use crate::nvim::{NeovimClient, NormalError, NvimSession, SessionError};
 use crate::shell::Shell;
 use crate::ui::{Components, UiMutex};
+use nvim_rs::Value;
 
 pub fn can_close_window(
     comps: &Arc<UiMutex<Components>>,
     shell: &Rc<RefCell<Shell>>,
-    nvim: &Rc<NeovimClient>
+    nvim: &Rc<NeovimClient>,
 ) -> bool {
     if comps.borrow().exit_confirmed {
         return true;
@@ -26,7 +21,7 @@ pub fn can_close_window(
 
     if let Some(ref nvim) = nvim.nvim() {
         if nvim.is_blocked() {
-            return false
+            return false;
         }
 
         match get_changed_buffers(nvim) {
@@ -65,7 +60,7 @@ pub fn can_close_window(
 async fn show_not_saved_dlg(
     comps: &Components,
     shell: Rc<RefCell<Shell>>,
-    changed_bufs: &[String]
+    changed_bufs: &[String],
 ) -> bool {
     let mut changed_files = changed_bufs
         .iter()

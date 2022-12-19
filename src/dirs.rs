@@ -1,13 +1,11 @@
+use crate::env_dirs;
 use std;
 use std::path::PathBuf;
-use crate::env_dirs;
 
 pub fn get_app_config_dir_create() -> Result<PathBuf, String> {
     let config_dir = get_app_config_dir()?;
 
-    std::fs::create_dir_all(&config_dir).map_err(
-        |e| format!("{}", e),
-    )?;
+    std::fs::create_dir_all(&config_dir).map_err(|e| format!("{}", e))?;
 
     Ok(config_dir)
 }
@@ -25,9 +23,7 @@ fn get_xdg_config_dir() -> Result<PathBuf, String> {
         return Ok(PathBuf::from(config_path));
     }
 
-    let mut home_dir = env_dirs::home_dir().ok_or(
-        "Impossible to get your home dir!",
-    )?;
+    let mut home_dir = env_dirs::home_dir().ok_or("Impossible to get your home dir!")?;
     home_dir.push(".config");
     Ok(home_dir)
 }

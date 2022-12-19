@@ -1,7 +1,7 @@
 use std::{
+    iter::Peekable,
     ops::{Index, IndexMut},
     rc::Rc,
-    iter::Peekable,
     slice::Iter,
 };
 
@@ -10,8 +10,8 @@ use pango;
 use super::cell::Cell;
 use super::item::Item;
 use crate::color;
+use crate::highlight::{Highlight, HighlightMap};
 use crate::render;
-use crate::highlight::{HighlightMap, Highlight};
 
 pub struct Line {
     pub line: Box<[Cell]>,
@@ -191,8 +191,7 @@ impl Line {
 
         if item_idx >= 0 {
             let item_idx = item_idx as usize;
-            let cells_count: usize = self
-                .item_line[item_idx]
+            let cells_count: usize = self.item_line[item_idx]
                 .iter()
                 .map(|i| i.cells_count)
                 .max()
@@ -298,11 +297,7 @@ pub struct StyledLine {
 }
 
 impl StyledLine {
-    pub fn from(
-        line: &Line,
-        hl: &HighlightMap,
-        font_features: &render::FontFeatures,
-    ) -> Self {
+    pub fn from(line: &Line, hl: &HighlightMap, font_features: &render::FontFeatures) -> Self {
         let average_capacity = line.line.len() * 4 * 2; // code bytes * grapheme cluster
 
         let mut line_str = String::with_capacity(average_capacity);
@@ -374,12 +369,7 @@ impl<'c> StyleAttr<'c> {
         }
     }
 
-    fn from(
-        start_idx: usize,
-        end_idx: usize,
-        cell: &'c Cell,
-        hl: &'c HighlightMap,
-    ) -> Self {
+    fn from(start_idx: usize, end_idx: usize, cell: &'c Cell, hl: &'c HighlightMap) -> Self {
         StyleAttr {
             italic: cell.hl.italic,
             bold: cell.hl.bold,
@@ -406,7 +396,6 @@ impl<'c> StyleAttr<'c> {
             return None;
         }
 
-
         let style_attr = Self::from(start_idx, end_idx, cell, hl);
 
         if self != &style_attr {
@@ -423,11 +412,17 @@ impl<'c> StyleAttr<'c> {
         }
 
         if self.italic {
-            self.insert_attr(attr_list, pango::AttrInt::new_style(pango::Style::Italic).into());
+            self.insert_attr(
+                attr_list,
+                pango::AttrInt::new_style(pango::Style::Italic).into(),
+            );
         }
 
         if self.bold {
-            self.insert_attr(attr_list, pango::AttrInt::new_weight(pango::Weight::Bold).into());
+            self.insert_attr(
+                attr_list,
+                pango::AttrInt::new_weight(pango::Weight::Bold).into(),
+            );
         }
 
         if let Some(fg) = self.foreground {
@@ -470,11 +465,8 @@ mod tests {
         line[1].ch = "b".to_owned();
         line[2].ch = "c".to_owned();
 
-        let styled_line = StyledLine::from(
-            &line,
-            &HighlightMap::new(),
-            &render::FontFeatures::new(),
-        );
+        let styled_line =
+            StyledLine::from(&line, &HighlightMap::new(), &render::FontFeatures::new());
         assert_eq!("abc", styled_line.line_str);
         assert_eq!(3, styled_line.cell_to_byte.len());
         assert_eq!(0, styled_line.cell_to_byte[0]);

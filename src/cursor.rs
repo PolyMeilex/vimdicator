@@ -1,19 +1,16 @@
 use glib;
-use gtk::{
-    prelude::*,
-    graphene::Rect,
-};
+use gtk::{graphene::Rect, prelude::*};
 
 use std::{
     sync::{Arc, Weak},
     time::Duration,
 };
 
+use crate::highlight::HighlightMap;
 use crate::mode;
 use crate::nvim::RedrawMode;
 use crate::render;
 use crate::render::CellMetrics;
-use crate::highlight::HighlightMap;
 use crate::ui::UiMutex;
 use crate::ui_model::Cell;
 
@@ -240,12 +237,7 @@ impl<CB: CursorRedrawCb> Cursor for BlinkCursor<CB> {
         let state = self.state.borrow();
 
         let cell_metrics = font_ctx.cell_metrics();
-        let (y, w, h) = cursor_rect(
-            self.mode_info(),
-            cell_metrics,
-            y,
-            double_width,
-        );
+        let (y, w, h) = cursor_rect(self.mode_info(), cell_metrics, y, double_width);
         let (x, y, w, h) = (x as f32, y as f32, w as f32, h as f32);
 
         if state.anim_phase == AnimPhase::NoFocus {
@@ -405,8 +397,10 @@ fn anim_step<CB: CursorRedrawCb + 'static>(state: &Arc<UiMutex<State<CB>>>) -> g
 
     if let Some(timeout) = next_event {
         let moved_state = state.clone();
-        mut_state.timer =
-            Some(glib::timeout_add(Duration::from_millis(timeout), move || anim_step(&moved_state)));
+        mut_state.timer = Some(glib::timeout_add(
+            Duration::from_millis(timeout),
+            move || anim_step(&moved_state),
+        ));
 
         glib::Continue(false)
     } else {

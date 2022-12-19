@@ -1,19 +1,11 @@
 use super::popupmenu_model::PopupMenuItemRef;
 
-use std::{
-    cell::RefCell,
-    convert::*,
-    rc::*,
-};
+use std::{cell::RefCell, convert::*, rc::*};
 
 use lazy_static::lazy_static;
 
-use gtk::{
-    self,
-    prelude::*,
-    subclass::prelude::*,
-};
 use glib;
+use gtk::{self, prelude::*, subclass::prelude::*};
 
 pub const PADDING: i32 = 2;
 
@@ -130,14 +122,14 @@ impl ObjectImpl for PopupMenuListRowObject {
                         menu_label.set_width_request(width);
                     }
                 }
-            },
+            }
             "state" => {
                 *self.state.borrow_mut() = value
                     .get_owned::<glib::BoxedAnyObject>()
                     .unwrap()
                     .borrow::<Rc<RefCell<PopupMenuListRowState>>>()
                     .clone();
-            },
+            }
             _ => unreachable!(),
         }
     }

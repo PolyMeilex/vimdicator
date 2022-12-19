@@ -9,27 +9,19 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::Duration;
 
-use futures::{FutureExt, executor::block_on};
+use futures::{executor::block_on, FutureExt};
 
-use tokio::sync::{
-    Mutex as AsyncMutex,
-    Notify,
-};
+use tokio::sync::{Mutex as AsyncMutex, Notify};
 
 use clap::{self, value_t};
 
-use gdk::{
-    self,
-    prelude::*,
-    ModifierType,
-    Display,
-};
-use glib;
+use gdk::{self, prelude::*, Display, ModifierType};
 use gio;
 use gio::ApplicationCommandLine;
+use glib;
 use gtk;
-use gtk::{Button, MenuButton, Notebook};
 use gtk::prelude::*;
+use gtk::{Button, MenuButton, Notebook};
 use pango;
 use pango::FontDescription;
 
@@ -37,11 +29,11 @@ use nvim_rs::Value;
 
 use crate::color::{Color, COLOR_BLACK, COLOR_WHITE};
 use crate::grid::GridMap;
-use crate::highlight::{HighlightMap, BackgroundState};
+use crate::highlight::{BackgroundState, HighlightMap};
 use crate::misc::{decode_uri, escape_filename, split_at_comma};
 use crate::nvim::{
-    self, CallErrorExt, ErrorReport, NeovimClient, NvimHandler, PendingPopupMenu, RedrawMode,
-    NvimSession, Tabpage, NormalError,
+    self, CallErrorExt, ErrorReport, NeovimClient, NormalError, NvimHandler, NvimSession,
+    PendingPopupMenu, RedrawMode, Tabpage,
 };
 use crate::settings::{FontSource, Settings};
 use crate::ui_model::ModelRect;
@@ -59,7 +51,7 @@ use crate::render;
 use crate::render::CellMetrics;
 use crate::subscriptions::{SubscriptionHandle, SubscriptionKey, Subscriptions};
 use crate::tabline::Tabline;
-use crate::ui::{UiMutex, Components};
+use crate::ui::{Components, UiMutex};
 
 const DEFAULT_FONT_NAME: &str = "DejaVu Sans Mono 12";
 pub const MINIMUM_SUPPORTED_NVIM_VERSION: &str = "0.3.2";
@@ -235,8 +227,7 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(settings: Rc<RefCell<Settings>>, options: ShellOptions)
-        -> State {
+    pub fn new(settings: Rc<RefCell<Settings>>, options: ShellOptions) -> State {
         let nvim_viewport = NvimViewport::new();
 
         let pango_context = nvim_viewport.create_pango_context();
@@ -273,7 +264,7 @@ impl State {
             focus_state: Arc::new(AsyncMutex::new(FocusState {
                 last: true,
                 next: true,
-                is_pending: false
+                is_pending: false,
             })),
 
             clipboard_clipboard: display.clipboard(),
@@ -314,7 +305,7 @@ impl State {
     pub fn set_action_widgets(
         &self,
         header_bar: Option<Box<HeaderBarButtons>>,
-        file_browser: gtk::Box
+        file_browser: gtk::Box,
     ) {
         self.action_widgets.replace(Some(ActionWidgets {
             header_bar,
@@ -419,7 +410,10 @@ impl State {
     }
 
     pub fn set_transparency(&mut self, background_alpha: f64, filled_alpha: f64) {
-        self.transparency_settings = TransparencySettings { background_alpha, filled_alpha };
+        self.transparency_settings = TransparencySettings {
+            background_alpha,
+            filled_alpha,
+        };
         self.queue_draw(RedrawMode::ClearCache);
     }
 
@@ -530,7 +524,8 @@ impl State {
             let (x, y, width, height) = ModelRect::point(col, row)
                 .to_area(self.render_state.borrow().font_ctx.cell_metrics());
 
-            self.im_context.set_cursor_location(&gdk::Rectangle::new(x, y, width, height));
+            self.im_context
+                .set_cursor_location(&gdk::Rectangle::new(x, y, width, height));
             self.im_context.reset();
         }
     }
@@ -609,11 +604,13 @@ impl State {
                         "nvim_ui_try_resize".into(),
                         Value::Array(vec![cols.into(), rows.into()]),
                     ]),
-                ]).await.report_err();
+                ])
+                .await
+                .report_err();
 
                 // Wait for the resize request to finish, and then update the request state
                 status_ref.autocmd_status.notified().await;
-            };
+            }
         });
     }
 
@@ -719,12 +716,16 @@ impl State {
                     focus_state.last = focus_state.next;
                     focus_state.next
                 };
-                let autocmd = if next == true { "FocusGained" } else { "FocusLost" };
+                let autocmd = if next == true {
+                    "FocusGained"
+                } else {
+                    "FocusLost"
+                };
 
                 debug!("Triggering {} autocmd", autocmd);
-                nvim.command(&format!(
-                    "if exists('#{a}')|doau {a}|endif", a = autocmd
-                )).await.report_err();
+                nvim.command(&format!("if exists('#{a}')|doau {a}|endif", a = autocmd))
+                    .await
+                    .report_err();
             }
         });
     }
@@ -734,7 +735,10 @@ impl State {
     }
 
     pub fn set_background(&self, background: BackgroundState) {
-        self.render_state.borrow_mut().hl.set_background_state(background)
+        self.render_state
+            .borrow_mut()
+            .hl
+            .set_background_state(background)
     }
 
     pub fn cursor(&self) -> Option<&BlinkCursor<State>> {
@@ -788,7 +792,7 @@ impl UiState {
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum StartMode {
     Normal,
-    Diff
+    Diff,
 }
 
 #[derive(Clone)]
@@ -807,12 +811,11 @@ impl ShellOptions {
         ShellOptions {
             input_data,
             cterm_colors: matches.is_present("cterm-colors"),
-            mode:
-                if matches.is_present("diff-mode") {
-                    StartMode::Diff
-                } else {
-                    StartMode::Normal
-                },
+            mode: if matches.is_present("diff-mode") {
+                StartMode::Diff
+            } else {
+                StartMode::Normal
+            },
             nvim_bin_path: matches.value_of("nvim-bin-path").map(str::to_owned),
             timeout: value_t!(matches.value_of("timeout"), u64)
                 .map(Duration::from_secs)
@@ -855,7 +858,9 @@ async fn gtk_drop_receive(drop: &gdk::Drop) -> Result<Vec<String>, Box<dyn std::
         .expect("Failed to find GdkFileList GType")
         .to_owned();
 
-    let value = drop.read_value_future(file_list_type, glib::PRIORITY_DEFAULT).await?;
+    let value = drop
+        .read_value_future(file_list_type, glib::PRIORITY_DEFAULT)
+        .await?;
 
     // We won't have GdkFileList until 4.6, however we know that GdkFileList is just a boxed GSList
     // type. So, use witch magic to extract the boxed GSList pointer ourselves.
@@ -890,30 +895,32 @@ fn gtk_handle_drop(state: &State, context: &glib::MainContext, drop: &gdk::Drop)
                 drop.finish(gdk::DragAction::empty());
                 action_widgets.borrow().as_ref().unwrap().set_enabled(true);
                 return;
-            },
+            }
         };
 
-        match nvim.command(
-            input
-            .into_iter()
-            .filter_map(|uri| decode_uri(&uri))
-            .fold(
-                "ar".to_owned(),
-                |command, filename| format!("{} {}", command, escape_filename(&filename)),
+        match nvim
+            .command(
+                input
+                    .into_iter()
+                    .filter_map(|uri| decode_uri(&uri))
+                    .fold("ar".to_owned(), |command, filename| {
+                        format!("{} {}", command, escape_filename(&filename))
+                    })
+                    .as_str(),
             )
-            .as_str()
-        ).await {
+            .await
+        {
             Err(e) => {
                 match NormalError::try_from(&*e) {
                     Ok(e) => {
                         if !e.has_code(325) {
                             e.print(&nvim).await;
                         }
-                    },
+                    }
                     Err(_) => e.print(),
                 };
                 drop.finish(gdk::DragAction::empty());
-            },
+            }
             Ok(_) => drop.finish(gdk::DragAction::COPY),
         };
 
@@ -941,7 +948,11 @@ impl Shell {
         let shell_ref = Arc::downgrade(&shell.state);
         shell.state.borrow_mut().cursor = Some(BlinkCursor::new(shell_ref));
 
-        shell.state.borrow().nvim_viewport.set_shell_state(&shell.state);
+        shell
+            .state
+            .borrow()
+            .nvim_viewport
+            .set_shell_state(&shell.state);
 
         shell
     }
@@ -967,7 +978,9 @@ impl Shell {
         state.nvim_viewport.set_focusable(true);
         state.nvim_viewport.set_focus_on_click(true);
         state.nvim_viewport.set_receives_default(true);
-        state.nvim_viewport.set_completion_popover(&*state.popup_menu);
+        state
+            .nvim_viewport
+            .set_completion_popover(&*state.popup_menu);
 
         state.im_context.set_use_preedit(false);
 
@@ -1020,8 +1033,7 @@ impl Shell {
         ));
         state.nvim_viewport.add_controller(&key_controller);
 
-        fn get_button(controller: &gtk::GestureClick) -> u32
-        {
+        fn get_button(controller: &gtk::GestureClick) -> u32 {
             match controller.current_button() {
                 0 => 1, // 0 == no button, e.g. it's a touch event, so map it to left click
                 button => button,
@@ -1030,10 +1042,7 @@ impl Shell {
 
         let menu = self.create_context_menu();
         state.nvim_viewport.set_context_menu(&menu);
-        let click_controller = gtk::GestureClick::builder()
-            .n_points(1)
-            .button(0)
-            .build();
+        let click_controller = gtk::GestureClick::builder().n_points(1).button(0).build();
         click_controller.connect_pressed(clone!(
             state_ref, ui_state_ref, menu => move |controller, _, x, y| {
                 gtk_button_press(
@@ -1094,8 +1103,7 @@ impl Shell {
         state.nvim_viewport.add_controller(&focus_controller);
 
         let scroll_controller = gtk::EventControllerScroll::new(
-            gtk::EventControllerScrollFlags::BOTH_AXES |
-            gtk::EventControllerScrollFlags::DISCRETE
+            gtk::EventControllerScrollFlags::BOTH_AXES | gtk::EventControllerScrollFlags::DISCRETE,
         );
         scroll_controller.connect_scroll(clone!(
             state_ref, ui_state_ref => move |controller, dx, dy| {
@@ -1114,36 +1122,38 @@ impl Shell {
         let context = glib::MainContext::default();
         let dnd_target = gtk::DropTargetAsync::new(
             Some(&gdk::ContentFormats::new(&["text/uri-list"])),
-            gdk::DragAction::COPY
+            gdk::DragAction::COPY,
         );
         dnd_target.connect_drop(clone!(state_ref => move |_, drop, _, _| {
             gtk_handle_drop(&state_ref.borrow(), &context, drop)
         }));
         state.nvim_viewport.add_controller(&dnd_target);
 
-        state.nvim_viewport.connect_realize(clone!(state_ref => move |viewport| {
-            let window: gtk::Window = viewport.root().unwrap().downcast().unwrap();
+        state
+            .nvim_viewport
+            .connect_realize(clone!(state_ref => move |viewport| {
+                let window: gtk::Window = viewport.root().unwrap().downcast().unwrap();
 
-            // sometime set_client_window does not work without idle_add
-            // and looks like not enabled im_context
-            glib::idle_add_local_once(clone!(state_ref, window => move || {
-                state_ref.borrow().im_context.set_client_widget(Some(&window));
+                // sometime set_client_window does not work without idle_add
+                // and looks like not enabled im_context
+                glib::idle_add_local_once(clone!(state_ref, window => move || {
+                    state_ref.borrow().im_context.set_client_widget(Some(&window));
+                }));
+
+                let mut state = state_ref.borrow_mut();
+                let redraw = state
+                    .cursor
+                    .as_mut()
+                    .unwrap()
+                    .set_toplevel_focus(window.is_active());
+                if state.nvim().is_some() {
+                    state.queue_draw(redraw);
+                }
+
+                window.connect_is_active_notify(clone!(state_ref => move |window| {
+                    gtk_active_notify(&mut state_ref.borrow_mut(), window.is_active());
+                }));
             }));
-
-            let mut state = state_ref.borrow_mut();
-            let redraw = state
-                .cursor
-                .as_mut()
-                .unwrap()
-                .set_toplevel_focus(window.is_active());
-            if state.nvim().is_some() {
-                state.queue_draw(redraw);
-            }
-
-            window.connect_is_active_notify(clone!(state_ref => move |window| {
-                gtk_active_notify(&mut state_ref.borrow_mut(), window.is_active());
-            }));
-        }));
 
         state
             .im_context
@@ -1155,9 +1165,11 @@ impl Shell {
                 state.im_commit(ch);
             }));
 
-        state.nvim_viewport.connect_map(clone!(state_ref, components => move |_| {
-            init_nvim(&state_ref, &components);
-        }));
+        state
+            .nvim_viewport
+            .connect_map(clone!(state_ref, components => move |_| {
+                init_nvim(&state_ref, &components);
+            }));
     }
 
     fn create_context_menu(&self) -> gtk::PopoverMenu {
@@ -1365,13 +1377,13 @@ fn gtk_button_press(
                     x.round() as i32,
                     y.round() as i32,
                     0,
-                    0
+                    0,
                 )));
 
                 // Popping up the menu will trigger a focus event, so handle this in the idle loop
                 // to avoid a double borrow_mut()
                 glib::idle_add_local_once(clone!(menu => move || menu.popup()));
-            },
+            }
             _ => (),
         }
     }
@@ -1382,15 +1394,21 @@ fn mouse_input(
     button: &str,
     action: &str,
     state: ModifierType,
-    position: (f64, f64)
+    position: (f64, f64),
 ) {
     if let Some(nvim) = shell.nvim() {
         let (col, row) = mouse_coordinates_to_nvim(shell, position);
 
-        nvim.block_timeout(
-            nvim.input_mouse(button, action, &keyval_to_input_string("", state), 0,
-                             row as i64, col as i64)
-        ).ok_and_report().expect("Can't send mouse input event");
+        nvim.block_timeout(nvim.input_mouse(
+            button,
+            action,
+            &keyval_to_input_string("", state),
+            0,
+            row as i64,
+            col as i64,
+        ))
+        .ok_and_report()
+        .expect("Can't send mouse input event");
     }
 }
 
@@ -1582,9 +1600,7 @@ fn init_nvim(state_ref: &Arc<UiMutex<State>>, components: &Arc<UiMutex<Component
         let comps = components.clone();
         let nvim_handler = NvimHandler::new(state_ref.clone(), state.resize_status());
         let options = state.options.borrow_mut().input_data();
-        thread::spawn(move || init_nvim_async(
-            state_arc, comps, nvim_handler, options, cols, rows
-        ));
+        thread::spawn(move || init_nvim_async(state_arc, comps, nvim_handler, options, cols, rows));
     }
 }
 
@@ -1676,7 +1692,8 @@ impl State {
         let updated = render_state.hl.set(id, &rgb_attr, &info);
 
         if updated.pmenu {
-            self.popup_menu.update_css(&render_state.hl, &render_state.font_ctx);
+            self.popup_menu
+                .update_css(&render_state.hl, &render_state.font_ctx);
         }
 
         if updated.cursor {
@@ -1780,7 +1797,7 @@ impl State {
             pending,
             &self.nvim,
             &self.render_state,
-            self.max_popup_width()
+            self.max_popup_width(),
         );
     }
 

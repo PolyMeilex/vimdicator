@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use crate::nvim::{NeovimClient, ErrorReport, NvimSession};
+use crate::nvim::{ErrorReport, NeovimClient, NvimSession};
 use crate::spawn_timeout;
 use crate::value::ValueMapExt;
 
@@ -23,9 +23,9 @@ impl Manager {
 
     pub fn get_plugs(&self) -> Result<Box<[VimPlugInfo]>, String> {
         if let Some(nvim) = self.nvim() {
-            let g_plugs = nvim.block_timeout(nvim.eval("g:plugs")).map_err(|e| {
-                format!("Can't retrive g:plugs map: {}", e)
-            })?;
+            let g_plugs = nvim
+                .block_timeout(nvim.eval("g:plugs"))
+                .map_err(|e| format!("Can't retrive g:plugs map: {}", e))?;
 
             let plugs_map = g_plugs
                 .as_map()
@@ -36,29 +36,30 @@ impl Manager {
                 .block_timeout(nvim.eval("g:plugs_order"))
                 .map_err(|e| format!("{}", e))?;
 
-            let order_arr = g_plugs_order.as_array().ok_or_else(
-                || "Can't find g:plugs_order array"
-                    .to_owned(),
-            )?;
+            let order_arr = g_plugs_order
+                .as_array()
+                .ok_or_else(|| "Can't find g:plugs_order array".to_owned())?;
 
             let plugs_info: Vec<VimPlugInfo> = order_arr
                 .iter()
                 .map(|n| n.as_str())
-                .filter_map(|name| if let Some(name) = name {
-                    plugs_map
-                        .get(name)
-                        .and_then(|desc| desc.as_map())
-                        .and_then(|desc| desc.to_attrs_map().ok())
-                        .and_then(|desc| {
-                            let uri = desc.get("uri").and_then(|uri| uri.as_str());
-                            if let Some(uri) = uri {
-                                Some(VimPlugInfo::new(name.to_owned(), uri.to_owned()))
-                            } else {
-                                None
-                            }
-                        })
-                } else {
-                    None
+                .filter_map(|name| {
+                    if let Some(name) = name {
+                        plugs_map
+                            .get(name)
+                            .and_then(|desc| desc.as_map())
+                            .and_then(|desc| desc.to_attrs_map().ok())
+                            .and_then(|desc| {
+                                let uri = desc.get("uri").and_then(|uri| uri.as_str());
+                                if let Some(uri) = uri {
+                                    Some(VimPlugInfo::new(name.to_owned(), uri.to_owned()))
+                                } else {
+                                    None
+                                }
+                            })
+                    } else {
+                        None
+                    }
                 })
                 .collect();
             Ok(plugs_info.into_boxed_slice())

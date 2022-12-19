@@ -12,7 +12,7 @@ impl ItemizeResult {
         Self {
             offset,
             len,
-            avoid_break
+            avoid_break,
         }
     }
 }
@@ -48,7 +48,10 @@ impl<'a> Iterator for ItemizeIterator<'a> {
         let mut avoid_break = false;
 
         let end_index = loop {
-            let grapheme_indice = self.prev_grapheme.take().or_else(|| self.grapheme_iter.next());
+            let grapheme_indice = self
+                .prev_grapheme
+                .take()
+                .or_else(|| self.grapheme_iter.next());
             if let Some((index, grapheme)) = grapheme_indice {
                 // Figure out if this grapheme is whitespace and/or ASCII in one iteration
                 let mut is_whitespace = true;
@@ -83,7 +86,11 @@ impl<'a> Iterator for ItemizeIterator<'a> {
         };
 
         if let Some(start_index) = start_index {
-            Some(ItemizeResult::new(start_index, end_index - start_index, avoid_break))
+            Some(ItemizeResult::new(
+                start_index,
+                end_index - start_index,
+                avoid_break,
+            ))
         } else {
             None
         }

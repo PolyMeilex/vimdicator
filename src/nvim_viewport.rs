@@ -1,22 +1,17 @@
 use lazy_static::lazy_static;
 
-use gtk::{
-    self,
-    graphene::Rect,
-    prelude::*,
-    subclass::prelude::*,
-};
 use glib;
+use gtk::{self, graphene::Rect, prelude::*, subclass::prelude::*};
 
 use std::{
-    sync::{Arc, Weak},
     cell::RefCell,
+    sync::{Arc, Weak},
 };
 
 use crate::{
     render::*,
+    shell::{RenderState, State},
     ui::UiMutex,
-    shell::{State, RenderState},
 };
 
 glib::wrapper! {
@@ -52,7 +47,7 @@ impl NvimViewport {
 }
 
 /** The inner state structure for the viewport widget, for holding non-glib types (e.g. ones that
-  * need inferior mutability) */
+ * need inferior mutability) */
 #[derive(Default)]
 struct NvimViewportInner {
     state: Weak<UiMutex<State>>,
@@ -144,15 +139,14 @@ impl ObjectImpl for NvimViewportObject {
                 let mut inner = self.inner.borrow_mut();
                 debug_assert!(inner.state.upgrade().is_none());
 
-                inner.state = Arc::downgrade(
-                    &value.get::<glib::BoxedAnyObject>().unwrap().borrow()
-                );
-            },
+                inner.state =
+                    Arc::downgrade(&value.get::<glib::BoxedAnyObject>().unwrap().borrow());
+            }
             "snapshot-cached" => {
                 if value.get::<bool>().unwrap() == false {
                     self.inner.borrow_mut().snapshot_cache = None;
                 }
-            },
+            }
             "context-menu" => {
                 if let Some(context_menu) = self.context_menu.upgrade() {
                     context_menu.unparent();
@@ -161,7 +155,7 @@ impl ObjectImpl for NvimViewportObject {
 
                 context_menu.set_parent(&*obj);
                 self.context_menu.set(Some(&context_menu));
-            },
+            }
             "completion-popover" => {
                 if let Some(popover) = self.completion_popover.upgrade() {
                     popover.unparent();
@@ -170,7 +164,7 @@ impl ObjectImpl for NvimViewportObject {
 
                 popover.set_parent(&*obj);
                 self.completion_popover.set(Some(&popover));
-            },
+            }
             "ext-cmdline" => {
                 if let Some(ext_cmdline) = self.ext_cmdline.upgrade() {
                     ext_cmdline.unparent();
@@ -181,7 +175,7 @@ impl ObjectImpl for NvimViewportObject {
                     ext_cmdline.set_parent(&*obj);
                 }
                 self.ext_cmdline.set(ext_cmdline.as_ref());
-            },
+            }
             _ => unreachable!(),
         }
     }
@@ -231,7 +225,7 @@ impl WidgetImpl for NvimViewportObject {
         let transparency = state.transparency();
         snapshot_in.append_color(
             &hl.bg().to_rgbo(transparency.background_alpha),
-            &Rect::new(0.0, 0.0, obj.width() as f32, obj.height() as f32)
+            &Rect::new(0.0, 0.0, obj.width() as f32, obj.height() as f32),
         );
 
         if state.nvim_clone().is_initialized() {
@@ -270,11 +264,7 @@ impl WidgetImpl for NvimViewportObject {
 }
 
 impl NvimViewportObject {
-    fn snapshot_initializing(
-        &self,
-        snapshot: &gtk::Snapshot,
-        render_state: &RenderState,
-    ) {
+    fn snapshot_initializing(&self, snapshot: &gtk::Snapshot, render_state: &RenderState) {
         let obj = self.obj();
         let layout = obj.create_pango_layout(Some("Loading…"));
 

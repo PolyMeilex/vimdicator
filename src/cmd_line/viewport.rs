@@ -1,23 +1,19 @@
 use lazy_static::lazy_static;
 
+use glib;
 use gtk::{
     self,
-    graphene::{Rect, Point},
+    graphene::{Point, Rect},
     prelude::*,
     subclass::prelude::*,
 };
-use glib;
 
 use std::{
-    sync::{Arc, Weak},
     cell::RefCell,
+    sync::{Arc, Weak},
 };
 
-use crate::{
-    render::*,
-    ui::UiMutex,
-    shell::TransparencySettings,
-};
+use crate::{render::*, shell::TransparencySettings, ui::UiMutex};
 
 use crate::cmd_line::State;
 
@@ -90,28 +86,22 @@ impl ObjectImpl for CmdlineViewportObject {
         PROPERTIES.as_ref()
     }
 
-    fn set_property(
-        &self,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         match pspec.name() {
             "cmdline-state" => {
                 let mut inner = self.inner.borrow_mut();
                 debug_assert!(inner.state.upgrade().is_none());
 
-                inner.state = Arc::downgrade(
-                    &value.get::<glib::BoxedAnyObject>().unwrap().borrow()
-                );
-            },
+                inner.state =
+                    Arc::downgrade(&value.get::<glib::BoxedAnyObject>().unwrap().borrow());
+            }
             "snapshot-cached" => {
                 if value.get::<bool>().unwrap() == false {
                     let mut inner = self.inner.borrow_mut();
                     inner.block_cache = None;
                     inner.level_cache = None;
                 }
-            },
+            }
             _ => unreachable!(),
         }
     }
@@ -121,7 +111,7 @@ impl ObjectImpl for CmdlineViewportObject {
             "snapshot-cached" => {
                 let inner = self.inner.borrow();
                 (inner.level_cache.is_some() || inner.block_cache.is_some()).to_value()
-            },
+            }
             _ => unreachable!(),
         }
     }
@@ -143,7 +133,7 @@ impl WidgetImpl for CmdlineViewportObject {
 
         snapshot.append_color(
             &hl.bg().into(),
-            &Rect::new(0.0, 0.0, obj.width() as f32, obj.height() as f32)
+            &Rect::new(0.0, 0.0, obj.width() as f32, obj.height() as f32),
         );
 
         snapshot.save();
@@ -182,7 +172,7 @@ impl WidgetImpl for CmdlineViewportObject {
                     font_ctx,
                     &level.model_layout.model,
                     hl,
-                    TransparencySettings::new() // FIXME
+                    TransparencySettings::new(), // FIXME
                 );
             }
         }

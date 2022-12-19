@@ -3,19 +3,19 @@ use std::path::Path;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use glib;
 use gtk;
 use gtk::prelude::*;
 use gtk::{
     CellRendererPixbuf, CellRendererText, CellRendererToggle, ListStore, MenuButton, Orientation,
     PolicyType, ScrolledWindow, TreeIter, TreeModel, TreeView, TreeViewColumn,
 };
-use glib;
 use pango;
 
-use nvim_rs::Value;
-use crate::nvim::{NvimSession, ErrorReport};
+use crate::nvim::{ErrorReport, NvimSession};
 use crate::shell::Shell;
 use crate::ui::UiMutex;
+use nvim_rs::Value;
 
 use htmlescape::encode_minimal;
 
@@ -85,9 +85,7 @@ impl Projects {
             .margin_end(5)
             .build();
 
-        let popup = gtk::Popover::builder()
-            .child(&vbox)
-            .build();
+        let popup = gtk::Popover::builder().child(&vbox).build();
         let open_btn = MenuButton::builder()
             .focusable(false)
             .focus_on_click(false)
@@ -120,7 +118,8 @@ impl Projects {
         projects.setup_tree();
 
         let search_box = gtk::Entry::new();
-        search_box.set_icon_from_icon_name(gtk::EntryIconPosition::Primary, Some("edit-find-symbolic"));
+        search_box
+            .set_icon_from_icon_name(gtk::EntryIconPosition::Primary, Some("edit-find-symbolic"));
 
         vbox.append(&search_box);
         vbox.append(&projects.scroll);
@@ -237,20 +236,11 @@ impl Projects {
     }
 
     fn get_list_store(&self) -> ListStore {
-        self.tree
-            .model()
-            .unwrap()
-            .downcast::<ListStore>()
-            .unwrap()
+        self.tree.model().unwrap().downcast::<ListStore>().unwrap()
     }
 
     fn show_open_file_dlg(&self) {
-        let window = self
-            .open_btn
-            .root()
-            .unwrap()
-            .downcast::<gtk::Window>()
-            .ok();
+        let window = self.open_btn.root().unwrap().downcast::<gtk::Window>().ok();
         let dlg = gtk::FileChooserDialog::new(
             Some("Open Document"),
             window.as_ref(),
@@ -258,7 +248,7 @@ impl Projects {
             &[
                 ("_Open", gtk::ResponseType::Ok),
                 ("_Cancel", gtk::ResponseType::Cancel),
-            ]
+            ],
         );
 
         let shell = self.shell.clone();
@@ -299,7 +289,9 @@ impl Projects {
     }
 
     pub fn clear(&mut self) {
-        if let Some(s) = self.store.take() { s.save() };
+        if let Some(s) = self.store.take() {
+            s.save()
+        };
         self.get_list_store().clear();
     }
 
@@ -325,8 +317,10 @@ impl Projects {
 
         self.name_renderer.set_width_chars(45);
         self.path_renderer.set_width_chars(45);
-        self.name_renderer.set_ellipsize(pango::EllipsizeMode::Middle);
-        self.path_renderer.set_ellipsize(pango::EllipsizeMode::Start);
+        self.name_renderer
+            .set_ellipsize(pango::EllipsizeMode::Middle);
+        self.path_renderer
+            .set_ellipsize(pango::EllipsizeMode::Start);
         self.name_renderer.set_padding(0, 5);
         self.path_renderer.set_padding(0, 5);
 
@@ -500,11 +494,11 @@ impl EntryStore {
                 list_store.insert_with_values(
                     None,
                     COLUMN_IDS
-                    .iter()
-                    .enumerate()
-                    .map(|(i, id)| (*id, files[i]))
-                    .collect::<Box<_>>()
-                    .as_ref()
+                        .iter()
+                        .enumerate()
+                        .map(|(i, id)| (*id, files[i]))
+                        .collect::<Box<_>>()
+                        .as_ref(),
                 );
             }
         }

@@ -1,11 +1,7 @@
 use lazy_static::lazy_static;
 
-use gtk::{
-    self,
-    prelude::*,
-    subclass::prelude::*,
-};
 use glib;
+use gtk::{self, prelude::*, subclass::prelude::*};
 
 glib::wrapper! {
     pub struct TreeView(ObjectSubclass<TreeViewObject>)
@@ -44,26 +40,19 @@ impl ObjectImpl for TreeViewObject {
 
     fn properties() -> &'static [glib::ParamSpec] {
         lazy_static! {
-            static ref PROPERTIES: Vec<glib::ParamSpec> = vec![
-                glib::ParamSpecObject::new(
-                    "context-menu",
-                    "Context menu",
-                    "PopoverMenu to use as the context menu",
-                    gtk::PopoverMenu::static_type(),
-                    glib::ParamFlags::READWRITE
-                ),
-            ];
+            static ref PROPERTIES: Vec<glib::ParamSpec> = vec![glib::ParamSpecObject::new(
+                "context-menu",
+                "Context menu",
+                "PopoverMenu to use as the context menu",
+                gtk::PopoverMenu::static_type(),
+                glib::ParamFlags::READWRITE
+            ),];
         }
 
         PROPERTIES.as_ref()
     }
 
-    fn set_property(
-        &self,
-        _id: usize,
-        value: &glib::Value,
-        pspec: &glib::ParamSpec
-    ) {
+    fn set_property(&self, _id: usize, value: &glib::Value, pspec: &glib::ParamSpec) {
         let obj = self.obj();
         match pspec.name() {
             "context-menu" => {
@@ -74,7 +63,7 @@ impl ObjectImpl for TreeViewObject {
                 let context_menu: gtk::PopoverMenu = value.get().unwrap();
                 context_menu.set_parent(&*obj);
                 self.context_menu.set(Some(&context_menu));
-            },
+            }
             _ => unimplemented!(),
         }
     }
