@@ -257,7 +257,7 @@ pub fn call_gui_request(
                     // while it runs, otherwise ui callbacks will get called and try to borrow
                     // mutably twice!
                     let clipboard = {
-                        let ui = &mut ui.borrow_mut();
+                        let ui = &ui.borrow();
                         match try_str!(args[1]) {
                             "*" => ui.clipboard_primary.clone(),
                             _ => ui.clipboard_clipboard.clone(),
