@@ -197,9 +197,13 @@ impl State {
         }
 
         let CellMetrics { pango_ascent, pango_descent, .. } = ctx.font_ctx.cell_metrics();
-        self.row_height =
-            (((pango_ascent + pango_descent) as f64 / pango::SCALE as f64)
-             + (PADDING * 2) as f64).ceil() as i32;
+
+        // FIXME: We're still doing something with with what we do for calculating
+        // CellMetrics.char_height, since using it here doesn't seem to get the right value for
+        // determining the y coordinate of the selected item. For now, just use the old method
+        let char_height = (pango_ascent + pango_descent) as f64 / pango::SCALE as f64;
+        self.row_height = (char_height + (PADDING * 2) as f64).ceil() as i32;
+
         self.limit_column_widths(&ctx);
 
         self.items = Rc::new(ctx.menu_items);
