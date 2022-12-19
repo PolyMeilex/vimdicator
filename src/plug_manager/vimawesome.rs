@@ -90,9 +90,12 @@ fn create_plug_row<F: Fn(PlugInfo) + 'static>(
         .margin_top(5)
         .margin_end(5)
         .build();
+
+    #[rustfmt::skip]
     let row = gtk::ListBoxRow::builder()
         .child(&row_container)
         .build();
+
     let hbox = gtk::Box::new(gtk::Orientation::Horizontal, 5);
     let label_box = create_plug_label(plug);
 

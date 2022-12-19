@@ -80,6 +80,7 @@ pub fn about_comments() -> String {
 }
 
 /// Escape a VimL expression so that it may included in quotes
+#[rustfmt::skip]
 pub fn viml_escape(viml: &str) -> String {
     viml.replace('\\', r"\\")
         .replace('"', r#"\""#)

@@ -255,6 +255,7 @@ fn create_plug_row(
     button_box.append(&exists_button_box);
     hbox.append(&button_box);
 
+    #[rustfmt::skip]
     let row = gtk::ListBoxRow::builder()
         .child(&row_container)
         .build();
@@ -439,6 +440,7 @@ impl SettingsPages {
             .build();
         hbox.append(label);
 
+        #[rustfmt::skip]
         let row = gtk::ListBoxRow::builder()
             .child(&hbox)
             .build();

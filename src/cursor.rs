@@ -249,11 +249,14 @@ impl<CB: CursorRedrawCb> Cursor for BlinkCursor<CB> {
         let (x, y, w, h) = (x as f32, y as f32, w as f32, h as f32);
 
         if state.anim_phase == AnimPhase::NoFocus {
-            let bg = hl.cursor_bg().to_rgbo(filled_alpha);
-            snapshot.append_color(&bg, &Rect::new(          x,           y,   w, 1.0));
-            snapshot.append_color(&bg, &Rect::new(          x,           y, 1.0,   h));
-            snapshot.append_color(&bg, &Rect::new(          x, y + h - 1.0,   w, 1.0));
-            snapshot.append_color(&bg, &Rect::new(x + w - 1.0,           y, 1.0,   h));
+            #[rustfmt::skip]
+            {
+                let bg = hl.cursor_bg().to_rgbo(filled_alpha);
+                snapshot.append_color(&bg, &Rect::new(          x,           y,   w, 1.0));
+                snapshot.append_color(&bg, &Rect::new(          x,           y, 1.0,   h));
+                snapshot.append_color(&bg, &Rect::new(          x, y + h - 1.0,   w, 1.0));
+                snapshot.append_color(&bg, &Rect::new(x + w - 1.0,           y, 1.0,   h));
+            };
             false
         } else {
             let bg = hl

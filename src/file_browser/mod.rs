@@ -110,6 +110,7 @@ impl FileBrowserWidget {
         dir_list.pack_end(&text_renderer, false);
         dir_list.add_attribute(&text_renderer, "text", 0);
 
+        #[rustfmt::skip]
         let pixbuf_renderer = gtk::CellRendererPixbuf::builder()
             .xpad(6)
             .build();
@@ -142,6 +143,7 @@ impl FileBrowserWidget {
             .sizing(gtk::TreeViewColumnSizing::Autosize)
             .build();
 
+        #[rustfmt::skip]
         let pixbuf_renderer = gtk::CellRendererPixbuf::builder()
             .xpad(6)
             .build();
@@ -380,6 +382,7 @@ impl FileBrowserWidget {
 
         let context_menu = &self.comps.context_menu;
         let cd_action = &self.comps.cd_action;
+        #[rustfmt::skip]
         let right_click_controller = gtk::GestureClick::builder()
             .button(3)
             .build();
@@ -398,6 +401,7 @@ impl FileBrowserWidget {
         );
         self.tree.add_controller(&right_click_controller);
 
+        #[rustfmt::skip]
         let long_tap_controller = gtk::GestureLongPress::builder()
             .touch_only(true)
             .build();

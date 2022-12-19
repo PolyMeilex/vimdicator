@@ -37,6 +37,8 @@ impl<'a> RenderStep<'a> {
         }
     }
 
+    // (until match_arm_wrapping stabilizes https://github.com/rust-lang/rustfmt/pull/4924 )
+    #[rustfmt::skip]
     fn to_snapshot(
         self,
         snapshot: &gtk::Snapshot,
