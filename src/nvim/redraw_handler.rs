@@ -384,7 +384,7 @@ pub fn call(
     }
 }
 
-/// Represents the next pending popup menu action before we've actually received a flush event
+/// Represents the next pending popup menu action before we've actually performed a redraw
 #[derive(Clone, Debug, Default, PartialEq)]
 pub enum PendingPopupMenu {
     Show {
