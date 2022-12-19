@@ -303,12 +303,15 @@ pub fn call(
             /* Complete lists can be enormous, so we want to be careful to avoid duplicating strings
              * by consuming the argument list */
             let mut iter = args.into_iter();
+            #[rustfmt::skip]
             let menu_items_in = into_array!(
                 iter.next().ok_or("Menu list array is missing")?,
                 "Failed to get menu list array",
-                |item| into_array!(item, "Failed to get menu item array", |col| try_string!(
-                    col
-                ))
+                |item| into_array!(
+                    item,
+                    "Failed to get menu item array",
+                    |col| try_string!(col)
+                )
             )?;
 
             // XXX: Use try_collect() when that stabilizes
