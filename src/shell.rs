@@ -1,7 +1,7 @@
 use std;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryFrom;
 use std::mem;
 use std::ops::Deref;
 use std::rc::Rc;
@@ -1780,16 +1780,6 @@ impl State {
     pub fn set_pending_popupmenu(&mut self, new_pending: PendingPopupMenu) -> RedrawMode {
         self.pending_popupmenu.update(new_pending);
         RedrawMode::Nothing
-    }
-
-    pub fn popupmenu_select(&mut self, selected: i64) -> RedrawMode {
-        let selected = if selected != -1 {
-            Some(selected.try_into().expect("Selection out of bounds"))
-        } else {
-            None
-        };
-
-        self.set_pending_popupmenu(PendingPopupMenu::Select(selected))
     }
 
     pub fn popupmenu_flush(&self, pending: PendingPopupMenu) {

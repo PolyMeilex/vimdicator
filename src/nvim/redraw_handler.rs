@@ -61,6 +61,38 @@ macro_rules! try_uint {
     };
 }
 
+// Neovim will often represent optional uint values as a -1 to represent None
+macro_rules! try_option_uint {
+    ($exp:expr) => {{
+        let val = $exp;
+        if let Some(uint) = val.as_u64() {
+            Ok(Some(uint))
+        } else if val.as_i64() == Some(-1) {
+            Ok(None)
+        } else {
+            Err(format!("Can't convert argument {} to Option<u64>", val))
+        }?
+    }};
+}
+
+// Note that Neovim doesn't actually have a u32 type. Or at the very least, there is not one
+// documented in :help api-types . We mainly use these for places where we technically expect to
+// receive a u64 or -1, but are not able to support anything larger then u32 due to some GTK+ api
+// requiring a u32. At least as of writing this comment, this is mainly just for the external popup
+// menu.
+//
+// This is definitely not an ideal solution, however: we still have a range of 0-4,294,967,295 which
+// we should hopefully almost never go over in the real world.
+macro_rules! try_option_u32 {
+    ($exp:expr) => {
+        if let Some(uint) = try_option_uint!($exp) {
+            Some(u32::try_from(uint).map_err(|e| e.to_string())?)
+        } else {
+            None
+        }
+    };
+}
+
 macro_rules! try_bool {
     ($exp:expr) => {
         $exp.as_bool()
@@ -320,14 +352,11 @@ pub fn call(
                 menu_items.push(PopupMenuItem::new(menu_item)?);
             }
 
-            let selected = try_int!(iter.next().ok_or("Failed to get selected popupmenu row")?);
             ui.set_pending_popupmenu(PendingPopupMenu::Show {
                 items: menu_items,
-                selected: if selected != -1 {
-                    Some(u32::try_from(selected).map_err(|e| e.to_string())?)
-                } else {
-                    None
-                },
+                selected: try_option_u32!(iter
+                    .next()
+                    .ok_or("Failed to get selected popupmenu row")?),
                 pos: (
                     try_uint!(iter.next().ok_or("Failed to get popupmenu row")?),
                     try_uint!(iter.next().ok_or("Failed to get popupmenu col")?),
@@ -335,7 +364,9 @@ pub fn call(
             })
         }
         "popupmenu_hide" => ui.set_pending_popupmenu(PendingPopupMenu::Hide),
-        "popupmenu_select" => call!(ui->popupmenu_select(args: int)),
+        "popupmenu_select" => {
+            ui.set_pending_popupmenu(PendingPopupMenu::Select(try_option_u32!(&args[0])))
+        }
         "tabline_update" => {
             let nvim = ui.nvim().ok_or_else(|| "Nvim not initialized".to_owned())?;
             let tabs_out = map_array!(args[1], "Error get tabline list".to_owned(), |tab| tab
