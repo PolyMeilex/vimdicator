@@ -3,7 +3,7 @@ mod ext;
 mod handler;
 mod redraw_handler;
 
-pub use self::client::NeovimClient;
+pub use self::client::{NeovimApiInfo, NeovimClient};
 pub use self::ext::*;
 pub use self::handler::NvimHandler;
 pub use self::redraw_handler::{NvimCommand, PendingPopupMenu, PopupMenuItem, RedrawMode};
@@ -274,20 +274,13 @@ impl NvimSession {
 
     /// Shutdown this neovim session by executing the relevant autocommands, and then closing our
     /// RPC channel with the Neovim instance.
-    pub async fn shutdown(&self) {
+    pub async fn shutdown(&self, channel: i64) {
         self.timeout(self.command("doau VimLeavePre|doau VimLeave"))
             .await
             .report_err();
 
-        let chan = self
-            .timeout(self.get_api_info())
-            .await
-            .ok_and_report()
-            .and_then(|v| v[0].as_i64())
-            .expect("Couldn't retrieve current channel for closing");
-
         let res = self
-            .timeout(self.command(&format!("cal chanclose({})", chan)))
+            .timeout(self.command(&format!("cal chanclose({})", channel)))
             .await;
         if let Err(ref e) = res {
             if let SessionError::CallError(ref e) = *e {
@@ -392,7 +385,7 @@ pub async fn post_start_init(
     cols: i32,
     rows: i32,
     input_data: Option<String>,
-) -> Result<(), NvimInitError> {
+) -> Result<NeovimApiInfo, NvimInitError> {
     let mut version_info: Vec<(Value, Value)> = vec![
         ("major".into(), env!("CARGO_PKG_VERSION_MAJOR").into()),
         ("minor".into(), env!("CARGO_PKG_VERSION_MINOR").into()),
@@ -411,6 +404,12 @@ pub async fn post_start_init(
     ))
     .await
     .map_err(NvimInitError::new_post_init)?;
+
+    let api_info = NeovimApiInfo::new(
+        nvim.get_api_info()
+            .await
+            .map_err(NvimInitError::new_post_init)?
+    ).map_err(NvimInitError::new_post_init)?;
 
     nvim.timeout(
         nvim.ui_attach(
@@ -446,5 +445,5 @@ pub async fn post_start_init(
         }
     }
 
-    Ok(())
+    Ok(api_info)
 }

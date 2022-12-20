@@ -32,8 +32,8 @@ use crate::grid::GridMap;
 use crate::highlight::{BackgroundState, HighlightMap};
 use crate::misc::{decode_uri, escape_filename, split_at_comma};
 use crate::nvim::{
-    self, CallErrorExt, ErrorReport, NeovimClient, NormalError, NvimHandler, NvimSession,
-    PendingPopupMenu, RedrawMode, Tabpage,
+    self, CallErrorExt, ErrorReport, NeovimClient, NeovimApiInfo, NormalError, NvimHandler,
+    NvimSession, PendingPopupMenu, RedrawMode, Tabpage,
 };
 use crate::settings::{FontSource, Settings};
 use crate::ui_model::ModelRect;
@@ -1229,9 +1229,10 @@ impl Shell {
         let nvim_client = state.nvim.clone();
 
         if let Some(nvim) = nvim_client.nvim() {
+            let api_info = nvim_client.api_info();
             nvim_client.clear();
             nvim.block_timeout(nvim.ui_detach()).report_err();
-            nvim.block_on(nvim.shutdown());
+            nvim.block_on(nvim.shutdown(api_info.channel));
         }
     }
 
@@ -1548,7 +1549,7 @@ fn init_nvim_async(
     let input_data = options.input_data;
     session.clone().spawn(async move {
         match nvim::post_start_init(session, cols, rows, input_data).await {
-            Ok(_) => set_nvim_initialized(state_arc),
+            Ok(api_info) => set_nvim_initialized(state_arc, api_info),
             Err(ref e) => show_nvim_init_error(e, state_arc, comps),
         }
     });
@@ -1576,10 +1577,10 @@ fn set_nvim_to_state(state_arc: Arc<UiMutex<State>>, nvim: &NvimSession) {
     }
 }
 
-fn set_nvim_initialized(state_arc: Arc<UiMutex<State>>) {
+fn set_nvim_initialized(state_arc: Arc<UiMutex<State>>, api_info: NeovimApiInfo) {
     glib::idle_add_once(clone!(state_arc => move || {
         let mut state = state_arc.borrow_mut();
-        state.nvim.set_initialized();
+        state.nvim.set_initialized(api_info);
         // in some case resize can happens while initilization in progress
         // so force resize here
         state.try_nvim_resize();

@@ -403,7 +403,9 @@ impl Ui {
         }
 
         let commands = commands.join("|");
-        let nvim = shell.nvim().unwrap();
+        let nvim_client = shell.nvim_clone();
+        let nvim = nvim_client.nvim().unwrap();
+        let channel_id = nvim_client.api_info().channel;
         nvim.clone().spawn(async move {
             let res = nvim.command(&commands).await;
 
@@ -414,7 +416,7 @@ impl Ui {
             if let Err(e) = res {
                 if let Ok(e) = NormalError::try_from(&*e) {
                     if e == NormalError::KeyboardInterrupt {
-                        nvim.shutdown().await;
+                        nvim.shutdown(channel_id).await;
                         return;
                     } else if !e.has_code(325) {
                         // Filter out errors we get if the user is presented with a prompt
