@@ -2,7 +2,7 @@ use std::{convert::*, mem, num::ParseFloatError, result, sync::Arc};
 
 use nvim_rs::Value;
 
-use crate::nvim::Tabpage;
+use crate::nvim::{NvimSession, Tabpage};
 use crate::shell;
 use crate::ui::UiMutex;
 
@@ -182,13 +182,22 @@ macro_rules! call {
     )
 }
 
-fn set_ui_opt(ui: &mut shell::State, opts: &[&str], val: bool) -> Result<(), String> {
-    let nvim = ui
-        .nvim()
-        .ok_or_else(|| "Nvim should be initialized by now, but isn't".to_owned())?;
+fn set_ui_opt(nvim: &NvimSession, opts: &[(&str, bool)], enable: bool) -> Result<(), String> {
+    for (ext, supported) in opts {
+        if !supported {
+            return if enable {
+                Err(format!(
+                    "{} is not supported by your version of neovim, please update!",
+                    ext
+                ))
+            } else {
+                Ok(())
+            };
+        }
+    }
 
-    for opt in opts {
-        nvim.block_timeout(nvim.ui_set_option(opt, val.into()))
+    for (ext, _) in opts {
+        nvim.block_timeout(nvim.ui_set_option(ext, enable.into()))
             .map_err(|e| e.to_string())?;
     }
     Ok(())
@@ -218,21 +227,36 @@ pub fn call_gui_event(
             },
             opt => error!("Unknown option {}", opt),
         },
-        "Option" => match try_str!(args[0]) {
-            "Popupmenu" => set_ui_opt(ui, &["ext_popupmenu"], try_uint!(args[1]) == 1)?,
-            "Tabline" => {
-                let arg = try_uint!(args[1]) == 1;
+        "Option" => {
+            let nvim_client = ui.nvim_clone();
+            let nvim = nvim_client.nvim().unwrap();
+            let api_info = nvim_client.api_info();
 
-                set_ui_opt(ui, &["ext_tabline"], arg)?;
-                ui.set_tabline(arg);
+            let mut args = args.into_iter();
+            let opt_name = try_string!(args.next().ok_or("UI extension name missing")?)?;
+            let opt_value =
+                try_int!(args.next().ok_or("New value for UI extension is missing")?) != 0;
+            match opt_name.as_str() {
+                "Popupmenu" => set_ui_opt(
+                    &nvim,
+                    &[("ext_popupmenu", api_info.ext_popupmenu)],
+                    opt_value,
+                )?,
+                "Tabline" => {
+                    set_ui_opt(&nvim, &[("ext_tabline", api_info.ext_tabline)], opt_value)?;
+                    ui.set_tabline(opt_value);
+                }
+                "Cmdline" => set_ui_opt(
+                    &nvim,
+                    &[
+                        ("ext_cmdline", api_info.ext_cmdline),
+                        ("ext_wildmenu", api_info.ext_wildmenu),
+                    ],
+                    opt_value,
+                )?,
+                opt => error!("Unknown option {}", opt),
             }
-            "Cmdline" => set_ui_opt(
-                ui,
-                &["ext_cmdline", "ext_wildmenu"],
-                try_uint!(args[1]) == 1,
-            )?,
-            opt => error!("Unknown option {}", opt),
-        },
+        }
         "Command" => {
             match try_str!(args[0]) {
                 "ToggleSidebar" => ui.on_command(NvimCommand::ToggleSidebar),

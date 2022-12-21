@@ -42,9 +42,12 @@ use nvim_rs::{
 use crate::nvim_config::NvimConfig;
 
 #[derive(Debug)]
-pub struct NvimInitError {
-    source: Box<dyn error::Error>,
-    cmd: Option<String>,
+pub enum NvimInitError {
+    ResponseError {
+        source: Box<dyn error::Error>,
+        cmd: Option<String>,
+    },
+    MissingCapability(String),
 }
 
 impl NvimInitError {
@@ -52,7 +55,7 @@ impl NvimInitError {
     where
         E: Into<Box<dyn error::Error>>,
     {
-        NvimInitError {
+        NvimInitError::ResponseError {
             cmd: None,
             source: error.into(),
         }
@@ -62,24 +65,40 @@ impl NvimInitError {
     where
         E: Into<Box<dyn error::Error>>,
     {
-        NvimInitError {
+        NvimInitError::ResponseError {
             cmd: Some(format!("{:?}", cmd)),
             source: error.into(),
         }
     }
 
+    pub fn new_missing_capability(cap_msg: impl Into<String>) -> Self {
+        Self::MissingCapability(cap_msg.into())
+    }
+
     pub fn source(&self) -> String {
-        format!("{}", self.source)
+        match self {
+            Self::ResponseError { source, .. } => format!("{}", source),
+            Self::MissingCapability(_) => "".to_string(),
+        }
     }
 
     pub fn cmd(&self) -> Option<&String> {
-        self.cmd.as_ref()
+        if let Self::ResponseError { ref cmd, .. } = self {
+            cmd.as_ref()
+        } else {
+            None
+        }
     }
 }
 
 impl fmt::Display for NvimInitError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self.source)
+        match self {
+            Self::ResponseError { source, .. } => write!(f, "{:?}", source),
+            Self::MissingCapability(cap) => {
+                write!(f, "Nvim version is too old, missing support for {}", cap)
+            }
+        }
     }
 }
 
@@ -89,7 +108,11 @@ impl error::Error for NvimInitError {
     }
 
     fn cause(&self) -> Option<&dyn error::Error> {
-        Some(&*self.source)
+        if let Self::ResponseError { ref source, .. } = self {
+            Some(source.as_ref())
+        } else {
+            None
+        }
     }
 }
 
@@ -408,19 +431,25 @@ pub async fn post_start_init(
     let api_info = NeovimApiInfo::new(
         nvim.get_api_info()
             .await
-            .map_err(NvimInitError::new_post_init)?
-    ).map_err(NvimInitError::new_post_init)?;
+            .map_err(NvimInitError::new_post_init)?,
+    )
+    .map_err(NvimInitError::new_post_init)?;
+
+    /* Check that this neovim instance pleases us */
+    if !api_info.ext_linegrid {
+        return Err(NvimInitError::new_missing_capability("ext_linegrid"));
+    }
 
     nvim.timeout(
         nvim.ui_attach(
             cols.into(),
             rows.into(),
             UiAttachOptions::new()
-                .set_popupmenu_external(true)
-                .set_tabline_external(true)
+                .set_popupmenu_external(api_info.ext_popupmenu)
+                .set_tabline_external(api_info.ext_tabline)
                 .set_linegrid_external(true)
-                .set_hlstate_external(true)
-                .set_termcolors_external(true),
+                .set_hlstate_external(api_info.ext_hlstate)
+                .set_termcolors_external(api_info.ext_termcolors),
         ),
     )
     .await

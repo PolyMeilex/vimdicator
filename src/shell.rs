@@ -32,7 +32,7 @@ use crate::grid::GridMap;
 use crate::highlight::{BackgroundState, HighlightMap};
 use crate::misc::{decode_uri, escape_filename, split_at_comma};
 use crate::nvim::{
-    self, CallErrorExt, ErrorReport, NeovimClient, NeovimApiInfo, NormalError, NvimHandler,
+    self, CallErrorExt, ErrorReport, NeovimApiInfo, NeovimClient, NormalError, NvimHandler,
     NvimSession, PendingPopupMenu, RedrawMode, Tabpage,
 };
 use crate::settings::{FontSource, Settings};
@@ -1493,13 +1493,13 @@ fn show_nvim_init_error(
     state_arc: Arc<UiMutex<State>>,
     comps: Arc<UiMutex<Components>>,
 ) {
-    let source = err.source();
+    let error_msg = format!("{}", err);
 
     glib::idle_add_once(move || {
         let state = state_arc.borrow();
         state.nvim.set_error();
         comps.borrow().window().remove_css_class("nvim-background");
-        state.error_area.show_nvim_init_error(&source);
+        state.error_area.show_nvim_init_error(&error_msg);
         state.show_error_area();
     });
 }
