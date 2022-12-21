@@ -1227,12 +1227,12 @@ impl Shell {
     pub fn detach_ui(&self) {
         let state = self.state.borrow();
         let nvim_client = state.nvim.clone();
+        let api_info = nvim_client.api_info();
 
         if let Some(nvim) = nvim_client.nvim() {
-            let api_info = nvim_client.api_info();
             nvim_client.clear();
             nvim.block_timeout(nvim.ui_detach()).report_err();
-            nvim.block_on(nvim.shutdown(api_info.channel));
+            nvim.block_on(nvim.shutdown(api_info.map_or(1, |i| i.channel)));
         }
     }
 
