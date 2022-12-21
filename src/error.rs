@@ -14,13 +14,29 @@ pub struct ErrorArea {
 
 impl ErrorArea {
     pub fn new() -> Self {
-        let base = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        let base = gtk::Box::builder()
+            .orientation(gtk::Orientation::Horizontal)
+            .spacing(10)
+            .valign(gtk::Align::Center)
+            .halign(gtk::Align::Center)
+            .vexpand(true)
+            .hexpand(true)
+            .build();
 
         let label = gtk::Label::builder()
             .wrap(true)
             .selectable(true)
+            .hexpand(true)
+            .vexpand(true)
             .build();
+
         let error_image = gtk::Image::from_icon_name("dialog-error");
+        error_image.set_icon_size(gtk::IconSize::Large);
+        error_image.set_halign(gtk::Align::End);
+        error_image.set_valign(gtk::Align::Center);
+        error_image.set_hexpand(true);
+        error_image.set_vexpand(true);
+
         base.append(&error_image);
         base.append(&label);
 
