@@ -16,7 +16,10 @@ impl ErrorArea {
     pub fn new() -> Self {
         let base = gtk::Box::new(gtk::Orientation::Horizontal, 0);
 
-        let label = gtk::Label::builder().wrap(true).build();
+        let label = gtk::Label::builder()
+            .wrap(true)
+            .selectable(true)
+            .build();
         let error_image = gtk::Image::from_icon_name("dialog-error");
         base.append(&error_image);
         base.append(&label);
