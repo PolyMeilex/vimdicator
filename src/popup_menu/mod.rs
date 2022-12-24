@@ -16,6 +16,7 @@ use crate::{
     nvim::{self, ErrorReport, NeovimClient, PendingPopupMenu, PopupMenuItem},
     render::{self, CellMetrics},
     shell::RenderState,
+    spawn_timeout,
     ui_model::ModelRect,
 };
 use list_row::{PopupMenuListRow, PopupMenuListRowState, PADDING};
@@ -192,6 +193,15 @@ impl State {
     fn update_list(&mut self, ctx: PopupMenuContext) {
         if ctx.menu_items.is_empty() {
             return;
+        }
+
+        let nvim_client = self.nvim.as_ref().unwrap();
+        let nvim = nvim_client.nvim().unwrap();
+        let api_info = self.nvim.as_ref().unwrap().api_info().unwrap();
+
+        if api_info.ui_pum_set_height {
+            let len = ctx.menu_items.len().min(MAX_VISIBLE_ROWS as usize);
+            spawn_timeout!(nvim.ui_pum_set_height(len as i64));
         }
 
         let CellMetrics {

@@ -13,6 +13,8 @@ pub struct NeovimApiInfo {
     pub ext_popupmenu: bool,
     pub ext_tabline: bool,
     pub ext_termcolors: bool,
+
+    pub ui_pum_set_height: bool,
 }
 
 impl NeovimApiInfo {
@@ -37,6 +39,7 @@ impl NeovimApiInfo {
                 .ok_or(format!("Metadata key {:?} isn't string", key))?
             {
                 "ui_options" => self_.parse_ui_options(value)?,
+                "functions" => self_.parse_functions(value)?,
                 _ => (),
             }
         }
@@ -62,6 +65,30 @@ impl NeovimApiInfo {
                 "ext_termcolors" => self.ext_termcolors = true,
                 _ => (),
             };
+        }
+        Ok(())
+    }
+
+    #[inline]
+    fn parse_functions(&mut self, functions: Value) -> Result<(), String> {
+        for function in functions
+            .as_array()
+            .ok_or_else(|| format!("Function list is not a list: {:?}", functions))?
+        {
+            match function
+                .as_map()
+                .ok_or_else(|| format!("Function info is not a map: {:?}", function))?
+                .into_iter()
+                .find_map(|(key, value)| {
+                    key.as_str()
+                        .filter(|k| *k == "name")
+                        .and_then(|_| value.as_str())
+                })
+                .ok_or_else(|| format!("Function info is missing name: {:?}", functions))?
+            {
+                "nvim_ui_pum_set_height" => self.ui_pum_set_height = true,
+                _ => (),
+            }
         }
         Ok(())
     }
