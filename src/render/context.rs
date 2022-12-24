@@ -227,8 +227,23 @@ impl CellMetrics {
     }
 
     // Translate the given grid coordinates into their actual pixel coordinates
-    pub fn get_coords(&self, (row, col): (usize, usize)) -> (f64, f64) {
+    pub fn get_pixel_coords(&self, (row, col): (usize, usize)) -> (f64, f64) {
         (self.char_width * col as f64, self.line_height * row as f64)
+    }
+
+    /* Translate the given pixel coordinates to their positions on the grid, while allowing for
+     * fractional values to be returned (nvim asks for this sometimes!)
+     */
+    pub fn get_fractional_grid_area(
+        &self,
+        (x, y, w, h): (f64, f64, f64, f64),
+    ) -> (f64, f64, f64, f64) {
+        (
+            x as f64 / self.char_width,
+            y as f64 / self.line_height,
+            w as f64 / self.char_width,
+            h as f64 / self.line_height,
+        )
     }
 
     // Convert a count of cells to its respective length in pixels

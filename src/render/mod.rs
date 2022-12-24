@@ -41,7 +41,7 @@ impl<'a> RenderStep<'a> {
         snapshot: &gtk::Snapshot,
         cell_metrics: &CellMetrics
     ) {
-        let (x, y) = cell_metrics.get_coords(self.pos);
+        let (x, y) = cell_metrics.get_pixel_coords(self.pos);
         let len = cell_metrics.get_cell_len(self.len);
         match self.kind {
             RenderStepKind::Background =>
@@ -170,7 +170,7 @@ pub fn snapshot_cursor<C: Cursor>(
         ascent, char_width, ..
     } = *cell_metrics;
     let (cursor_row, cursor_col) = ui_model.get_cursor();
-    let (x, y) = cell_metrics.get_coords((cursor_row, cursor_col));
+    let (x, y) = cell_metrics.get_pixel_coords((cursor_row, cursor_col));
 
     let cursor_line = match ui_model.model().get(cursor_row) {
         Some(cursor_line) => cursor_line,
@@ -447,7 +447,7 @@ fn snapshot_cell(
     pos: (usize, usize),
     cell_metrics: &CellMetrics,
 ) {
-    let (x, y) = cell_metrics.get_coords(pos);
+    let (x, y) = cell_metrics.get_pixel_coords(pos);
     for item in items {
         let fg = hl.actual_cell_fg(cell);
 
