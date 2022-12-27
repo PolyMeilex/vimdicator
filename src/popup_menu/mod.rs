@@ -389,10 +389,7 @@ impl PopupMenu {
 
     pub fn hide(&self) {
         self.state.borrow_mut().open = false;
-        // popdown() in case of fast hide/show
-        // situation does not work and just close popup window
-        // so hide() is important here
-        self.popover.hide();
+        self.popover.popdown();
     }
 
     pub fn select(&self, selected: Option<u32>) {
