@@ -2,8 +2,7 @@ use std::convert::*;
 
 use once_cell::sync::*;
 
-use gdk;
-use glib::{self, prelude::*, SignalHandlerId};
+use glib::SignalHandlerId;
 use gtk::{self, prelude::*, subclass::prelude::*, graphene::*};
 
 glib::wrapper! {
