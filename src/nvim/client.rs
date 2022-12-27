@@ -15,6 +15,7 @@ pub struct NeovimApiInfo {
     pub ext_termcolors: bool,
 
     pub ui_pum_set_height: bool,
+    pub ui_pum_set_bounds: bool,
 }
 
 impl NeovimApiInfo {
@@ -87,6 +88,7 @@ impl NeovimApiInfo {
                 .ok_or_else(|| format!("Function info is missing name: {:?}", functions))?
             {
                 "nvim_ui_pum_set_height" => self.ui_pum_set_height = true,
+                "nvim_ui_pum_set_bounds" => self.ui_pum_set_bounds = true,
                 _ => (),
             }
         }
