@@ -8,7 +8,6 @@ use std::{
 };
 
 use crate::{
-    popup_menu::PopupMenuPopover,
     render::*,
     shell::{RenderState, State},
     ui::UiMutex,
@@ -33,7 +32,7 @@ impl NvimViewport {
         self.set_property("context-menu", popover_menu);
     }
 
-    pub fn set_completion_popover(&self, completion_popover: &PopupMenuPopover) {
+    pub fn set_completion_popover(&self, completion_popover: &gtk::Popover) {
         self.set_property("completion-popover", completion_popover);
     }
 
@@ -58,7 +57,7 @@ struct NvimViewportInner {
 pub struct NvimViewportObject {
     inner: RefCell<NvimViewportInner>,
     context_menu: glib::WeakRef<gtk::PopoverMenu>,
-    completion_popover: glib::WeakRef<PopupMenuPopover>,
+    completion_popover: glib::WeakRef<gtk::Popover>,
     ext_cmdline: glib::WeakRef<gtk::Popover>,
 }
 
@@ -160,7 +159,7 @@ impl ObjectImpl for NvimViewportObject {
                 if let Some(popover) = self.completion_popover.upgrade() {
                     popover.unparent();
                 }
-                let popover: PopupMenuPopover = value.get().unwrap();
+                let popover: gtk::Popover = value.get().unwrap();
 
                 popover.set_parent(&*obj);
                 self.completion_popover.set(Some(&popover));

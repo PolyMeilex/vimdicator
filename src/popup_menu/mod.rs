@@ -1,5 +1,4 @@
 mod list_row;
-mod popover;
 mod popupmenu_model;
 
 use std::cell::RefCell;
@@ -21,7 +20,6 @@ use crate::{
     ui_model::ModelRect,
 };
 use list_row::{PopupMenuListRow, PopupMenuListRowState, PADDING};
-pub use popover::PopupMenuPopover;
 use popupmenu_model::{PopupMenuItemRef, PopupMenuModel};
 
 pub const MAX_VISIBLE_ROWS: i32 = 10;
@@ -40,7 +38,6 @@ pub struct State {
     open: bool,
     row_height: i32,
     prev_selected: Option<u32>,
-    prev_bounds: Option<(f64, f64, f64, f64)>,
     preview: bool,
 }
 
@@ -104,7 +101,6 @@ impl State {
             list_row_state: Rc::new(RefCell::new(PopupMenuListRowState::default())),
             open: false,
             prev_selected: None,
-            prev_bounds: None,
             preview: true,
         }
     }
@@ -307,7 +303,7 @@ impl State {
 }
 
 pub struct PopupMenu {
-    popover: PopupMenuPopover,
+    popover: gtk::Popover,
 
     state: Rc<RefCell<State>>,
 }
@@ -318,13 +314,13 @@ impl PopupMenu {
         state.update_css(&render_state.hl, &render_state.font_ctx);
 
         let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        let popover = PopupMenuPopover::new();
-        popover.set_autohide(false);
-        popover.set_can_focus(false);
-        popover.set_child(Some(&content));
-        popover.add_css_class("background");
-        popover.add_css_class("nvim-popover");
-        popover.set_position(gtk::PositionType::Top);
+        let popover = gtk::Popover::builder()
+            .autohide(false)
+            .can_focus(false)
+            .child(&content)
+            .css_classes(vec!["background".into(), "nvim-popover".into()])
+            .position(gtk::PositionType::Top)
+            .build();
 
         content.append(&state.item_scroll);
         content.append(&state.info_scroll);
@@ -380,67 +376,7 @@ impl PopupMenu {
         self.state.borrow().open
     }
 
-    // Store reference to nvim and setup bounds reporting for the popup, if this nvim instance
-    // supports it
-    fn first_time_init(&self, ctx: &PopupMenuContext, render_state: &Rc<RefCell<RenderState>>) {
-        /* If nvim hasn't been set to the popup state, this is our first time showing the popup
-         * menu
-         */
-        if self.state.borrow().nvim.is_some() {
-            return;
-        }
-
-        let nvim_client = ctx.nvim.clone();
-        let api_info = ctx
-            .nvim
-            .api_info()
-            .expect("Popup menu being shown before nvim is ready?");
-
-        let nvim = nvim_client.nvim().unwrap();
-        if api_info.ui_pum_set_bounds {
-            self.popover.connect_bounds_changed(glib::clone!(
-                @strong self.state as state, @strong render_state => move |_, x, y, w, h| {
-                    let mut state = state.borrow_mut();
-
-                    /* Figure out the actual cell size of the bounds */
-                    let render_state = render_state.borrow();
-                    let cell_metrics = render_state.font_ctx.cell_metrics();
-                    let (mut x, mut y, mut w, mut h) = cell_metrics.get_fractional_grid_area(
-                        (x as f64, y as f64, w as f64, h as f64)
-                    );
-
-                    if x < 0.0 {
-                        w += x;
-                        x = 0.0;
-                    }
-                    if y < 0.0 {
-                        h += y;
-                        y = 0.0;
-                    }
-
-                    if state.prev_bounds != Some((x, y, w, h)) {
-                        state.prev_bounds = Some((x, y, w, h));
-                        debug!("popup_menu bounds: {w}x{h} @ {x}x{y}");
-
-                        nvim.spawn(glib::clone!(@strong nvim => async move {
-                            // XXX the arg order is weird here, but correct
-                            nvim.ui_pum_set_bounds(w, h, y, x)
-                                .await
-                                .report_err();
-                        }));
-                    }
-                }
-            ));
-            self.popover
-                .connect_unmap(glib::clone!(@strong self.state as state => move |_| {
-                    state.borrow_mut().prev_bounds = None;
-                }));
-        }
-    }
-
-    pub fn show(&self, ctx: PopupMenuContext, render_state: &Rc<RefCell<RenderState>>) {
-        self.first_time_init(&ctx, render_state);
-
+    pub fn show(&self, ctx: PopupMenuContext) {
         let mut state = self.state.borrow_mut();
         state.open = true;
 
@@ -485,14 +421,14 @@ impl PopupMenu {
                 selected,
                 pos: (row, col),
             } => {
-                let render_state_ref = render_state.borrow();
+                let render_state = render_state.borrow();
                 let point = ModelRect::point(col as usize, row as usize);
-                let (x, y, width, height) = point.to_area(render_state_ref.font_ctx.cell_metrics());
+                let (x, y, width, height) = point.to_area(render_state.font_ctx.cell_metrics());
 
                 let context = PopupMenuContext {
                     nvim,
-                    hl: &render_state_ref.hl,
-                    font_ctx: &render_state_ref.font_ctx,
+                    hl: &render_state.hl,
+                    font_ctx: &render_state.font_ctx,
                     menu_items,
                     selected,
                     x,
@@ -502,7 +438,7 @@ impl PopupMenu {
                     max_width: max_popup_width,
                 };
 
-                self.show(context, render_state);
+                self.show(context);
             }
             PendingPopupMenu::Select(selected) => self.select(selected),
             PendingPopupMenu::Hide => self.hide(),
@@ -512,7 +448,7 @@ impl PopupMenu {
 }
 
 impl Deref for PopupMenu {
-    type Target = PopupMenuPopover;
+    type Target = gtk::Popover;
 
     fn deref(&self) -> &Self::Target {
         &self.popover
