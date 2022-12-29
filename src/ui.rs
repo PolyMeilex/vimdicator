@@ -152,7 +152,10 @@ impl Ui {
             window.add_css_class("nvim-background");
         }
 
-        let main = Paned::new(Orientation::Horizontal);
+        let main = Paned::builder()
+            .orientation(Orientation::Horizontal)
+            .focusable(false)
+            .build();
 
         let comps_ref = &self.comps;
         let shell_ref = &self.shell;
