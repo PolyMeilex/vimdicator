@@ -1702,28 +1702,16 @@ impl State {
 
     pub fn default_colors_set(
         &mut self,
-        fg: i64,
-        bg: i64,
-        sp: i64,
+        fg: Option<u64>,
+        bg: Option<u64>,
+        sp: Option<u64>,
         cterm_fg: i64,
         cterm_bg: i64,
     ) -> RedrawMode {
         self.render_state.borrow_mut().hl.set_defaults(
-            if fg >= 0 {
-                Some(Color::from_indexed_color(fg as u64))
-            } else {
-                None
-            },
-            if bg >= 0 {
-                Some(Color::from_indexed_color(bg as u64))
-            } else {
-                None
-            },
-            if sp >= 0 {
-                Some(Color::from_indexed_color(sp as u64))
-            } else {
-                None
-            },
+            fg.map(Color::from_indexed_color),
+            bg.map(Color::from_indexed_color),
+            sp.map(Color::from_indexed_color),
             if cterm_fg > 0 {
                 Color::from_cterm((cterm_fg - 1) as u8)
             } else {
