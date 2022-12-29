@@ -304,15 +304,13 @@ fn snapshot_undercurl(
 ) {
     let CellMetrics {
         underline_position,
-        char_height,
+        /* Ideally we always want to make sure that the undercurl comes out as a distinct set of
+         * repeating dots, always equally spaced, and as large as possible within the descent area
+         * starting from the underline position to the bottom of the line.
+         */
+        underline_thickness: diameter,
         ..
     } = *cell_metrics;
-
-    /* Ideally we always want to make sure that the undercurl comes out as a distinct set of
-     * repeating dots, always equally spaced, and as large as possible within the descent area
-     * starting from the underline position to the bottom of the line..
-     */
-    let diameter = char_height - underline_position;
 
     /* We also want to make sure that each dot starts on an X coordinate that's a multiple of the
      * width of the segment that we'll be repeating, in order to avoid the spacing between dots of
@@ -321,7 +319,7 @@ fn snapshot_undercurl(
      */
     let start_x = x - (x % (diameter * 2.0));
 
-    y += underline_position;
+    y = (y + underline_position).floor();
 
     let rect = Rect::new(x as f32, y as f32, len as f32, diameter as f32);
     snapshot.push_repeat(
