@@ -3,7 +3,7 @@ use std::convert::*;
 use once_cell::sync::*;
 
 use glib::SignalHandlerId;
-use gtk::{self, prelude::*, subclass::prelude::*, graphene::*};
+use gtk::{self, graphene::*, prelude::*, subclass::prelude::*};
 
 glib::wrapper! {
     pub struct PopupMenuPopover(ObjectSubclass<PopupMenuPopoverObject>)
@@ -44,16 +44,16 @@ impl ObjectSubclass for PopupMenuPopoverObject {
 
 impl ObjectImpl for PopupMenuPopoverObject {
     fn signals() -> &'static [glib::subclass::Signal] {
-        static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| vec![
-            glib::subclass::Signal::builder("bounds-change")
+        static SIGNALS: Lazy<Vec<glib::subclass::Signal>> = Lazy::new(|| {
+            vec![glib::subclass::Signal::builder("bounds-change")
                 .param_types([
                     glib::Type::F32, // x
                     glib::Type::F32, // y
                     glib::Type::I32, // w
                     glib::Type::I32, // h
                 ])
-                .build(),
-        ]);
+                .build()]
+        });
 
         SIGNALS.as_ref()
     }
