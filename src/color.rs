@@ -63,19 +63,8 @@ impl Color {
         pango::AttrColor::new_foreground(r, g, b)
     }
 
-    #[deprecated]
-    pub fn inverse(&self, inverse_level: f64) -> Cow<Color> {
-        debug_assert!(inverse_level >= 0.0 && inverse_level <= 1.0);
-
-        if inverse_level <= 0.000001 {
-            Cow::Borrowed(self)
-        } else {
-            Cow::Owned(Color(
-                (inverse_level - self.0).abs(),
-                (inverse_level - self.1).abs(),
-                (inverse_level - self.2).abs(),
-            ))
-        }
+    pub fn invert(&self) -> Self {
+        Self(1.0 - self.0, 1.0 - self.1, 1.0 - self.2)
     }
 
     pub fn fade<'a>(&'a self, into: &'a Self, percentage: f64) -> Cow<Self> {

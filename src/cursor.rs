@@ -252,7 +252,7 @@ impl<CB: CursorRedrawCb> Cursor for BlinkCursor<CB> {
         } else {
             let bg = hl
                 .actual_cell_bg(cell)
-                .fade(hl.cursor_bg(), fade_percentage)
+                .fade(&hl.cursor_bg(), fade_percentage)
                 .as_ref()
                 .to_rgbo(filled_alpha);
             snapshot.append_color(&bg, &Rect::new(x, y, w, h));
