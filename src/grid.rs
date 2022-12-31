@@ -6,7 +6,7 @@ use fnv::FnvHashMap;
 use nvim_rs::Value;
 
 use crate::highlight::{Highlight, HighlightMap};
-use crate::ui_model::{ModelRect, ModelRectVec, UiModel};
+use crate::ui_model::{ModelRect, UiModel};
 
 const DEFAULT_GRID: u64 = 1;
 
@@ -92,7 +92,7 @@ impl Grid {
         }
     }
 
-    pub fn cursor_goto(&mut self, row: usize, col: usize) -> ModelRectVec {
+    pub fn cursor_goto(&mut self, row: usize, col: usize) {
         self.model.set_cursor(row, col)
     }
 

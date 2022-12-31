@@ -61,21 +61,9 @@ impl UiModel {
         ModelRect::point(self.cur_col, self.cur_row)
     }
 
-    pub fn set_cursor(&mut self, row: usize, col: usize) -> ModelRectVec {
-        // it is possible in some cases that cursor moved out of visible rect
-        // see https://github.com/daa84/neovim-gtk/issues/20
-        if row >= self.model.len() || col >= self.model[row].line.len() {
-            return ModelRectVec::empty();
-        }
-
-        let mut changed_region = ModelRectVec::new(self.cur_point());
-
+    pub fn set_cursor(&mut self, row: usize, col: usize) {
         self.cur_row = row;
         self.cur_col = col;
-
-        changed_region.join(&self.cur_point());
-
-        changed_region
     }
 
     pub fn get_cursor(&self) -> (usize, usize) {
@@ -212,87 +200,6 @@ impl UiModel {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_vec_join_inside() {
-        let mut list = ModelRectVec::new(ModelRect::new(0, 23, 0, 69));
-
-        let inside = ModelRect::new(23, 23, 68, 69);
-
-        list.join(&inside);
-        assert_eq!(1, list.list.len());
-    }
-
-    #[test]
-    fn test_vec_join_top() {
-        let mut list = ModelRectVec::new(ModelRect::point(0, 0));
-
-        let neighbor = ModelRect::point(1, 0);
-
-        list.join(&neighbor);
-        assert_eq!(1, list.list.len());
-    }
-
-    #[test]
-    fn test_model_vec_join_right() {
-        let mut list = ModelRectVec::new(ModelRect::new(23, 23, 69, 69));
-
-        let neighbor = ModelRect::new(23, 23, 69, 70);
-
-        list.join(&neighbor);
-        assert_eq!(1, list.list.len());
-    }
-
-    #[test]
-    fn test_model_vec_join_right2() {
-        let mut list = ModelRectVec::new(ModelRect::new(0, 1, 0, 9));
-
-        let neighbor = ModelRect::new(1, 1, 9, 10);
-
-        list.join(&neighbor);
-        assert_eq!(1, list.list.len());
-    }
-
-    #[test]
-    fn test_model_vec_join() {
-        let mut list = ModelRectVec::new(ModelRect::point(5, 5));
-
-        let neighbor = ModelRect::point(6, 5);
-
-        list.join(&neighbor);
-        assert_eq!(1, list.list.len());
-    }
-
-    #[test]
-    fn test_model_vec_no_join() {
-        let mut list = ModelRectVec::new(ModelRect::point(5, 5));
-
-        let not_neighbor = ModelRect::point(6, 6);
-
-        list.join(&not_neighbor);
-        assert_eq!(2, list.list.len());
-    }
-
-    #[test]
-    fn test_cursor_area() {
-        let mut model = UiModel::new(10, 20);
-
-        model.set_cursor(1, 1);
-
-        let rect = model.set_cursor(5, 5);
-
-        assert_eq!(2, rect.list.len());
-
-        assert_eq!(1, rect.list[0].top);
-        assert_eq!(1, rect.list[0].left);
-        assert_eq!(1, rect.list[0].bot);
-        assert_eq!(1, rect.list[0].right);
-
-        assert_eq!(5, rect.list[1].top);
-        assert_eq!(5, rect.list[1].left);
-        assert_eq!(5, rect.list[1].bot);
-        assert_eq!(5, rect.list[1].right);
-    }
 
     #[test]
     fn test_scroll_area() {
