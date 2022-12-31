@@ -37,7 +37,7 @@ use crate::ui_model::ModelRect;
 use crate::{spawn_timeout, spawn_timeout_user_err};
 
 use crate::cmd_line::{CmdLine, CmdLineContext};
-use crate::cursor::{BlinkCursor, CursorRedrawCb};
+use crate::cursor::{Cursor, CursorRedrawCb};
 use crate::input;
 use crate::input::keyval_to_input_string;
 use crate::mode;
@@ -188,7 +188,7 @@ pub struct State {
 
     mouse_enabled: bool,
     nvim: Rc<NeovimClient>,
-    cursor: Option<BlinkCursor<State>>,
+    cursor: Option<Cursor<State>>,
     popup_menu: PopupMenu,
     cmd_line: CmdLine,
     settings: Rc<RefCell<Settings>>,
@@ -737,7 +737,7 @@ impl State {
             .set_background_state(background)
     }
 
-    pub fn cursor(&self) -> Option<&BlinkCursor<State>> {
+    pub fn cursor(&self) -> Option<&Cursor<State>> {
         self.cursor.as_ref()
     }
 }
@@ -942,7 +942,7 @@ impl Shell {
         };
 
         let shell_ref = Arc::downgrade(&shell.state);
-        shell.state.borrow_mut().cursor = Some(BlinkCursor::new(shell_ref));
+        shell.state.borrow_mut().cursor = Some(Cursor::new(shell_ref));
 
         shell
             .state

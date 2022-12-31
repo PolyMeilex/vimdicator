@@ -171,7 +171,7 @@ pub struct State {
     block: Option<Level>,
     render_state: Rc<RefCell<shell::RenderState>>,
     viewport: CmdlineViewport,
-    cursor: Option<cursor::BlinkCursor<State>>,
+    cursor: Option<cursor::Cursor<State>>,
 }
 
 impl State {
@@ -256,7 +256,7 @@ impl CmdLine {
 
         let state = Arc::new(UiMutex::new(State::new(viewport.clone(), render_state)));
         let weak_cb = Arc::downgrade(&state);
-        let cursor = cursor::BlinkCursor::new(weak_cb);
+        let cursor = cursor::Cursor::new(weak_cb);
         state.borrow_mut().cursor = Some(cursor);
 
         viewport.set_state(&state);

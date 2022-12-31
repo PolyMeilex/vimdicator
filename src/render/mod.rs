@@ -7,7 +7,7 @@ use log::warn;
 
 use crate::{
     color,
-    cursor::{cursor_rect, Cursor},
+    cursor::{cursor_rect, Cursor, CursorRedrawCb},
     highlight::HighlightMap,
     shell::TransparencySettings,
     ui_model,
@@ -153,9 +153,9 @@ pub fn snapshot_nvim(
     snapshot.to_node()
 }
 
-pub fn snapshot_cursor<C: Cursor>(
+pub fn snapshot_cursor<T: CursorRedrawCb + 'static>(
     snapshot: &gtk::Snapshot,
-    cursor: &C,
+    cursor: &Cursor<T>,
     font_ctx: &Context,
     ui_model: &ui_model::UiModel,
     hl: &HighlightMap,

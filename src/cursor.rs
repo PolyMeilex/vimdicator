@@ -94,38 +94,14 @@ impl<CB: CursorRedrawCb> State<CB> {
     }
 }
 
-pub trait Cursor {
-    /// Add render nodes for the cursor to the snapshot. Returns whether or not text should be drawn
-    /// after
-    fn snapshot(
-        &self,
-        snapshot: &gtk::Snapshot,
-        font_ctx: &render::Context,
-        pos: (f64, f64),
-        cell: &Cell,
-        double_width: bool,
-        hl: &HighlightMap,
-        fade_percentage: f64,
-        alpha: f64,
-    ) -> bool;
-
-    fn alpha(&self) -> f64;
-
-    fn is_visible(&self) -> bool;
-
-    fn is_focused(&self) -> bool;
-
-    fn mode_info(&self) -> Option<&mode::ModeInfo>;
-}
-
-pub struct BlinkCursor<CB: CursorRedrawCb> {
+pub struct Cursor<CB: CursorRedrawCb> {
     state: Arc<UiMutex<State<CB>>>,
     mode_info: Option<mode::ModeInfo>,
 }
 
-impl<CB: CursorRedrawCb + 'static> BlinkCursor<CB> {
+impl<CB: CursorRedrawCb + 'static> Cursor<CB> {
     pub fn new(redraw_cb: Weak<UiMutex<CB>>) -> Self {
-        BlinkCursor {
+        Cursor {
             state: Arc::new(UiMutex::new(State::new(redraw_cb))),
             mode_info: None,
         }
@@ -219,10 +195,10 @@ impl<CB: CursorRedrawCb + 'static> BlinkCursor<CB> {
     pub fn busy_off(&mut self) {
         self.start();
     }
-}
 
-impl<CB: CursorRedrawCb> Cursor for BlinkCursor<CB> {
-    fn snapshot(
+    /// Add render nodes for the cursor to the snapshot. Returns whether or not text should be drawn
+    /// after
+    pub fn snapshot(
         &self,
         snapshot: &gtk::Snapshot,
         font_ctx: &render::Context,
@@ -260,11 +236,11 @@ impl<CB: CursorRedrawCb> Cursor for BlinkCursor<CB> {
         }
     }
 
-    fn alpha(&self) -> f64 {
+    pub fn alpha(&self) -> f64 {
         self.state.borrow().alpha.0
     }
 
-    fn is_visible(&self) -> bool {
+    pub fn is_visible(&self) -> bool {
         let state = self.state.borrow();
 
         if state.anim_phase == AnimPhase::Busy {
@@ -278,11 +254,11 @@ impl<CB: CursorRedrawCb> Cursor for BlinkCursor<CB> {
         }
     }
 
-    fn is_focused(&self) -> bool {
+    pub fn is_focused(&self) -> bool {
         self.state.borrow().focus()
     }
 
-    fn mode_info(&self) -> Option<&mode::ModeInfo> {
+    pub fn mode_info(&self) -> Option<&mode::ModeInfo> {
         self.mode_info.as_ref()
     }
 }
@@ -407,7 +383,7 @@ fn anim_step<CB: CursorRedrawCb + 'static>(state: &Arc<UiMutex<State<CB>>>) -> g
     }
 }
 
-impl<CB: CursorRedrawCb> Drop for BlinkCursor<CB> {
+impl<CB: CursorRedrawCb> Drop for Cursor<CB> {
     fn drop(&mut self) {
         if let Some(timer_id) = self.state.borrow_mut().timer.take() {
             timer_id.remove();
