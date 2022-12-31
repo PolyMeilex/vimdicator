@@ -1,11 +1,6 @@
 use super::UiModel;
 use crate::render::CellMetrics;
 
-#[derive(Clone, Debug)]
-pub struct ModelRectVec {
-    pub list: Vec<ModelRect>,
-}
-
 #[derive(Clone, PartialEq, Debug)]
 pub struct ModelRect {
     pub top: usize,
