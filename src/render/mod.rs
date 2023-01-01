@@ -169,7 +169,7 @@ pub fn snapshot_cursor<T: CursorRedrawCb + 'static>(
     let CellMetrics {
         ascent, char_width, ..
     } = *cell_metrics;
-    let (cursor_row, cursor_col) = ui_model.get_cursor();
+    let (cursor_row, cursor_col) = ui_model.get_flushed_cursor();
     let (x, y) = cell_metrics.get_pixel_coords((cursor_row, cursor_col));
 
     let cursor_line = match ui_model.model().get(cursor_row) {

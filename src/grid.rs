@@ -95,7 +95,7 @@ impl Grid {
     }
 
     pub fn cur_point(&self) -> ModelRect {
-        self.model.cur_point()
+        self.model.cur_real_point()
     }
 
     pub fn resize(&mut self, columns: u64, rows: u64) {

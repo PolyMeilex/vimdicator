@@ -20,7 +20,7 @@ pub struct UiModel {
     /// (row, col)
     cur_pos: (usize, usize),
     /// (row, col)
-    pending_pos: Option<(usize, usize)>,
+    flushed_pos: (usize, usize),
     model: Box<[Line]>,
 }
 
@@ -35,7 +35,7 @@ impl UiModel {
             columns: columns as usize,
             rows: rows as usize,
             cur_pos: (0, 0),
-            pending_pos: None,
+            flushed_pos: (0, 0),
             model: model.into_boxed_slice(),
         }
     }
@@ -50,31 +50,31 @@ impl UiModel {
         &mut self.model
     }
 
-    pub fn cur_point(&self) -> ModelRect {
+    /// Get the current point where the cursor is located. Note that this isn't what you want to use
+    /// if you
+    pub fn cur_real_point(&self) -> ModelRect {
         let (row, col) = self.cur_pos;
         ModelRect::point(col, row)
     }
 
     pub fn set_cursor(&mut self, row: usize, col: usize) {
-        self.pending_pos = Some((row, col));
+        self.cur_pos = (row, col);
     }
 
     pub fn flush_cursor(&mut self) {
-        if let Some(pos) = self.pending_pos.take() {
-            self.cur_pos = pos;
-        }
+        self.flushed_pos = self.cur_pos;
     }
 
     /// Get the "real" cursor position, e.g. use the intermediate position if there is one. This is
     /// usually what you want for UI model operations
     pub fn get_real_cursor(&self) -> (usize, usize) {
-        self.pending_pos.unwrap_or(self.cur_pos)
+        self.cur_pos
     }
 
     /// Get the position of the cursor from the last 'flush' event. This is usually what you want
     /// for snapshot generation
-    pub fn get_cursor(&self) -> (usize, usize) {
-        self.cur_pos
+    pub fn get_flushed_cursor(&self) -> (usize, usize) {
+        self.flushed_pos
     }
 
     pub fn put_one(
