@@ -124,7 +124,6 @@ impl UiModel {
         }
     }
 
-    #[inline]
     fn swap_row(&mut self, target_row: i64, offset: i64, left_col: usize, right_col: usize) {
         debug_assert_ne!(0, offset);
 
