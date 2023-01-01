@@ -808,6 +808,17 @@ pub struct UiMutex<T: ?Sized> {
 unsafe impl<T: ?Sized> Send for UiMutex<T> {}
 unsafe impl<T: ?Sized> Sync for UiMutex<T> {}
 
+impl<T: ?Sized> Drop for UiMutex<T> {
+    fn drop(&mut self) {
+        assert_eq!(
+            self.thread,
+            thread::current().id(),
+            "Value dropped on a different thread than where it was created, this likely means our \
+            async runtime outlived GTK+. That's not good!"
+        );
+    }
+}
+
 impl<T> UiMutex<T> {
     pub fn new(t: T) -> UiMutex<T> {
         UiMutex {
@@ -815,9 +826,7 @@ impl<T> UiMutex<T> {
             data: RefCell::new(t),
         }
     }
-}
 
-impl<T> UiMutex<T> {
     pub fn replace(&self, t: T) -> T {
         self.assert_ui_thread();
         self.data.replace(t)
