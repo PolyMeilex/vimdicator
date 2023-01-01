@@ -1,7 +1,6 @@
 use std::{
     result,
     sync::{mpsc, Arc},
-    time::Duration,
 };
 
 use log::{debug, error};
@@ -19,8 +18,6 @@ use super::redraw_handler::{self, PendingPopupMenu, RedrawMode};
 pub struct NvimHandler {
     shell: Arc<UiMutex<shell::State>>,
     resize_status: Arc<shell::ResizeState>,
-
-    delayed_redraw_event_id: Arc<UiMutex<Option<glib::SourceId>>>,
 }
 
 impl NvimHandler {
@@ -28,38 +25,7 @@ impl NvimHandler {
         NvimHandler {
             shell,
             resize_status,
-            delayed_redraw_event_id: Arc::new(UiMutex::new(None)),
         }
-    }
-
-    pub fn schedule_redraw_event(&self, event: Value) {
-        let shell = self.shell.clone();
-        let delayed_redraw_event_id = self.delayed_redraw_event_id.clone();
-
-        glib::idle_add_once(move || {
-            let id = Some(glib::timeout_add_once(
-                Duration::from_millis(250),
-                clone!(shell, event, delayed_redraw_event_id => move || {
-                    delayed_redraw_event_id.replace(None);
-
-                    if let Err(msg) = call_redraw_handler(vec![event.clone()], &shell) {
-                        error!("Error call function: {}", msg);
-                    }
-                }),
-            ));
-
-            delayed_redraw_event_id.replace(id);
-        });
-    }
-
-    pub fn remove_scheduled_redraw_event(&self) {
-        let delayed_redraw_event_id = self.delayed_redraw_event_id.clone();
-        glib::idle_add_once(move || {
-            let id = delayed_redraw_event_id.replace(None);
-            if let Some(ev_id) = id {
-                ev_id.remove();
-            }
-        });
     }
 
     async fn nvim_cb(&self, method: String, params: Vec<Value>) {
@@ -241,7 +207,6 @@ impl Clone for NvimHandler {
         NvimHandler {
             shell: self.shell.clone(),
             resize_status: self.resize_status.clone(),
-            delayed_redraw_event_id: self.delayed_redraw_event_id.clone(),
         }
     }
 }
