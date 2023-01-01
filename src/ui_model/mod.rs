@@ -57,22 +57,26 @@ impl UiModel {
         ModelRect::point(col, row)
     }
 
+    #[inline]
     pub fn set_cursor(&mut self, row: usize, col: usize) {
         self.cur_pos = (row, col);
     }
 
+    #[inline]
     pub fn flush_cursor(&mut self) {
         self.flushed_pos = self.cur_pos;
     }
 
     /// Get the "real" cursor position, e.g. use the intermediate position if there is one. This is
     /// usually what you want for UI model operations
+    #[inline]
     pub fn get_real_cursor(&self) -> (usize, usize) {
         self.cur_pos
     }
 
     /// Get the position of the cursor from the last 'flush' event. This is usually what you want
     /// for snapshot generation
+    #[inline]
     pub fn get_flushed_cursor(&self) -> (usize, usize) {
         self.flushed_pos
     }
