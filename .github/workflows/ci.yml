@@ -60,9 +60,16 @@ jobs:
         if: ${{ steps.cache-neovim-gtk-container.outputs.cache-hit == 'true' }}
         run: podman load -i ~/neovim-gtk-archive.tar
 
+      # Start up a container that we can reuse on subsequent commands, so that we don't have to keep
+      # re-specifying which volumes to bind mount - and so that changes outside of the github
+      # workspace can be saved to speed up tasks like clippy
+      - name: Start neovim-gtk container
+        run: |
+          podman run -v "${GITHUB_WORKSPACE}:${GITHUB_WORKSPACE}:rw" -w ${GITHUB_WORKSPACE} --detach neovim-gtk sleep infinity
+
       - name: Run cargo test
         run: |
-          podman run -v "${GITHUB_WORKSPACE}:${GITHUB_WORKSPACE}:rw" -w ${GITHUB_WORKSPACE} neovim-gtk cargo test
+          podman exec -l cargo test
 
       # This is intended to prevent mistakes such as accidentally committing an out of date
       # Cargo.lock
@@ -70,10 +77,10 @@ jobs:
         run: ${GITHUB_WORKSPACE}/.github/workflows/check-dirty.sh
 
       - name: Check that rust-fmt is happy
-        run: podman run -v "${GITHUB_WORKSPACE}:${GITHUB_WORKSPACE}:rw" -w ${GITHUB_WORKSPACE} neovim-gtk cargo fmt --check -v
+        run: podman exec -l cargo fmt --check -v
 
       - name: Check for clippy lints
-        run: podman run -v "${GITHUB_WORKSPACE}:${GITHUB_WORKSPACE}:rw" -w ${GITHUB_WORKSPACE} neovim-gtk cargo clippy -- -Dwarnings
+        run: podman exec -l cargo clippy -- -Dwarnings
 
       - name: Save neovim-gtk container image
         if: ${{ steps.cache-neovim-gtk-container.outputs.cache-hit != 'true' }}
