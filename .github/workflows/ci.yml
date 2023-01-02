@@ -56,10 +56,6 @@ jobs:
         if: ${{ steps.cache-neovim-gtk-container.outputs.cache-hit != 'true' }}
         run: podman build -f $GITHUB_WORKSPACE/Containerfile.fedora --squash-all -t neovim-gtk
 
-      - name: Save neovim-gtk container image
-        if: ${{ steps.cache-neovim-gtk-container.outputs.cache-hit != 'true' }}
-        run: podman save -o ~/neovim-gtk-archive.tar neovim-gtk
-
       - name: Import neovim-gtk container into podman
         if: ${{ steps.cache-neovim-gtk-container.outputs.cache-hit == 'true' }}
         run: podman load -i ~/neovim-gtk-archive.tar
@@ -78,3 +74,7 @@ jobs:
 
       - name: Check for clippy lints
         run: podman run -v "${GITHUB_WORKSPACE}:${GITHUB_WORKSPACE}:rw" -w ${GITHUB_WORKSPACE} neovim-gtk cargo clippy -- -Dwarnings
+
+      - name: Save neovim-gtk container image
+        if: ${{ steps.cache-neovim-gtk-container.outputs.cache-hit != 'true' }}
+        run: podman save -o ~/neovim-gtk-archive.tar neovim-gtk
