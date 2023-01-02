@@ -799,6 +799,15 @@ impl SettingsLoader for ToplevelState {
     }
 }
 
+/// Our big thread-safety guard. This guard relies on the following assertions to remain true in
+/// order to provide safety:
+///
+/// 1. T may never be accessed, except from within the same thread the UiMutex was originally
+///    created on
+/// 2. The thread T was created on is destroyed only after all other possible threads with
+///    references to T have been finished execution
+///
+/// Both of these assumptions are verified at runtime, just in case.
 #[derive(Debug)]
 pub struct UiMutex<T: ?Sized> {
     thread: thread::ThreadId,
