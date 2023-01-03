@@ -228,7 +228,7 @@ impl Ui {
         let show_sidebar_action =
             SimpleAction::new_stateful("show-sidebar", None, &false.to_variant());
         show_sidebar_action.connect_change_state(
-            glib::clone!(@strong file_browser_ref, @strong comps_ref => move |action, value| {
+            glib::clone!(@strong file_browser_ref, @weak comps_ref => move |action, value| {
                 if let Some(value) = value {
                     action.set_state(value);
                     let is_active = value.get::<bool>().unwrap();
