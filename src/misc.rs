@@ -84,6 +84,21 @@ pub fn viml_escape(viml: &str) -> String {
         .replace('"', r#"\""#)
 }
 
+pub trait BoolExt {
+    /// Parse a bool in a str represented by '0' or '1'
+    fn from_int_str(int_str: &str) -> Option<bool>;
+}
+
+impl BoolExt for bool {
+    fn from_int_str(int_str: &str) -> Option<Self> {
+        match int_str {
+            "0" => Some(false),
+            "1" => Some(true),
+            _ => None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -104,5 +119,13 @@ mod tests {
     #[test]
     fn test_viml_escape() {
         assert_eq!(r#"a\"b\\"#, viml_escape(r#"a"b\"#));
+    }
+
+    #[test]
+    fn test_bool_int_str() {
+        assert_eq!(bool::from_int_str("0"), Some(false));
+        assert_eq!(bool::from_int_str("1"), Some(true));
+        assert_eq!(bool::from_int_str("2"), None);
+        assert_eq!(bool::from_int_str("f"), None);
     }
 }

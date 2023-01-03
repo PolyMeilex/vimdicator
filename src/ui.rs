@@ -1,5 +1,5 @@
 use std::cell::{Ref, RefCell, RefMut};
-use std::convert::TryFrom;
+use std::convert::*;
 use std::path::Path;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::file_browser::FileBrowserWidget;
 use crate::highlight::BackgroundState;
-use crate::misc;
+use crate::misc::{self, BoolExt};
 use crate::nvim::*;
 use crate::plug_manager;
 use crate::project::Projects;
@@ -294,8 +294,15 @@ impl Ui {
         // Autocmds we want to run when starting
         let mut autocmds = vec![
             state.subscribe(
-                SubscriptionKey::from("BufEnter,DirChanged"),
-                &["expand('%:p')", "getcwd()", "win_gettype()", "&buftype"],
+                SubscriptionKey::from("BufEnter,BufModifiedSet,DirChanged"),
+                &[
+                    "expand('%:p')",
+                    "getcwd()",
+                    "&modified",
+                    "&modifiable",
+                    "win_gettype()",
+                    "&buftype",
+                ],
                 glib::clone!(@weak comps_ref => move |args| update_window_title(&comps_ref, args)),
             ),
             state.subscribe(
@@ -733,9 +740,14 @@ fn set_background(shell: &RefCell<Shell>, args: Vec<String>) {
 }
 
 fn update_window_title(comps: &Arc<UiMutex<Components>>, args: Vec<String>) {
+    let file_path = &args[0];
+    let dir = Path::new(&args[1]);
+    let modified = bool::from_int_str(&args[2]).unwrap();
+    let modifiable = bool::from_int_str(&args[3]).unwrap();
+
     // Ignore certain window types that will never have a title (GH #26)
-    let win_type = &args[2];
-    let buf_type = &args[3];
+    let win_type = &args[4];
+    let buf_type = &args[5];
     if win_type == "autocmd"
         || win_type == "command"
         || win_type == "loclist"
@@ -749,8 +761,6 @@ fn update_window_title(comps: &Arc<UiMutex<Components>>, args: Vec<String>) {
     let comps_ref = comps.clone();
     let comps = comps_ref.borrow();
 
-    let file_path = &args[0];
-    let dir = Path::new(&args[1]);
     let filename = if file_path.is_empty() {
         "[No Name]"
     } else if let Some(rel_path) = Path::new(&file_path)
@@ -763,7 +773,18 @@ fn update_window_title(comps: &Arc<UiMutex<Components>>, args: Vec<String>) {
         file_path
     };
 
-    comps.set_title(filename);
+    let mut parts = Vec::with_capacity(2);
+    parts.push(filename);
+
+    if modifiable {
+        if modified {
+            parts.push("+");
+        }
+    } else {
+        parts.push("-");
+    }
+
+    comps.set_title(&parts.join(" "));
 }
 
 fn set_exit_status(shell: &RefCell<Shell>, args: Vec<String>) {
