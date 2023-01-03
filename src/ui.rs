@@ -260,11 +260,11 @@ impl Ui {
             }
         ));
 
-        window.connect_maximized_notify(clone!(comps_ref => move |window| {
+        window.connect_maximized_notify(glib::clone!(@weak comps_ref => move |window| {
             comps_ref.borrow_mut().window_state.is_maximized = window.is_maximized();
         }));
 
-        window.connect_destroy(clone!(comps_ref => move |_| {
+        window.connect_destroy(glib::clone!(@weak comps_ref => move |_| {
             comps_ref.borrow().window_state.save();
         }));
 
@@ -283,43 +283,42 @@ impl Ui {
             show_sidebar_action.change_state(&show_sidebar.to_variant());
         }
 
-        let update_title = shell.state.borrow().subscribe(
-            SubscriptionKey::from("BufEnter,DirChanged"),
-            &["expand('%:p')", "getcwd()", "win_gettype()", "&buftype"],
-            glib::clone!(@strong comps_ref => move |args| update_window_title(&comps_ref, args)),
-        );
-
-        let update_completeopt = shell.state.borrow().subscribe(
-            SubscriptionKey::with_pattern("OptionSet", "completeopt"),
-            &["&completeopt"],
-            glib::clone!(@weak shell_ref => move |args| set_completeopts(&shell_ref, args)),
-        );
-
-        let update_background = shell.state.borrow().subscribe(
-            SubscriptionKey::with_pattern("OptionSet", "background"),
-            &["&background"],
-            glib::clone!(@weak shell_ref => move |args| set_background(&shell_ref, args)),
-        );
-
-        shell.state.borrow().subscribe(
+        let state_ref = shell_ref.borrow().state.clone();
+        let state = state_ref.borrow();
+        state.subscribe(
             SubscriptionKey::from("VimLeave"),
             &["v:exiting ? v:exiting : 0"],
             glib::clone!(@weak shell_ref => move |args| set_exit_status(&shell_ref, args)),
         );
 
-        window.connect_close_request(clone!(comps_ref, shell_ref => move |_| {
-            gtk_close_request(&comps_ref, &shell_ref)
-        }));
+        // Autocmds we want to run when starting
+        let mut autocmds = vec![
+            state.subscribe(
+                SubscriptionKey::from("BufEnter,DirChanged"),
+                &["expand('%:p')", "getcwd()", "win_gettype()", "&buftype"],
+                glib::clone!(@weak comps_ref => move |args| update_window_title(&comps_ref, args)),
+            ),
+            state.subscribe(
+                SubscriptionKey::with_pattern("OptionSet", "completeopt"),
+                &["&completeopt"],
+                glib::clone!(@weak shell_ref => move |args| set_completeopts(&shell_ref, args)),
+            ),
+            state.subscribe(
+                SubscriptionKey::with_pattern("OptionSet", "background"),
+                &["&background"],
+                glib::clone!(@weak shell_ref => move |args| set_background(&shell_ref, args)),
+            ),
+        ];
+        if let Some(autocmd) = update_subtitle {
+            autocmds.push(autocmd);
+        }
+
+        window.connect_close_request(glib::clone!(
+            @weak shell_ref, @weak comps_ref => @default-return gtk::Inhibit(false),
+            move |_| gtk_close_request(&comps_ref, &shell_ref)
+        ));
 
         shell.grab_focus();
-
-        shell.set_detach_cb(Some(clone!(comps_ref => move || {
-            glib::idle_add_once(clone!(comps_ref => move || comps_ref.borrow().close_window()));
-        })));
-
-        let state_ref = self.shell.borrow().state.clone();
-        let plug_manager_ref = self.plug_manager.clone();
-        let files_list = self.open_paths.clone();
 
         let (post_config_cmds, mode) = {
             let state_ref = state_ref.borrow();
@@ -328,20 +327,25 @@ impl Ui {
             (options.post_config_cmds(), options.mode)
         };
 
-        state_ref
-            .borrow()
-            .set_action_widgets(header_bar, file_browser_ref.borrow().clone());
+        state.set_action_widgets(header_bar, file_browser_ref.borrow().clone());
 
-        shell.set_nvim_started_cb(Some(clone!(file_browser_ref => move || {
+        drop(state);
+        shell.set_detach_cb(Some(glib::clone!(@strong comps_ref => move || {
+            glib::idle_add_once(glib::clone!(
+                @strong comps_ref => move || comps_ref.borrow().close_window()
+            ));
+        })));
+
+        shell.set_nvim_started_cb(Some(glib::clone!(
+            @strong file_browser_ref,
+            @strong self.plug_manager as plug_manager,
+            @strong self.open_paths as files_list => move || {
             Ui::nvim_started(
                 &state_ref.borrow(),
-                &plug_manager_ref,
+                &plug_manager,
                 &file_browser_ref,
                 &files_list,
-                &update_title,
-                &update_subtitle,
-                &update_completeopt,
-                &update_background,
+                &autocmds,
                 post_config_cmds.as_ref(),
                 mode,
             );
@@ -362,10 +366,7 @@ impl Ui {
         plug_manager: &UiMutex<plug_manager::Manager>,
         file_browser: &UiMutex<FileBrowserWidget>,
         files_list: &[String],
-        update_title: &SubscriptionHandle,
-        update_subtitle: &Option<SubscriptionHandle>,
-        update_completeopt: &SubscriptionHandle,
-        update_background: &SubscriptionHandle,
+        subscriptions: &[SubscriptionHandle],
         post_config_cmds: &[String],
         mode: StartMode,
     ) {
@@ -374,11 +375,8 @@ impl Ui {
             .init_nvim_client(shell.nvim_clone());
         file_browser.borrow_mut().init();
         shell.set_autocmds();
-        shell.run_now(update_title);
-        shell.run_now(update_completeopt);
-        shell.run_now(update_background);
-        if let Some(ref update_subtitle) = update_subtitle {
-            shell.run_now(update_subtitle);
+        for subscription in subscriptions.iter() {
+            shell.run_now(subscription);
         }
 
         let mut commands = Vec::<String>::new();
