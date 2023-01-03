@@ -228,7 +228,7 @@ impl Ui {
         let show_sidebar_action =
             SimpleAction::new_stateful("show-sidebar", None, &false.to_variant());
         show_sidebar_action.connect_change_state(
-            clone!(file_browser_ref, comps_ref => move |action, value| {
+            glib::clone!(@strong file_browser_ref, @strong comps_ref => move |action, value| {
                 if let Some(value) = value {
                     action.set_state(value);
                     let is_active = value.get::<bool>().unwrap();
@@ -239,22 +239,26 @@ impl Ui {
         );
         app.add_action(&show_sidebar_action);
 
-        window.connect_default_width_notify(clone!(main, comps_ref => move |window| {
-            gtk_window_resize(
-                window,
-                &mut comps_ref.borrow_mut(),
-                &main,
-                gtk::Orientation::Horizontal,
-            );
-        }));
-        window.connect_default_height_notify(clone!(main, comps_ref => move |window| {
-            gtk_window_resize(
-                window,
-                &mut comps_ref.borrow_mut(),
-                &main,
-                gtk::Orientation::Vertical,
-            );
-        }));
+        window.connect_default_width_notify(glib::clone!(
+            @strong main, @weak comps_ref => move |window| {
+                gtk_window_resize(
+                    window,
+                    &mut comps_ref.borrow_mut(),
+                    &main,
+                    gtk::Orientation::Horizontal,
+                );
+            }
+        ));
+        window.connect_default_height_notify(glib::clone!(
+            @strong main, @weak comps_ref => move |window| {
+                gtk_window_resize(
+                    window,
+                    &mut comps_ref.borrow_mut(),
+                    &main,
+                    gtk::Orientation::Vertical,
+                );
+            }
+        ));
 
         window.connect_maximized_notify(clone!(comps_ref => move |window| {
             comps_ref.borrow_mut().window_state.is_maximized = window.is_maximized();
@@ -282,25 +286,25 @@ impl Ui {
         let update_title = shell.state.borrow().subscribe(
             SubscriptionKey::from("BufEnter,DirChanged"),
             &["expand('%:p')", "getcwd()", "win_gettype()", "&buftype"],
-            clone!(comps_ref => move |args| update_window_title(&comps_ref, args)),
+            glib::clone!(@strong comps_ref => move |args| update_window_title(&comps_ref, args)),
         );
 
         let update_completeopt = shell.state.borrow().subscribe(
             SubscriptionKey::with_pattern("OptionSet", "completeopt"),
             &["&completeopt"],
-            clone!(shell_ref => move |args| set_completeopts(&shell_ref, args)),
+            glib::clone!(@weak shell_ref => move |args| set_completeopts(&shell_ref, args)),
         );
 
         let update_background = shell.state.borrow().subscribe(
             SubscriptionKey::with_pattern("OptionSet", "background"),
             &["&background"],
-            clone!(shell_ref => move |args| set_background(&shell_ref, args)),
+            glib::clone!(@weak shell_ref => move |args| set_background(&shell_ref, args)),
         );
 
         shell.state.borrow().subscribe(
             SubscriptionKey::from("VimLeave"),
             &["v:exiting ? v:exiting : 0"],
-            clone!(shell_ref => move |args| set_exit_status(&shell_ref, args)),
+            glib::clone!(@weak shell_ref => move |args| set_exit_status(&shell_ref, args)),
         );
 
         window.connect_close_request(clone!(comps_ref, shell_ref => move |_| {

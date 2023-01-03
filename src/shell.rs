@@ -987,8 +987,8 @@ impl Shell {
         self.widget.append(&state.stack);
 
         let motion_controller = gtk::EventControllerMotion::new();
-        motion_controller.connect_motion(clone!(
-            state_ref, ui_state_ref => move |controller, x, y| {
+        motion_controller.connect_motion(glib::clone!(
+            @weak state_ref, @strong ui_state_ref => move |controller, x, y| {
                 gtk_motion_notify(
                     &state_ref.borrow(),
                     &mut ui_state_ref.borrow_mut(),
@@ -997,8 +997,8 @@ impl Shell {
                 );
             }
         ));
-        motion_controller.connect_enter(clone!(
-            state_ref, ui_state_ref => move |controller, x, y| {
+        motion_controller.connect_enter(glib::clone!(
+            @weak state_ref, @strong ui_state_ref => move |controller, x, y| {
                 gtk_motion_notify(
                     &state_ref.borrow(),
                     &mut ui_state_ref.borrow_mut(),
@@ -1011,8 +1011,10 @@ impl Shell {
 
         let key_controller = gtk::EventControllerKey::new();
         key_controller.set_im_context(Some(&state.im_context));
-        key_controller.connect_key_pressed(clone!(
-            ui_state_ref, state_ref => move |_, key, _, modifiers| {
+        key_controller.connect_key_pressed(glib::clone!(
+            @strong ui_state_ref,
+            @weak state_ref => @default-return gtk::Inhibit(false),
+            move |_, key, _, modifiers| {
                 let mut state = state_ref.borrow_mut();
                 state.cursor.as_mut().unwrap().reset_state();
                 ui_state_ref.borrow_mut().set_cursor_visible(&state.nvim_viewport, false);
@@ -1035,10 +1037,11 @@ impl Shell {
         let menu = self.create_context_menu();
         state.nvim_viewport.set_context_menu(&menu);
         let click_controller = gtk::GestureClick::builder().n_points(1).button(0).build();
-        click_controller.connect_pressed(clone!(
-            state_ref, ui_state_ref, menu => move |controller, _, x, y| {
+        click_controller.connect_pressed(glib::clone!(
+            @weak state_ref, @strong ui_state_ref, @strong menu => move |controller, _, x, y| {
+                let state = state_ref.borrow();
                 gtk_button_press(
-                    &state_ref.borrow_mut(),
+                    &state,
                     &ui_state_ref,
                     get_button(controller),
                     x,
@@ -1048,10 +1051,11 @@ impl Shell {
                 )
             }
         ));
-        click_controller.connect_released(clone!(
-            state_ref, ui_state_ref => move |controller, _, x, y| {
+        click_controller.connect_released(glib::clone!(
+            @weak state_ref, @strong ui_state_ref => move |controller, _, x, y| {
+                let state = state_ref.borrow();
                 gtk_button_release(
-                    &state_ref.borrow(),
+                    &state,
                     &mut ui_state_ref.borrow_mut(),
                     get_button(controller),
                     x,
@@ -1066,10 +1070,11 @@ impl Shell {
             .n_points(1)
             .touch_only(true)
             .build();
-        long_tap_controller.connect_pressed(clone!(
-            state_ref, ui_state_ref => move |controller, x, y| {
+        long_tap_controller.connect_pressed(glib::clone!(
+            @weak state_ref, @strong ui_state_ref => move |controller, x, y| {
+                let state = state_ref.borrow();
                 gtk_button_press(
-                    &state_ref.borrow(),
+                    &state,
                     &ui_state_ref,
                     3,
                     x,
@@ -1082,12 +1087,12 @@ impl Shell {
         state.nvim_viewport.add_controller(&long_tap_controller);
 
         let focus_controller = gtk::EventControllerFocus::new();
-        focus_controller.connect_enter(clone!(state_ref => move |_| {
+        focus_controller.connect_enter(glib::clone!(@weak state_ref => move |_| {
             let mut state = state_ref.borrow_mut();
             let redraw_mode = state.cursor.as_mut().unwrap().set_widget_focus(true);
             state.queue_draw(redraw_mode);
         }));
-        focus_controller.connect_leave(clone!(state_ref => move |_| {
+        focus_controller.connect_leave(glib::clone!(@weak state_ref => move |_| {
             let mut state = state_ref.borrow_mut();
             let redraw_mode = state.cursor.as_mut().unwrap().set_widget_focus(false);
             state.queue_draw(redraw_mode);
@@ -1097,8 +1102,10 @@ impl Shell {
         let scroll_controller = gtk::EventControllerScroll::new(
             gtk::EventControllerScrollFlags::BOTH_AXES | gtk::EventControllerScrollFlags::DISCRETE,
         );
-        scroll_controller.connect_scroll(clone!(
-            state_ref, ui_state_ref => move |controller, dx, dy| {
+        scroll_controller.connect_scroll(glib::clone!(
+            @strong ui_state_ref,
+            @weak state_ref => @default-return gtk::Inhibit(false),
+            move |controller, dx, dy| {
                 gtk_scroll_event(
                     &mut state_ref.borrow_mut(),
                     &mut ui_state_ref.borrow_mut(),
@@ -1116,21 +1123,27 @@ impl Shell {
             Some(&gdk::ContentFormats::new(&["text/uri-list"])),
             gdk::DragAction::COPY,
         );
-        dnd_target.connect_drop(clone!(state_ref => move |_, drop, _, _| {
-            gtk_handle_drop(&state_ref.borrow(), &context, drop)
-        }));
+        dnd_target.connect_drop(glib::clone!(
+            @weak state_ref => @default-panic,
+            move |_, drop, _, _| {
+                let state = state_ref.borrow();
+                gtk_handle_drop(&state, &context, drop)
+            }
+        ));
         state.nvim_viewport.add_controller(&dnd_target);
 
         state
             .nvim_viewport
-            .connect_realize(clone!(state_ref => move |viewport| {
+            .connect_realize(glib::clone!(@weak state_ref => move |viewport| {
                 let window: gtk::Window = viewport.root().unwrap().downcast().unwrap();
 
                 // sometime set_client_window does not work without idle_add
                 // and looks like not enabled im_context
-                glib::idle_add_local_once(clone!(state_ref, window => move || {
-                    state_ref.borrow().im_context.set_client_widget(Some(&window));
-                }));
+                glib::idle_add_local_once(glib::clone!(
+                    @strong state_ref, @strong window => move || {
+                        state_ref.borrow().im_context.set_client_widget(Some(&window));
+                    }
+                ));
 
                 let mut state = state_ref.borrow_mut();
                 let redraw = state
@@ -1142,26 +1155,26 @@ impl Shell {
                     state.queue_draw(redraw);
                 }
 
-                window.connect_is_active_notify(clone!(state_ref => move |window| {
+                window.connect_is_active_notify(glib::clone!(@strong state_ref => move |window| {
                     gtk_active_notify(&mut state_ref.borrow_mut(), window.is_active());
                 }));
             }));
 
-        state
-            .im_context
-            .connect_commit(clone!(ui_state_ref, state_ref => move |_, ch| {
+        state.im_context.connect_commit(
+            glib::clone!(@weak state_ref, @strong ui_state_ref => move |_, ch| {
                 let mut state = state_ref.borrow_mut();
 
                 state.cursor.as_mut().unwrap().reset_state();
                 ui_state_ref.borrow_mut().set_cursor_visible(&state.nvim_viewport, false);
                 state.im_commit(ch);
-            }));
+            }),
+        );
 
-        state
-            .nvim_viewport
-            .connect_map(clone!(state_ref, components => move |_| {
+        state.nvim_viewport.connect_map(
+            glib::clone!(@weak state_ref, @strong components => move |_| {
                 init_nvim(&state_ref, &components);
-            }));
+            }),
+        );
     }
 
     fn create_context_menu(&self) -> gtk::PopoverMenu {
@@ -1170,11 +1183,17 @@ impl Shell {
         let action_group = gio::SimpleActionGroup::new();
 
         let copy = gio::SimpleAction::new("copy", None);
-        copy.connect_activate(clone!(state_ref => move |_, _| state_ref.borrow().edit_copy("+")));
+        copy.connect_activate(glib::clone!(@weak state_ref => move |_, _| {
+            let state = state_ref.borrow();
+            state.edit_copy("+")
+        }));
         action_group.add_action(&copy);
 
         let paste = gio::SimpleAction::new("paste", None);
-        paste.connect_activate(clone!(state_ref => move |_, _| state_ref.borrow().edit_paste("+")));
+        paste.connect_activate(glib::clone!(@weak state_ref => move |_, _| {
+            let state = state_ref.borrow();
+            state.edit_paste("+")
+        }));
         action_group.add_action(&paste);
 
         let menu = gio::Menu::new();
@@ -1375,7 +1394,7 @@ fn gtk_button_press(
 
                 // Popping up the menu will trigger a focus event, so handle this in the idle loop
                 // to avoid a double borrow_mut()
-                glib::idle_add_local_once(clone!(menu => move || menu.popup()));
+                glib::idle_add_local_once(glib::clone!(@strong menu => move || menu.popup()));
             }
             _ => (),
         }
@@ -1570,7 +1589,7 @@ fn set_nvim_to_state(state_arc: Arc<UiMutex<State>>, nvim: &NvimSession) {
 }
 
 fn set_nvim_initialized(state_arc: Arc<UiMutex<State>>, api_info: NeovimApiInfo) {
-    glib::idle_add_once(clone!(state_arc => move || {
+    glib::idle_add_once(glib::clone!(@strong state_arc => move || {
         let mut state = state_arc.borrow_mut();
         state.nvim.set_initialized(api_info);
         // in some case resize can happens while initilization in progress
