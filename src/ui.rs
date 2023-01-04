@@ -750,7 +750,7 @@ fn format_window_title(
     modifiable: bool,
     long: bool,
 ) -> String {
-    let mut parts = Vec::with_capacity(4);
+    let mut parts = Vec::with_capacity(5);
 
     let filename = if file_path.is_empty() {
         "[No Name]"
@@ -785,6 +785,10 @@ fn format_window_title(
     if argc > 1 {
         arg_cnt = format!("({argidx} of {argc})");
         parts.push(&arg_cnt);
+    }
+
+    if long {
+        parts.push("- nvim-gtk");
     }
 
     parts.join(" ")
