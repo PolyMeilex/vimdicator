@@ -90,10 +90,10 @@ impl Components {
         self.window.as_ref().unwrap()
     }
 
-    pub fn set_title(&self, title: &str) {
-        self.window.as_ref().unwrap().set_title(Some(title));
+    pub fn set_title(&self, short_title: &str, long_title: &str) {
+        self.window.as_ref().unwrap().set_title(Some(long_title));
         if let Some(ref title_label) = self.title_label {
-            title_label.set_label(title);
+            title_label.set_label(short_title);
         }
     }
 
@@ -739,6 +739,47 @@ fn set_background(shell: &RefCell<Shell>, args: Vec<String>) {
     );
 }
 
+fn format_window_title(
+    file_path: &str,
+    dir: &Path,
+    modified: bool,
+    modifiable: bool,
+    long: bool,
+) -> String {
+    let mut parts = Vec::with_capacity(3);
+
+    let filename = if file_path.is_empty() {
+        "[No Name]"
+    } else if let Some(rel_path) = Path::new(&file_path)
+        .strip_prefix(dir)
+        .ok()
+        .and_then(|p| p.to_str())
+    {
+        rel_path
+    } else {
+        file_path
+    };
+    parts.push(filename);
+
+    if modifiable {
+        if modified {
+            parts.push("+");
+        }
+    } else {
+        parts.push("-");
+    }
+
+    let dir_str;
+    if long {
+        if let Some(s) = dir.to_str() {
+            dir_str = format!("({s})");
+            parts.push(&dir_str);
+        }
+    }
+
+    parts.join(" ")
+}
+
 fn update_window_title(comps: &Arc<UiMutex<Components>>, args: Vec<String>) {
     let file_path = &args[0];
     let dir = Path::new(&args[1]);
@@ -758,33 +799,10 @@ fn update_window_title(comps: &Arc<UiMutex<Components>>, args: Vec<String>) {
         return;
     }
 
-    let comps_ref = comps.clone();
-    let comps = comps_ref.borrow();
-
-    let filename = if file_path.is_empty() {
-        "[No Name]"
-    } else if let Some(rel_path) = Path::new(&file_path)
-        .strip_prefix(dir)
-        .ok()
-        .and_then(|p| p.to_str())
-    {
-        rel_path
-    } else {
-        file_path
-    };
-
-    let mut parts = Vec::with_capacity(2);
-    parts.push(filename);
-
-    if modifiable {
-        if modified {
-            parts.push("+");
-        }
-    } else {
-        parts.push("-");
-    }
-
-    comps.set_title(&parts.join(" "));
+    comps.borrow().set_title(
+        &format_window_title(file_path, dir, modified, modifiable, false),
+        &format_window_title(file_path, dir, modified, modifiable, true),
+    );
 }
 
 fn set_exit_status(shell: &RefCell<Shell>, args: Vec<String>) {
