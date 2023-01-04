@@ -298,6 +298,8 @@ impl Ui {
                 &[
                     "expand('%:p')",
                     "getcwd()",
+                    "argidx()",
+                    "argc()",
                     "&modified",
                     "&modifiable",
                     "win_gettype()",
@@ -742,11 +744,13 @@ fn set_background(shell: &RefCell<Shell>, args: Vec<String>) {
 fn format_window_title(
     file_path: &str,
     dir: &Path,
+    argidx: u32,
+    argc: u32,
     modified: bool,
     modifiable: bool,
     long: bool,
 ) -> String {
-    let mut parts = Vec::with_capacity(3);
+    let mut parts = Vec::with_capacity(4);
 
     let filename = if file_path.is_empty() {
         "[No Name]"
@@ -777,14 +781,22 @@ fn format_window_title(
         }
     }
 
+    let arg_cnt;
+    if argc > 1 {
+        arg_cnt = format!("({argidx} of {argc})");
+        parts.push(&arg_cnt);
+    }
+
     parts.join(" ")
 }
 
 fn update_window_title(comps: &Arc<UiMutex<Components>>, args: Vec<String>) {
     let file_path = &args[0];
     let dir = Path::new(&args[1]);
-    let modified = bool::from_int_str(&args[2]).unwrap();
-    let modifiable = bool::from_int_str(&args[3]).unwrap();
+    let argidx = args[2].parse::<u32>().unwrap() + 1;
+    let argc = args[3].parse::<u32>().unwrap();
+    let modified = bool::from_int_str(&args[4]).unwrap();
+    let modifiable = bool::from_int_str(&args[5]).unwrap();
 
     // Ignore certain window types that will never have a title (GH #26)
     let win_type = &args[4];
@@ -800,8 +812,8 @@ fn update_window_title(comps: &Arc<UiMutex<Components>>, args: Vec<String>) {
     }
 
     comps.borrow().set_title(
-        &format_window_title(file_path, dir, modified, modifiable, false),
-        &format_window_title(file_path, dir, modified, modifiable, true),
+        &format_window_title(file_path, dir, argidx, argc, modified, modifiable, false),
+        &format_window_title(file_path, dir, argidx, argc, modified, modifiable, true),
     );
 }
 
