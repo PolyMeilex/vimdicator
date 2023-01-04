@@ -118,12 +118,10 @@ pub trait SettingsLoader: Sized + serde::Serialize + Default {
     }
 
     fn is_file_exists() -> bool {
-        if let Ok(mut toml_path) = dirs::get_app_config_dir() {
-            toml_path.push(Self::SETTINGS_FILE);
-            toml_path.is_file()
-        } else {
-            false
-        }
+        dirs::get_app_config_dir()
+            .to_path_buf()
+            .join(Self::SETTINGS_FILE)
+            .is_file()
     }
 
     fn save(&self) {

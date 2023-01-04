@@ -35,11 +35,10 @@ impl NvimConfig {
     }
 
     pub fn config_path() -> Option<PathBuf> {
-        if let Ok(mut path) = dirs::get_app_config_dir() {
-            path.push(NvimConfig::CONFIG_PATH);
-            if path.is_file() {
-                return Some(path);
-            }
+        let mut path = dirs::get_app_config_dir().to_path_buf();
+        path.push(NvimConfig::CONFIG_PATH);
+        if path.is_file() {
+            return Some(path);
         }
 
         None
