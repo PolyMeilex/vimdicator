@@ -68,13 +68,7 @@ jobs:
           podman run -v "${GITHUB_WORKSPACE}:${GITHUB_WORKSPACE}:rw" -w ${GITHUB_WORKSPACE} --detach neovim-gtk sleep infinity
 
       - name: Run cargo test
-        run: |
-          podman exec -l cargo test
-
-      # This is intended to prevent mistakes such as accidentally committing an out of date
-      # Cargo.lock
-      - name: Check that git repo is still clean after cargo test
-        run: ${GITHUB_WORKSPACE}/.github/workflows/check-dirty.sh
+        run: podman exec -l cargo test --locked
 
       - name: Check that rust-fmt is happy
         run: podman exec -l cargo fmt --check -v
