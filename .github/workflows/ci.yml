@@ -17,6 +17,8 @@ env:
 jobs:
   main:
     runs-on: [ubuntu-latest]
+    container:
+      image: fedora:37
 
     strategy:
       fail-fast: false
@@ -33,49 +35,20 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Cache Base Fedora container
-        id: cache-container-images
-        uses: jamesmortensen/cache-container-images-action@v1
-        with:
-          prefix-key: 'neovim-gtk-base'
-          images: fedora:37
+      - name: Run dnf update
+        run: dnf update -y
 
-      - name: Get Fedora container ID
-        id: base-container-id
+      - name: Install dependencies
         run: |
-          echo "id=$(podman image inspect fedora:37 --format '{{.Id}}')" >> $GITHUB_OUTPUT
+          dnf install -y --nodocs --setopt=install_weak_deps=False rust cargo rustfmt clippy atk-devel glib2-devel pango-devel gtk4-devel
 
-      - name: Cache neovim-gtk container
-        id: cache-neovim-gtk-container
-        uses: actions/cache@v3
-        with:
-          path: ~/neovim-gtk-archive.tar
-          key: "${{ steps.base-container-id.outputs.id }}-${{ hashFiles('Containerfile.fedora') }}-neovim-gtk"
-
-      - name: Build neovim-gtk container
-        if: ${{ steps.cache-neovim-gtk-container.outputs.cache-hit != 'true' }}
-        run: podman build -f $GITHUB_WORKSPACE/Containerfile.fedora --squash-all -t neovim-gtk
-
-      - name: Import neovim-gtk container into podman
-        if: ${{ steps.cache-neovim-gtk-container.outputs.cache-hit == 'true' }}
-        run: podman load -i ~/neovim-gtk-archive.tar
-
-      # Start up a container that we can reuse on subsequent commands, so that we don't have to keep
-      # re-specifying which volumes to bind mount - and so that changes outside of the github
-      # workspace can be saved to speed up tasks like clippy
-      - name: Start neovim-gtk container
-        run: |
-          podman run -v "${GITHUB_WORKSPACE}:${GITHUB_WORKSPACE}:rw" -w ${GITHUB_WORKSPACE} --detach neovim-gtk sleep infinity
+      - uses: Swatinem/rust-cache@v2
 
       - name: Run cargo test
-        run: podman exec -l cargo test --locked
+        run: cargo test --locked
 
       - name: Check that rust-fmt is happy
-        run: podman exec -l cargo fmt --check -v
+        run: cargo fmt --check -v
 
       - name: Check for clippy lints
-        run: podman exec -l cargo clippy -- -Dwarnings
-
-      - name: Save neovim-gtk container image
-        if: ${{ steps.cache-neovim-gtk-container.outputs.cache-hit != 'true' }}
-        run: podman save -o ~/neovim-gtk-archive.tar neovim-gtk
+        run: cargo clippy -- -Dwarnings
