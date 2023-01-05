@@ -30,10 +30,8 @@ jobs:
         # a5dd25c31ef03b47e87e68225a04d4b7852d9e09~1
         # TODO: OSX, this should be a bit easier hopefully
         os: [ubuntu-latest]
-        rust: [stable]
         include:
           - os: ubuntu-latest
-            rust: stable
 
     steps:
       - uses: actions/checkout@v3
