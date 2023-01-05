@@ -14,10 +14,11 @@ env:
   NVIM_GTK_LOG_FILE: nvim-gtk-stdout.log
   NVIM_GTK_LOG_LEVEL: debug
   NVIM_GTK_STDERR: nvim-gtk-stderr.log
+  HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: 1
   RUSTFLAGS: -C opt-level=0
 
 jobs:
-  main:
+  fedora:
     runs-on: [ubuntu-latest]
     container:
       image: fedora:37
@@ -54,3 +55,28 @@ jobs:
 
       - name: Check for clippy lints
         run: cargo clippy -- -Dwarnings
+
+  osx:
+    runs-on: [macos-latest]
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest]
+        rust: [stable]
+        include:
+          - os: macos-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Update brew
+        run: brew update
+
+      - name: Install dependencies
+        run: brew install gtk4
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Run cargo test
+        run: cargo test --locked
