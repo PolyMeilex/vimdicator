@@ -118,7 +118,7 @@ pub trait SettingsLoader: Sized + serde::Serialize + Default {
     }
 
     fn is_file_exists() -> bool {
-        dirs::get_app_config_dir()
+        dirs::app_config_dir()
             .to_path_buf()
             .join(Self::SETTINGS_FILE)
             .is_file()
@@ -145,13 +145,13 @@ fn load_from_file<T: SettingsLoader>(path: &Path) -> Result<T, String> {
 }
 
 fn load_err<T: SettingsLoader>() -> Result<T, String> {
-    let mut toml_path = dirs::get_app_config_dir_create()?;
+    let mut toml_path = dirs::app_config_dir_create()?;
     toml_path.push(T::SETTINGS_FILE);
     load_from_file(&toml_path)
 }
 
 fn save_err<T: SettingsLoader>(sl: &T) -> Result<(), String> {
-    let mut toml_path = dirs::get_app_config_dir_create()?;
+    let mut toml_path = dirs::app_config_dir_create()?;
     toml_path.push(T::SETTINGS_FILE);
     let mut file = File::create(toml_path).map_err(|e| format!("{e}"))?;
 

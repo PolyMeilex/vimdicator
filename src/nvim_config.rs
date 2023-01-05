@@ -35,7 +35,7 @@ impl NvimConfig {
     }
 
     pub fn config_path() -> Option<PathBuf> {
-        let mut path = dirs::get_app_config_dir().to_path_buf();
+        let mut path = dirs::app_config_dir().to_path_buf();
         path.push(NvimConfig::CONFIG_PATH);
         if path.is_file() {
             return Some(path);
@@ -45,7 +45,7 @@ impl NvimConfig {
     }
 
     fn write_file(&self) -> Result<PathBuf, String> {
-        let mut config_dir = dirs::get_app_config_dir_create()?;
+        let mut config_dir = dirs::app_config_dir_create()?;
         config_dir.push(NvimConfig::CONFIG_PATH);
 
         let mut file = OpenOptions::new()
