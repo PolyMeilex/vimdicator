@@ -1,5 +1,7 @@
 # neovim-gtk
 
+[![CI](https://github.com/Lyude/neovim-gtk/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Lyude/neovim-gtk/actions/workflows/ci.yml)
+
 GTK ui for neovim written in rust using gtk-rs bindings. With
 [ligatures](https://github.com/daa84/neovim-gtk/wiki/Configuration#ligatures) support. This project
 began as a fork of @daa84's neovim-gtk.
