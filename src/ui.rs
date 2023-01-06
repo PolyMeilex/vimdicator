@@ -812,8 +812,8 @@ fn update_window_title(comps: &Arc<UiMutex<Components>>, args: Vec<String>) {
     let modifiable = bool::from_int_str(&args[5]).unwrap();
 
     // Ignore certain window types that will never have a title (GH #26)
-    let win_type = &args[4];
-    let buf_type = &args[5];
+    let win_type = &args[6];
+    let buf_type = &args[7];
     if win_type == "autocmd"
         || win_type == "command"
         || win_type == "loclist"
