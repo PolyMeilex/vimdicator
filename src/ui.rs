@@ -1,6 +1,6 @@
 use std::cell::{Ref, RefCell, RefMut};
 use std::convert::*;
-use std::path::Path;
+use std::path::*;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::{env, thread};
@@ -576,7 +576,7 @@ impl Ui {
         let update_subtitle = shell.state.borrow().subscribe(
             SubscriptionKey::from("DirChanged"),
             &["getcwd()"],
-            move |args| header_bar_subtitle.set_label(&args[0]),
+            move |args| header_bar_subtitle.set_label(&shorten_file_path(&args[0])),
         );
 
         (
@@ -741,6 +741,17 @@ fn set_background(shell: &RefCell<Shell>, args: Vec<String>) {
     );
 }
 
+fn shorten_file_path(path: impl AsRef<Path>) -> String {
+    let path = path.as_ref();
+    if let Ok(path) = path.canonicalize() {
+        if let Ok(path) = path.strip_prefix(glib::home_dir()) {
+            return format!("~{MAIN_SEPARATOR}{}", path.to_string_lossy());
+        }
+    }
+
+    path.to_string_lossy().to_string()
+}
+
 fn format_window_title(
     file_path: &str,
     dir: &Path,
@@ -775,10 +786,8 @@ fn format_window_title(
 
     let dir_str;
     if long {
-        if let Some(s) = dir.to_str() {
-            dir_str = format!("({s})");
-            parts.push(&dir_str);
-        }
+        dir_str = format!("({})", shorten_file_path(dir));
+        parts.push(&dir_str);
     }
 
     let arg_cnt;
