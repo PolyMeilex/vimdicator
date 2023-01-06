@@ -106,7 +106,7 @@ pub struct ResizeRequests {
     /// neovim yet.
     pub current: Option<(i32, i32)>,
     /// The next resize request to submit to neovim, if any.
-    requested: Option<(i32, i32)>,
+    pub requested: Option<(i32, i32)>,
     /// Whether there's a resize future active or not
     active: bool,
 }
@@ -543,11 +543,6 @@ impl State {
         {
             let mut status = nvim.block_on(self.resize_status.requests.lock());
 
-            // Abort if the UI isn't attached yet
-            if status.current.is_none() {
-                return;
-            }
-
             let our_req = self.calc_nvim_size();
             if status.requested == Some(our_req) {
                 return;
@@ -561,6 +556,11 @@ impl State {
 
             debug!("Requesting resize to {:?}", our_req);
             status.requested.replace(our_req);
+
+            // Finish if the UI isn't ready yet
+            if status.current.is_none() {
+                return;
+            }
 
             // Don't spawn a resize future if one's already active
             if status.active {
@@ -1174,11 +1174,13 @@ impl Shell {
             }),
         );
 
-        state.nvim_viewport.connect_map(
-            glib::clone!(@weak state_ref, @strong components => move |_| {
-                init_nvim(&state_ref, &components);
-            }),
-        );
+        state.nvim_viewport.connect_map(glib::clone!(
+            @weak state_ref,
+            @strong state.resize_status as resize_state,
+            @strong components => move |_|
+        {
+            init_nvim(&state_ref, &resize_state, &components);
+        }));
     }
 
     fn create_context_menu(&self) -> gtk::PopoverMenu {
@@ -1522,6 +1524,7 @@ fn show_nvim_init_error(
 fn init_nvim_async(
     state_arc: Arc<UiMutex<State>>,
     comps: Arc<UiMutex<Components>>,
+    resize_status: Arc<ResizeState>,
     nvim_handler: NvimHandler,
     options: ShellOptions,
     cols: i32,
@@ -1565,14 +1568,12 @@ fn init_nvim_async(
     session.clone().spawn(async move {
         let mut initialized = false;
 
-        {
-            match nvim::post_start_init(session.clone(), cols, rows, input_data).await {
-                Ok(api_info) => {
-                    set_nvim_initialized(state_arc.clone(), api_info);
-                    initialized = true;
-                }
-                Err(ref e) => show_nvim_init_error(e, state_arc.clone(), comps.clone()),
+        match nvim::post_start_init(session.clone(), resize_status, input_data, rows, cols).await {
+            Ok(api_info) => {
+                set_nvim_initialized(state_arc.clone(), api_info);
+                initialized = true;
             }
+            Err(ref e) => show_nvim_init_error(e, state_arc.clone(), comps.clone()),
         }
 
         if initialized {
@@ -1622,18 +1623,35 @@ fn set_nvim_initialized(state_arc: Arc<UiMutex<State>>, api_info: NeovimApiInfo)
     idle_cb_call!(state_arc.nvim_started_cb());
 }
 
-fn init_nvim(state_ref: &Arc<UiMutex<State>>, components: &Arc<UiMutex<Components>>) {
+fn init_nvim(
+    state_ref: &Arc<UiMutex<State>>,
+    resize_state: &Arc<ResizeState>,
+    components: &Arc<UiMutex<Components>>,
+) {
     let state = state_ref.borrow_mut();
     if state.start_nvim_initialization() {
         let (cols, rows) = state.calc_nvim_size_from(components.borrow().saved_size());
 
         debug!("Init nvim {}/{}", cols, rows);
 
-        let state_arc = state_ref.clone();
-        let comps = components.clone();
         let nvim_handler = NvimHandler::new(state_ref.clone(), state.resize_status());
         let options = state.options.borrow_mut().input_data();
-        thread::spawn(move || init_nvim_async(state_arc, comps, nvim_handler, options, cols, rows));
+        thread::spawn(glib::clone!(
+            @strong state_ref,
+            @strong components,
+            @strong resize_state
+            => move || {
+                init_nvim_async(
+                    state_ref,
+                    components,
+                    resize_state,
+                    nvim_handler,
+                    options,
+                    cols,
+                    rows,
+                )
+            }
+        ));
     }
 }
 

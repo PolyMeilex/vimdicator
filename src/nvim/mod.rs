@@ -8,6 +8,8 @@ pub use self::ext::*;
 pub use self::handler::NvimHandler;
 pub use self::redraw_handler::{NvimCommand, PendingPopupMenu, PopupMenuItem, RedrawMode};
 
+use super::shell::ResizeState;
+
 use std::{
     convert::TryFrom,
     env, error, fmt,
@@ -406,9 +408,10 @@ pub fn start<'a>(
 
 pub async fn post_start_init(
     nvim: NvimSession,
+    resize_state: Arc<ResizeState>,
+    input_data: Option<String>,
     cols: i32,
     rows: i32,
-    input_data: Option<String>,
 ) -> Result<NeovimApiInfo, NvimInitError> {
     let mut version_info: Vec<(Value, Value)> = vec![
         ("major".into(), env!("CARGO_PKG_VERSION_MAJOR").into()),
@@ -441,20 +444,30 @@ pub async fn post_start_init(
         return Err(NvimInitError::new_missing_capability("ext_linegrid"));
     }
 
-    nvim.timeout(
-        nvim.ui_attach(
-            cols.into(),
-            rows.into(),
-            UiAttachOptions::new()
-                .set_popupmenu_external(api_info.ext_popupmenu)
-                .set_tabline_external(api_info.ext_tabline)
-                .set_linegrid_external(true)
-                .set_hlstate_external(api_info.ext_hlstate)
-                .set_termcolors_external(api_info.ext_termcolors),
-        ),
-    )
-    .await
-    .map_err(NvimInitError::new_post_init)?;
+    /* Get the most recent size we've received when attaching the UI, and activate resizing. If we
+     * haven't actually had a resizing event happen yet, we use the last saved width/height as a
+     * backup
+     */
+    {
+        let mut state = resize_state.requests.lock().await;
+        let (cols, rows) = state.requested.take().unwrap_or((cols, rows));
+        state.current = Some((cols, rows));
+
+        nvim.timeout(
+            nvim.ui_attach(
+                cols.into(),
+                rows.into(),
+                UiAttachOptions::new()
+                    .set_popupmenu_external(api_info.ext_popupmenu)
+                    .set_tabline_external(api_info.ext_tabline)
+                    .set_linegrid_external(true)
+                    .set_hlstate_external(api_info.ext_hlstate)
+                    .set_termcolors_external(api_info.ext_termcolors),
+            ),
+        )
+        .await
+        .map_err(NvimInitError::new_post_init)?;
+    }
 
     if let Some(input_data) = input_data {
         let buf = nvim.timeout(nvim.get_current_buf()).await.ok_and_report();
