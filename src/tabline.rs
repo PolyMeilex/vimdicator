@@ -56,7 +56,6 @@ impl Tabline {
         tabs.set_can_focus(false);
         tabs.set_scrollable(true);
         tabs.set_show_border(false);
-        //tabs.set_border_width(0); FIXME: figure out if we need to clear all of the margins on this
         tabs.set_hexpand(true);
         tabs.set_sensitive(false);
         tabs.hide();
