@@ -4,8 +4,6 @@ use std::rc::Rc;
 
 use gtk::prelude::*;
 
-use glib::signal;
-
 use crate::{
     nvim::{self, ErrorReport, Tabpage},
     spawn_timeout_user_err,
@@ -107,7 +105,7 @@ impl Tabline {
 
         self.update_state(nvim, selected, tabs);
 
-        signal::signal_handler_block(&self.tabs, &self.switch_handler_id);
+        self.tabs.block_signal(&self.switch_handler_id);
 
         let count = self.tabs.n_pages() as usize;
         if count < tabs.len() {
@@ -170,7 +168,7 @@ impl Tabline {
             }
         }
 
-        signal::signal_handler_unblock(&self.tabs, &self.switch_handler_id);
+        self.tabs.unblock_signal(&self.switch_handler_id);
     }
 }
 
