@@ -62,9 +62,11 @@ impl Tabline {
 
         let state = Rc::new(RefCell::new(State::new()));
 
-        let state_ref = state.clone();
         let switch_handler_id =
-            tabs.connect_switch_page(move |_, _, idx| state_ref.borrow().switch_page(idx));
+            tabs.connect_switch_page(glib::clone!(@strong state => move |_, _, idx| {
+                let state = state.borrow();
+                state.switch_page(idx)
+            }));
 
         Tabline {
             tabs,
