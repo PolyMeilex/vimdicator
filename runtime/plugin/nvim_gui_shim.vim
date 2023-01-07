@@ -5,7 +5,6 @@ endif
 let g:GuiLoaded = 1
 
 if exists('g:GuiInternalClipboard')
-	let s:LastRegType = 'v'
     let g:clipboard = {
             \   'name': 'neovim-gtk',
             \   'copy': {
