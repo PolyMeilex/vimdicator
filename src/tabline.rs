@@ -51,14 +51,14 @@ pub struct Tabline {
 
 impl Tabline {
     pub fn new() -> Self {
-        let tabs = gtk::Notebook::new();
-
-        tabs.set_can_focus(false);
-        tabs.set_scrollable(true);
-        tabs.set_show_border(false);
-        tabs.set_hexpand(true);
-        tabs.set_sensitive(false);
-        tabs.hide();
+        let tabs = gtk::Notebook::builder()
+            .can_focus(false)
+            .scrollable(true)
+            .show_border(false)
+            .hexpand(true)
+            .sensitive(false)
+            .visible(false)
+            .build();
 
         let state = Rc::new(RefCell::new(State::new()));
 
