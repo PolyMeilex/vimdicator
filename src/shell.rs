@@ -1836,7 +1836,7 @@ impl State {
         selected: Tabpage,
         tabs: Vec<(Tabpage, Option<String>)>,
     ) -> RedrawMode {
-        self.tabs.update_tabs(&self.nvim, &selected, &tabs);
+        self.tabs.update_tabs(&self.nvim, selected, tabs);
 
         RedrawMode::Nothing
     }

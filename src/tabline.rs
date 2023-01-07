@@ -1,50 +1,68 @@
-use std::cell::RefCell;
-use std::ops::Deref;
-use std::rc::Rc;
+use std::{cell::RefCell, collections::hash_map::HashMap, ops::Deref, rc::Rc};
 
 use gtk::prelude::*;
 
 use crate::{
-    nvim::{self, ErrorReport, Tabpage},
+    nvim::{self, ErrorReport, NvimSession, Tabpage},
     spawn_timeout_user_err,
 };
 
 struct State {
-    data: Vec<Tabpage>,
+    tabpages: Vec<Tabpage>,
     selected: Option<Tabpage>,
+    /// Since GTK only gives us the new index (at least afaict) of the tab page after a reorder
+    /// operation, we keep a map of tab widgets to their last known position
+    widget_map: HashMap<gtk::Widget, u32>,
     nvim: Option<Rc<nvim::NeovimClient>>,
 }
 
 impl State {
     pub fn new() -> Self {
         State {
-            data: Vec::new(),
+            tabpages: Vec::new(),
+            widget_map: HashMap::new(),
             selected: None,
             nvim: None,
         }
     }
 
+    fn nvim(&self) -> NvimSession {
+        self.nvim
+            .as_ref()
+            .and_then(|c| c.nvim())
+            .expect("Tabline shouldn't be usable before nvim is initialized")
+    }
+
     fn switch_page(&self, idx: u32) {
-        let target = &self.data[idx as usize];
+        let target = &self.tabpages[idx as usize];
         if Some(target) != self.selected.as_ref() {
-            if let Some(nvim) = self.nvim.as_ref().unwrap().nvim() {
-                nvim.block_timeout(nvim.set_current_tabpage(target))
-                    .report_err();
-            }
+            let nvim = self.nvim();
+            nvim.block_timeout(nvim.set_current_tabpage(target))
+                .report_err();
         }
     }
 
-    fn close_tab(&self, idx: u32) {
-        if let Some(nvim) = self.nvim.as_ref().unwrap().nvim() {
-            spawn_timeout_user_err!(nvim.command(&format!("tabc {}", idx + 1)));
+    fn reorder_page(&self, idx: u32, mut new_idx: u32) {
+        let nvim = self.nvim();
+
+        // :help :tabm - "N is counted before the move"
+        if new_idx > idx {
+            new_idx += 1;
         }
+
+        spawn_timeout_user_err!(nvim.command(&format!("{}tabd tabm {new_idx}", idx + 1)));
+    }
+
+    fn close_tab(&self, idx: u32) {
+        let nvim = self.nvim();
+        spawn_timeout_user_err!(nvim.command(&format!("tabc {}", idx + 1)));
     }
 }
 
 pub struct Tabline {
     tabs: gtk::Notebook,
     state: Rc<RefCell<State>>,
-    switch_handler_id: glib::SignalHandlerId,
+    signal_handlers: [glib::SignalHandlerId; 2],
 }
 
 impl Tabline {
@@ -60,16 +78,18 @@ impl Tabline {
 
         let state = Rc::new(RefCell::new(State::new()));
 
-        let switch_handler_id =
-            tabs.connect_switch_page(glib::clone!(@strong state => move |_, _, idx| {
-                let state = state.borrow();
-                state.switch_page(idx)
-            }));
-
         Tabline {
-            tabs,
-            state,
-            switch_handler_id,
+            tabs: tabs.clone(),
+            state: state.clone(),
+            signal_handlers: [
+                tabs.connect_switch_page(glib::clone!(@strong state => move |_, _, idx| {
+                    state.borrow().switch_page(idx)
+                })),
+                tabs.connect_page_reordered(glib::clone!(@strong state => move |_, tab, idx| {
+                    let state = state.borrow();
+                    state.reorder_page(state.widget_map[tab], idx);
+                })),
+            ],
         }
     }
 
@@ -87,14 +107,15 @@ impl Tabline {
 
         state.selected = Some(selected.clone());
 
-        state.data = tabs.iter().map(|item| item.0.clone()).collect();
+        state.tabpages = tabs.iter().map(|item| item.0.clone()).collect();
+        state.widget_map.clear();
     }
 
     pub fn update_tabs(
         &self,
         nvim: &Rc<nvim::NeovimClient>,
-        selected: &Tabpage,
-        tabs: &[(Tabpage, Option<String>)],
+        selected: Tabpage,
+        tabs: Vec<(Tabpage, Option<String>)>,
     ) {
         if tabs.len() <= 1 {
             self.tabs.hide();
@@ -103,9 +124,10 @@ impl Tabline {
             self.tabs.show();
         }
 
-        self.update_state(nvim, selected, tabs);
-
-        self.tabs.block_signal(&self.switch_handler_id);
+        self.update_state(nvim, &selected, &tabs);
+        for signal in &self.signal_handlers {
+            self.block_signal(signal);
+        }
 
         let count = self.tabs.n_pages() as usize;
         if count < tabs.len() {
@@ -129,6 +151,7 @@ impl Tabline {
                 label_box.append(&close_btn);
 
                 self.tabs.append_page(&empty, Some(&label_box));
+                self.tabs.set_tab_reorderable(&empty, true);
 
                 let tabs = self.tabs.clone();
                 let state_ref = Rc::clone(&self.state);
@@ -149,11 +172,15 @@ impl Tabline {
             }
         }
 
+        let mut state = self.state.borrow_mut();
+
         for (idx, tab) in tabs.iter().enumerate() {
-            let tab_child = self.tabs.nth_page(Some(idx as u32));
+            let tab_child = self.tabs.nth_page(Some(idx as u32)).unwrap();
+            state.widget_map.insert(tab_child.clone(), idx as u32);
+
             let tab_label = self
                 .tabs
-                .tab_label(&tab_child.unwrap())
+                .tab_label(&tab_child)
                 .unwrap()
                 .first_child()
                 .unwrap()
@@ -161,12 +188,15 @@ impl Tabline {
                 .unwrap();
             tab_label.set_text(tab.1.as_ref().unwrap_or(&"??".to_owned()));
 
-            if *selected == tab.0 {
+            if selected == tab.0 {
                 self.tabs.set_current_page(Some(idx as u32));
             }
         }
 
-        self.tabs.unblock_signal(&self.switch_handler_id);
+        drop(state);
+        for signal in &self.signal_handlers {
+            self.unblock_signal(signal);
+        }
     }
 }
 
