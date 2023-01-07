@@ -814,13 +814,7 @@ fn update_window_title(comps: &Arc<UiMutex<Components>>, args: Vec<String>) {
     // Ignore certain window types that will never have a title (GH #26)
     let win_type = &args[6];
     let buf_type = &args[7];
-    if win_type == "autocmd"
-        || win_type == "command"
-        || win_type == "loclist"
-        || (win_type == "popup" && buf_type != "terminal")
-        || win_type == "preview"
-        || win_type == "quickfix"
-    {
+    if !win_type.is_empty() || !matches!(buf_type.as_str(), "" | "terminal") {
         return;
     }
 
