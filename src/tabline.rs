@@ -155,8 +155,6 @@ impl Tabline {
                 .tabs
                 .tab_label(&tab_child.unwrap())
                 .unwrap()
-                .downcast::<gtk::Box>()
-                .unwrap()
                 .first_child()
                 .unwrap()
                 .downcast::<gtk::Label>()
