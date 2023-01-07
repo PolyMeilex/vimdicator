@@ -797,7 +797,7 @@ fn format_window_title(
     }
 
     if long {
-        parts.push("- nvim-gtk");
+        parts.push("- neovim-gtk");
     }
 
     parts.join(" ")
