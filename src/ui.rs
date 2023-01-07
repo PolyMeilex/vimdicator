@@ -294,7 +294,7 @@ impl Ui {
         // Autocmds we want to run when starting
         let mut autocmds = vec![
             state.subscribe(
-                SubscriptionKey::from("BufEnter,BufModifiedSet,DirChanged"),
+                SubscriptionKey::from("BufEnter,BufFilePost,BufModifiedSet,DirChanged"),
                 &[
                     "expand('%:p')",
                     "getcwd()",
