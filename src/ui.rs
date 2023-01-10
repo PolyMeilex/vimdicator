@@ -544,7 +544,7 @@ impl Ui {
 
         let new_tab_btn = Button::from_icon_name("tab-new-symbolic");
         let shell_ref = Rc::clone(&self.shell);
-        new_tab_btn.connect_clicked(move |_| shell_ref.borrow_mut().new_tab());
+        new_tab_btn.connect_clicked(move |_| shell_ref.borrow().new_tab());
         new_tab_btn.set_focusable(false);
         new_tab_btn.set_tooltip_text(Some("Open a new tab"));
         new_tab_btn.set_sensitive(false);
@@ -556,7 +556,7 @@ impl Ui {
 
         let paste_btn = Button::from_icon_name("edit-paste-symbolic");
         let shell = self.shell.clone();
-        paste_btn.connect_clicked(move |_| shell.borrow_mut().edit_paste());
+        paste_btn.connect_clicked(move |_| shell.borrow().edit_paste());
         paste_btn.set_focusable(false);
         paste_btn.set_tooltip_text(Some("Paste from clipboard"));
         paste_btn.set_sensitive(false);
@@ -564,7 +564,7 @@ impl Ui {
 
         let save_btn = Button::with_label("Save All");
         let shell = self.shell.clone();
-        save_btn.connect_clicked(move |_| shell.borrow_mut().edit_save_all());
+        save_btn.connect_clicked(move |_| shell.borrow().edit_save_all());
         save_btn.set_focusable(false);
         save_btn.set_sensitive(false);
         header_bar.pack_end(&save_btn);
