@@ -450,7 +450,11 @@ pub async fn post_start_init(
      */
     {
         let mut state = resize_state.requests.lock().await;
-        let (cols, rows) = state.requested.take().unwrap_or((cols, rows));
+        let (cols, rows) = state
+            .requested
+            .take()
+            .filter(|t| *t > (0, 0))
+            .unwrap_or((cols, rows));
         state.current = Some((cols, rows));
 
         nvim.timeout(
