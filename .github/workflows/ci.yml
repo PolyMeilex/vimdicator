@@ -79,3 +79,37 @@ jobs:
 
       - name: Run cargo test
         run: cargo test --locked
+
+  windows:
+    runs-on: [windows-latest]
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest]
+        include:
+          - os: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          update: true
+          install: >-
+            mingw-w64-x86_64-gtk4
+            mingw-w64-x86_64-binutils
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-rust
+            mingw-w64-x86_64-atk
+            mingw-w64-x86_64-pango
+            mingw-w64-x86_64-glib2
+            mingw-w64-x86_64-pkg-config
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Run cargo test
+        run: cargo test --locked
