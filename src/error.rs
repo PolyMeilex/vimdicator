@@ -2,7 +2,7 @@ use std::ops::Deref;
 
 use log::error;
 
-use htmlescape::encode_minimal;
+use html_escape::encode_text_minimal;
 
 use gtk::prelude::*;
 
@@ -52,7 +52,7 @@ impl ErrorArea {
              <big>Possible error reasons:</big>\n\
              &#9679; Not supported nvim version (minimum supported version is <b>{}</b>)\n\
              &#9679; Error in configuration file (init.vim or ginit.vim)",
-            encode_minimal(err),
+            encode_text_minimal(err),
             shell::MINIMUM_SUPPORTED_NVIM_VERSION
         ));
         self.base.show();
@@ -69,8 +69,8 @@ impl ErrorArea {
              &#9679; Error in configuration file (init.vim or ginit.vim)\n\
              &#9679; Wrong nvim binary path \
              (right path can be passed with <i>--nvim-bin-path=path_here</i>)",
-            encode_minimal(cmd),
-            encode_minimal(err),
+            encode_text_minimal(cmd),
+            encode_text_minimal(err),
             shell::MINIMUM_SUPPORTED_NVIM_VERSION
         ));
         self.base.show();

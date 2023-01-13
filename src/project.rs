@@ -18,7 +18,7 @@ use crate::shell::Shell;
 use crate::ui::UiMutex;
 use nvim_rs::Value;
 
-use htmlescape::encode_minimal;
+use html_escape::encode_text_minimal;
 
 const MAX_VISIBLE_ROWS: usize = 5;
 
@@ -528,9 +528,14 @@ impl Entry {
             uri: uri.to_owned(),
             path: path
                 .parent()
-                .map(|s| format!("<small>{}</small>", encode_minimal(&s.to_string_lossy())))
+                .map(|s| {
+                    format!(
+                        "<small>{}</small>",
+                        encode_text_minimal(&s.to_string_lossy())
+                    )
+                })
                 .unwrap_or_else(|| "".to_owned()),
-            file_name: encode_minimal(name),
+            file_name: encode_text_minimal(name).to_string(),
             name: name.to_owned(),
             pixbuf: BOOKMARKED_PIXBUF,
             project: true,
@@ -549,9 +554,14 @@ impl Entry {
             uri: uri.to_owned(),
             path: path
                 .parent()
-                .map(|s| format!("<small>{}</small>", encode_minimal(&s.to_string_lossy())))
+                .map(|s| {
+                    format!(
+                        "<small>{}</small>",
+                        encode_text_minimal(&s.to_string_lossy())
+                    )
+                })
                 .unwrap_or_else(|| "".to_owned()),
-            file_name: encode_minimal(&name),
+            file_name: encode_text_minimal(&name).to_string(),
             name,
             pixbuf: CURRENT_DIR_PIXBUF,
             project: true,
@@ -570,9 +580,14 @@ impl Entry {
             uri: uri.to_owned(),
             path: path
                 .parent()
-                .map(|s| format!("<small>{}</small>", encode_minimal(&s.to_string_lossy())))
+                .map(|s| {
+                    format!(
+                        "<small>{}</small>",
+                        encode_text_minimal(&s.to_string_lossy())
+                    )
+                })
                 .unwrap_or_else(|| "".to_owned()),
-            file_name: encode_minimal(&name),
+            file_name: encode_text_minimal(&name).to_string(),
             name,
             pixbuf: PLAIN_FILE_PIXBUF,
             project: false,
