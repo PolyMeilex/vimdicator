@@ -108,8 +108,7 @@ fn main() {
             }
         } else {
             clap::Error::with_description(
-                "Diff mode (-d) specified but no files provided. 2 or \
-                                           more files must be provided",
+                "Diff mode (-d) specified but no files provided. 2 or more files must be provided",
                 clap::ErrorKind::MissingRequiredArgument,
             )
             .exit();
