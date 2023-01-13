@@ -155,7 +155,6 @@ impl From<Elapsed> for SessionError {
 
 #[cfg(target_os = "windows")]
 fn set_windows_creation_flags(cmd: &mut Command) {
-    use std::os::windows::process::CommandExt;
     cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
 }
 
