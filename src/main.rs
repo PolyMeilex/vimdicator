@@ -39,8 +39,9 @@ use gio::ApplicationCommandLine;
 use std::cell::RefCell;
 use std::io::Read;
 use std::sync::{Arc, Mutex};
+
 #[cfg(unix)]
-use unix_daemonize::{daemonize_redirect, ChdirMode};
+use fork::{daemon, Fork};
 
 use crate::shell::ShellOptions;
 use crate::ui::Ui;
@@ -115,12 +116,14 @@ fn main() {
         }
     }
 
+    // fork to background by default
     #[cfg(unix)]
-    {
-        // fork to background by default
-        if !matches.is_present("no-fork") {
-            daemonize_redirect(None::<String>, None::<String>, ChdirMode::NoChdir).unwrap();
-        }
+    if !matches.is_present("no-fork") {
+        match daemon(true, true) {
+            Ok(Fork::Parent(_)) => return,
+            Ok(Fork::Child) => (),
+            Err(code) => panic!("Failed to fork, got {}", code),
+        };
     }
 
     gtk::init().expect("Failed to initialize GTK+");

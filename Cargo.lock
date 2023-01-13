@@ -234,6 +234,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 
 [[package]]
+name = "fork"
+version = "0.1.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9788ce090af4bf8d6e8f43d3f7d12305c787456387bd2d88856fcda3aa1f0dca"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "futures"
 version = "0.1.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -784,6 +793,7 @@ dependencies = [
  "dirs",
  "env_logger",
  "fnv",
+ "fork",
  "futures 0.3.25",
  "gdk4",
  "gdk4-sys",
@@ -810,7 +820,6 @@ dependencies = [
  "toml",
  "unicode-segmentation",
  "unicode-width",
- "unix-daemonize",
  "winres",
 ]
 
@@ -1471,15 +1480,6 @@ name = "unicode-width"
 version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c0edd1e5b14653f783770bce4a4dabb4a5108a5370a5f5d8cfe8710c361f6c8b"
-
-[[package]]
-name = "unix-daemonize"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "531faed80732acaa13d1016c66d6a9180b5045c4fcef8daa20bb2baf46b13907"
-dependencies = [
- "libc",
-]
 
 [[package]]
 name = "vec_map"

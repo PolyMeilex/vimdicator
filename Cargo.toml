@@ -38,7 +38,7 @@ atty = "0.2.0"
 env-dirs = { package = "dirs", version = "4.0" }
 
 [target.'cfg(unix)'.dependencies]
-unix-daemonize = "0.1.0"
+fork = "0.1.0"
 
 [target.'cfg(windows)'.build-dependencies]
 winres = "0.1.0"
