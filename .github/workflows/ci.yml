@@ -16,7 +16,7 @@ env:
   NVIM_GTK_STDERR: nvim-gtk-stderr.log
   # Brew update breaks otherwise
   HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: 1
-  RUSTFLAGS: -C opt-level=0
+  RUSTFLAGS: -C opt-level=0 -D warnings
 
 jobs:
   fedora:
