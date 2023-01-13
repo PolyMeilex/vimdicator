@@ -770,7 +770,6 @@ name = "nvim-gtk"
 version = "1.1.0-devel"
 dependencies = [
  "async-trait",
- "atty",
  "build-version",
  "clap",
  "env_logger",
@@ -786,6 +785,7 @@ dependencies = [
  "gtk4",
  "gtk4-sys",
  "html-escape",
+ "is-terminal",
  "log",
  "nvim-rs",
  "once_cell",

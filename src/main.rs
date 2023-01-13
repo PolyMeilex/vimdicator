@@ -48,6 +48,8 @@ use crate::ui::Ui;
 
 use clap::{App, Arg, ArgMatches};
 
+use is_terminal::IsTerminal;
+
 include!(concat!(env!("OUT_DIR"), "/version.rs"));
 
 fn main() {
@@ -222,7 +224,7 @@ fn activate(
 }
 
 fn read_piped_input() -> Option<String> {
-    if atty::isnt(atty::Stream::Stdin) {
+    if !std::io::stdout().is_terminal() {
         let mut buf = String::new();
         match std::io::stdin().read_to_string(&mut buf) {
             Ok(size) if size > 0 => Some(buf),
