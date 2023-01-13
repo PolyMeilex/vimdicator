@@ -14,8 +14,6 @@ use futures::{executor::block_on, FutureExt};
 
 use tokio::sync::{Mutex as AsyncMutex, Notify};
 
-use clap::value_t;
-
 use gdk::{prelude::*, Display, ModifierType};
 use gio::ApplicationCommandLine;
 use gtk::prelude::*;
@@ -806,24 +804,24 @@ impl ShellOptions {
     pub fn new(matches: &clap::ArgMatches, input_data: Option<String>) -> Self {
         ShellOptions {
             input_data,
-            cterm_colors: matches.is_present("cterm-colors"),
-            mode: if matches.is_present("diff-mode") {
+            cterm_colors: matches.get_flag("cterm-colors"),
+            mode: if matches.get_flag("diff-mode") {
                 StartMode::Diff
             } else {
                 StartMode::Normal
             },
-            nvim_bin_path: matches.value_of("nvim-bin-path").map(str::to_owned),
-            timeout: value_t!(matches.value_of("timeout"), u64)
-                .map(Duration::from_secs)
-                .ok(),
+            nvim_bin_path: matches.get_one("nvim-bin-path").cloned(),
+            timeout: matches.get_one("timeout").map(|v| Duration::from_secs(*v)),
             args_for_neovim: matches
-                .values_of("nvim-args")
-                .map(|args| args.map(str::to_owned).collect())
-                .unwrap_or_else(std::vec::Vec::new),
+                .get_many::<String>("nvim-args")
+                .into_iter()
+                .flat_map(|v| v.into_iter().cloned())
+                .collect(),
             post_config_cmds: matches
-                .values_of("post-config-cmds")
-                .map(|args| args.map(str::to_owned).collect())
-                .unwrap_or_default(),
+                .get_many::<String>("post-config-cmds")
+                .into_iter()
+                .flat_map(|v| v.into_iter().cloned())
+                .collect(),
         }
     }
 

@@ -10,7 +10,7 @@ edition = "2018"
 license = "GPLv3"
 
 [dependencies]
-clap = "2.0"
+clap = { version = "4.0", features = ["color", "help", "std", "usage", "error-context", "suggestions", "wrap_help"] }
 glib = "0.16.0"
 gio = "0.16.0"
 async-trait = "0.1.0"

@@ -46,7 +46,7 @@ use fork::{daemon, Fork};
 use crate::shell::ShellOptions;
 use crate::ui::Ui;
 
-use clap::{App, Arg, ArgMatches};
+use clap::{value_parser, Arg, ArgAction, ArgMatches, Command};
 
 use is_terminal::IsTerminal;
 
@@ -55,71 +55,75 @@ include!(concat!(env!("OUT_DIR"), "/version.rs"));
 fn main() {
     env_logger::init();
 
-    let matches = App::new("NeovimGtk")
+    let mut command = Command::new("NeovimGtk")
         .version(GIT_BUILD_VERSION.unwrap_or(env!("CARGO_PKG_VERSION")))
         .author(env!("CARGO_PKG_AUTHORS"))
-        .about(misc::about_comments().as_str())
-        .arg(Arg::with_name("no-fork")
+        .about(misc::about_comments())
+        .arg(Arg::new("no-fork")
              .long("no-fork")
+             .action(ArgAction::SetTrue)
              .help("Prevent detach from console"))
-        .arg(Arg::with_name("disable-win-restore")
+        .arg(Arg::new("disable-win-restore")
              .long("disable-win-restore")
+             .action(ArgAction::SetTrue)
              .help("Don't restore window size at start"))
-        .arg(Arg::with_name("timeout")
+        .arg(Arg::new("timeout")
              .long("timeout")
+             .value_parser(value_parser!(u64))
              .default_value("10")
              .help("Wait timeout in seconds. If nvim does not response in given time NvimGtk stops")
-             .takes_value(true))
-        .arg(Arg::with_name("cterm-colors")
+             .num_args(1))
+        .arg(Arg::new("cterm-colors")
              .long("cterm-colors")
+             .action(ArgAction::SetTrue)
              .help("Use ctermfg/ctermbg instead of guifg/guibg"))
-        .arg(Arg::with_name("diff-mode")
+        .arg(Arg::new("diff-mode")
              .help("Open two or more files in diff mode")
-             .short("d"))
-        .arg(Arg::with_name("files")
+             .short('d')
+             .action(ArgAction::SetTrue))
+        .arg(Arg::new("files")
              .help("Files to open")
-             .multiple(true))
-        .arg(Arg::with_name("nvim-bin-path")
+             .num_args(1..))
+        .arg(Arg::new("nvim-bin-path")
              .long("nvim-bin-path")
              .help("Path to nvim binary")
-             .takes_value(true))
-        .arg(Arg::with_name("post-config-cmds")
+             .num_args(1))
+        .arg(Arg::new("post-config-cmds")
              .help("Execute <cmd> after config and first file")
              .value_name("cmd")
-             .short("c")
-             .multiple(true)
-             .takes_value(true)
-             .number_of_values(1))
-        .arg(Arg::with_name("nvim-args")
+             .short('c')
+             .num_args(1)
+             .action(ArgAction::Append))
+        .arg(Arg::new("nvim-args")
              .help("Args will be passed to nvim")
              .last(true)
-             .multiple(true))
-        .get_matches();
+             .num_args(0..));
+    let matches = command.get_matches_mut();
 
     let input_data = RefCell::new(read_piped_input());
 
     // Additional argument parsing
-    if matches.is_present("diff-mode") {
-        if let Some(files) = matches.values_of("files") {
+    if matches.get_flag("diff-mode") {
+        if let Some(files) = matches.get_many::<String>("files") {
             if files.len() < 2 {
-                clap::Error::with_description(
-                    "Diff mode (-d) requires 2 or more files",
-                    clap::ErrorKind::TooFewValues,
-                )
-                .exit();
+                command
+                    .error(
+                        clap::error::ErrorKind::TooFewValues,
+                        "Diff mode (-d) requires 2 or more files",
+                    )
+                    .exit();
             }
         } else {
-            clap::Error::with_description(
+            command.error(
+                clap::error::ErrorKind::MissingRequiredArgument,
                 "Diff mode (-d) specified but no files provided. 2 or more files must be provided",
-                clap::ErrorKind::MissingRequiredArgument,
-            )
-            .exit();
+            ).exit();
         }
     }
 
     // fork to background by default
     #[cfg(unix)]
-    if !matches.is_present("no-fork") {
+    if !matches.get_flag("no-fork") {
         match daemon(true, true) {
             Ok(Fork::Parent(_)) => return,
             Ok(Fork::Child) => (),
@@ -148,7 +152,7 @@ fn main() {
         app_cmdline_copy.lock().unwrap().replace(cmdline.clone());
         let input_data = input_data
             .replace(None)
-            .filter(|_input| !matches_copy.is_present("files"));
+            .filter(|_input| !matches_copy.get_flag("files"));
 
         match input_data {
             Some(input_data) => activate(
@@ -159,16 +163,11 @@ fn main() {
             ),
             None => {
                 let files = matches_copy
-                    .values_of("files")
-                    .unwrap_or_default()
-                    .map(str::to_owned)
-                    .collect::<Vec<String>>();
-                open(
-                    app,
-                    files.into_boxed_slice(),
-                    &matches_copy,
-                    app_cmdline_copy.clone(),
-                );
+                    .get_many::<String>("files")
+                    .into_iter()
+                    .flat_map(|v| v.into_iter().cloned())
+                    .collect::<Box<[String]>>();
+                open(app, files, &matches_copy, app_cmdline_copy.clone());
             }
         }
         0
@@ -186,7 +185,7 @@ fn main() {
     );
 
     let app_ref = app.clone();
-    let matches_copy = matches.clone();
+    let matches_copy = matches;
     let app_cmdline_copy = Arc::clone(&app_cmdline);
     let new_window_action = gio::SimpleAction::new("new-window", None);
     new_window_action.connect_activate(move |_, _| {
@@ -209,7 +208,7 @@ fn open(
 ) {
     let mut ui = Ui::new(ShellOptions::new(matches, None), files);
 
-    ui.init(app, !matches.is_present("disable-win-restore"), app_cmdline);
+    ui.init(app, !matches.get_flag("disable-win-restore"), app_cmdline);
 }
 
 fn activate(
@@ -220,7 +219,7 @@ fn activate(
 ) {
     let mut ui = Ui::new(ShellOptions::new(matches, input_data), Box::new([]));
 
-    ui.init(app, !matches.is_present("disable-win-restore"), app_cmdline);
+    ui.init(app, !matches.get_flag("disable-win-restore"), app_cmdline);
 }
 
 fn read_piped_input() -> Option<String> {
