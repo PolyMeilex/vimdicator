@@ -98,6 +98,7 @@ fn main() {
              .help("Args will be passed to nvim")
              .last(true)
              .num_args(0..));
+
     let matches = command.get_matches_mut();
 
     let input_data = RefCell::new(read_piped_input());
@@ -129,6 +130,12 @@ fn main() {
             Ok(Fork::Child) => (),
             Err(code) => panic!("Failed to fork, got {}", code),
         };
+    }
+
+    #[cfg(debug_assertions)]
+    if std::env::var("NVIM_GTK_CLI_TEST_MODE") == Ok("1".to_string()) {
+        println!("Testing the CLI");
+        return;
     }
 
     gtk::init().expect("Failed to initialize GTK+");

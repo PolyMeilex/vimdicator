@@ -46,6 +46,9 @@ winres = "0.1.0"
 phf_codegen = "0.11.0"
 build-version = "0.1.1"
 
+[dev-dependencies]
+trycmd = "0.14.0"
+
 [dependencies.pango]
 features = ["v1_46"]
 version = "0.16.0"

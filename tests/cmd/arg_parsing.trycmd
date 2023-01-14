@@ -1,0 +1,33 @@
+Make sure `$NVIM_GTK_CLI_TEST_MODE` actually works
+
+```
+$ nvim-gtk
+? success
+Testing the CLI
+
+```
+
+Diff mode tests
+
+```
+$ nvim-gtk -d
+? failed
+error: Diff mode (-d) specified but no files provided. 2 or more files must be provided
+
+Usage: nvim-gtk[EXE] [OPTIONS] [files]... [-- [nvim-args]...]
+
+For more information, try '--help'.
+
+$ nvim-gtk -d foo
+? failed
+error: Diff mode (-d) requires 2 or more files
+
+Usage: nvim-gtk[EXE] [OPTIONS] [files]... [-- [nvim-args]...]
+
+For more information, try '--help'.
+
+$ nvim-gtk -d foo bar
+? success
+Testing the CLI
+
+```
