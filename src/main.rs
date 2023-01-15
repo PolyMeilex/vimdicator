@@ -132,9 +132,20 @@ fn main() {
         };
     }
 
+    // Debugging mode for CLI test runs
     #[cfg(debug_assertions)]
     if std::env::var("NVIM_GTK_CLI_TEST_MODE") == Ok("1".to_string()) {
         println!("Testing the CLI");
+        if let Some(commands) = matches.get_many::<String>("post-config-cmds") {
+            println!(
+                "Commands passed: [{}]",
+                commands
+                    .into_iter()
+                    .map(|c| format!("'{c}'"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        }
         return;
     }
 

@@ -31,3 +31,30 @@ $ nvim-gtk -d foo bar
 Testing the CLI
 
 ```
+
+Post-config commands
+
+```
+$ nvim-gtk -c
+? failed
+error: a value is required for '-c <cmd>' but none was supplied
+
+For more information, try '--help'.
+
+$ nvim-gtk -c foo
+? success
+Testing the CLI
+Commands passed: ['foo']
+
+$ nvim-gtk -c foo -c
+? failed
+error: a value is required for '-c <cmd>' but none was supplied
+
+For more information, try '--help'.
+
+$ nvim-gtk -c foo -c bar
+? success
+Testing the CLI
+Commands passed: ['foo', 'bar']
+
+```
