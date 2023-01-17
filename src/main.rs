@@ -36,9 +36,17 @@ use log::error;
 
 use gio::prelude::*;
 use gio::ApplicationCommandLine;
-use std::cell::RefCell;
-use std::io::Read;
-use std::sync::{Arc, Mutex};
+
+use std::{
+    cell::RefCell,
+    convert::*,
+    io::Read,
+    num::ParseIntError,
+    ops::Deref,
+    str::FromStr,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 #[cfg(unix)]
 use fork::{daemon, Fork};
@@ -46,85 +54,144 @@ use fork::{daemon, Fork};
 use crate::shell::ShellOptions;
 use crate::ui::Ui;
 
-use clap::{value_parser, Arg, ArgAction, ArgMatches, Command};
+use clap::*;
 
 use is_terminal::IsTerminal;
 
 include!(concat!(env!("OUT_DIR"), "/version.rs"));
 
+#[derive(Debug, Copy, Clone)]
+pub struct TimeoutDuration(Option<Duration>);
+
+impl TimeoutDuration {
+    fn new(secs: u64) -> Self {
+        Self(if secs == 0 {
+            None
+        } else {
+            Some(Duration::from_secs(secs))
+        })
+    }
+}
+
+impl Deref for TimeoutDuration {
+    type Target = Option<Duration>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl FromStr for TimeoutDuration {
+    type Err = ParseIntError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self::new(s.parse()?))
+    }
+}
+
+impl std::fmt::Display for TimeoutDuration {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(duration) = self.0 {
+            duration.as_secs().fmt(f)
+        } else {
+            f.write_str("0")
+        }
+    }
+}
+
+#[derive(Parser, Debug, Clone)]
+#[command(
+    name = "neovim-gtk",
+    version = GIT_BUILD_VERSION.unwrap_or(env!("CARGO_PKG_VERSION")),
+    author = env!("CARGO_PKG_AUTHORS"),
+    about = misc::about_comments(),
+)]
+pub struct Args {
+    /// Execute <CMD> after config and first file (same as 'nvim -c <CMD>')
+    ///
+    /// May be specified more then once.
+    #[arg(short = 'c', value_name = "CMD")]
+    post_config_cmds: Vec<String>,
+
+    /// Open two or more files in diff mode (same as 'nvim -d ...')
+    #[arg(short)]
+    diff_mode: bool,
+
+    /// Don't detach from the console (!= Windows only)
+    #[arg(long)]
+    no_fork: bool,
+
+    /// Don't restore the last saved window size at start
+    #[arg(long)]
+    disable_win_restore: bool,
+
+    /// RPC timeout (0 for none)
+    ///
+    /// If nvim doesn't respond to an RPC call unexpectedly within <SECONDS>, we give up.
+    #[arg(long, default_value_t = TimeoutDuration::new(10), value_name = "SECONDS")]
+    timeout: TimeoutDuration,
+
+    #[arg(long)]
+    /// Use ctermfg/ctermbg instead of guifg/guibg
+    cterm_colors: bool,
+
+    #[arg()]
+    /// Files to open
+    files: Vec<String>,
+
+    #[arg(long)]
+    /// Path to the nvim binary
+    nvim_bin_path: Option<String>,
+
+    /// Arguments that will be passed to nvim (see more with '--help' before using!)
+    ///
+    /// Note that due to current limitations, the arguments that may be passed through this are
+    /// limited to arguments that:
+    ///
+    /// * Don't cause a user prompt, e.g. anything that makes nvim go "Hit ENTER...", either
+    ///   directly or indirectly
+    ///
+    /// * Don't interfere with stdio output (since we start nvim with --embed, we need stdio
+    ///   reserved for RPC)
+    ///
+    /// * Are not filenames
+    ///
+    /// When possible, the equivalent neovim-gtk arguments should be used instead of being passed
+    /// via this option.
+    #[arg(last = true)]
+    nvim_args: Vec<String>,
+}
+
 fn main() {
     env_logger::init();
 
-    let mut command = Command::new("NeovimGtk")
-        .version(GIT_BUILD_VERSION.unwrap_or(env!("CARGO_PKG_VERSION")))
-        .author(env!("CARGO_PKG_AUTHORS"))
-        .about(misc::about_comments())
-        .arg(Arg::new("no-fork")
-             .long("no-fork")
-             .action(ArgAction::SetTrue)
-             .help("Prevent detach from console"))
-        .arg(Arg::new("disable-win-restore")
-             .long("disable-win-restore")
-             .action(ArgAction::SetTrue)
-             .help("Don't restore window size at start"))
-        .arg(Arg::new("timeout")
-             .long("timeout")
-             .value_parser(value_parser!(u64))
-             .default_value("10")
-             .help("Wait timeout in seconds. If nvim does not response in given time NvimGtk stops")
-             .num_args(1))
-        .arg(Arg::new("cterm-colors")
-             .long("cterm-colors")
-             .action(ArgAction::SetTrue)
-             .help("Use ctermfg/ctermbg instead of guifg/guibg"))
-        .arg(Arg::new("diff-mode")
-             .help("Open two or more files in diff mode")
-             .short('d')
-             .action(ArgAction::SetTrue))
-        .arg(Arg::new("files")
-             .help("Files to open")
-             .num_args(1..))
-        .arg(Arg::new("nvim-bin-path")
-             .long("nvim-bin-path")
-             .help("Path to nvim binary")
-             .num_args(1))
-        .arg(Arg::new("post-config-cmds")
-             .help("Execute <cmd> after config and first file")
-             .value_name("cmd")
-             .short('c')
-             .num_args(1)
-             .action(ArgAction::Append))
-        .arg(Arg::new("nvim-args")
-             .help("Args will be passed to nvim")
-             .last(true)
-             .num_args(0..));
-
-    let matches = command.get_matches_mut();
+    let mut command = Args::command();
+    let args = Args::from_arg_matches(&command.get_matches_mut()).unwrap_or_else(|e| e.exit());
 
     let input_data = RefCell::new(read_piped_input());
 
     // Additional argument parsing
-    if matches.get_flag("diff-mode") {
-        if let Some(files) = matches.get_many::<String>("files") {
-            if files.len() < 2 {
-                command
-                    .error(
-                        clap::error::ErrorKind::TooFewValues,
-                        "Diff mode (-d) requires 2 or more files",
-                    )
-                    .exit();
-            }
-        } else {
+    if args.diff_mode {
+        if args.files.is_empty() {
             command.error(
                 clap::error::ErrorKind::MissingRequiredArgument,
                 "Diff mode (-d) specified but no files provided. 2 or more files must be provided",
             ).exit();
+        } else if args.files.len() < 2 {
+            command
+                .error(
+                    clap::error::ErrorKind::TooFewValues,
+                    "Diff mode (-d) requires 2 or more files",
+                )
+                .exit();
         }
     }
 
+    command.build();
+
     // fork to background by default
     #[cfg(unix)]
-    if !matches.get_flag("no-fork") {
+    if !args.no_fork {
         match daemon(true, true) {
             Ok(Fork::Parent(_)) => return,
             Ok(Fork::Child) => (),
@@ -136,15 +203,15 @@ fn main() {
     #[cfg(debug_assertions)]
     if std::env::var("NVIM_GTK_CLI_TEST_MODE") == Ok("1".to_string()) {
         println!("Testing the CLI");
-        if let Some(commands) = matches.get_many::<String>("post-config-cmds") {
+        if !args.post_config_cmds.is_empty() {
             println!(
                 "Commands passed: [{}]",
-                commands
-                    .into_iter()
+                args.post_config_cmds
+                    .iter()
                     .map(|c| format!("'{c}'"))
                     .collect::<Vec<_>>()
                     .join(", ")
-            )
+            );
         }
         return;
     }
@@ -164,32 +231,28 @@ fn main() {
     };
 
     let app_cmdline = Arc::new(Mutex::new(None));
-    let app_cmdline_copy = app_cmdline.clone();
-    let matches_copy = matches.clone();
-    app.connect_command_line(move |app, cmdline| {
-        app_cmdline_copy.lock().unwrap().replace(cmdline.clone());
-        let input_data = input_data
-            .replace(None)
-            .filter(|_input| !matches_copy.get_flag("files"));
+    app.connect_command_line(
+        glib::clone!(@strong app_cmdline, @strong args => move |app, cmdline| {
+            app_cmdline.lock().unwrap().replace(cmdline.clone());
+            let input_data = input_data
+                .replace(None)
+                .filter(|_input| !args.files.is_empty());
 
-        match input_data {
-            Some(input_data) => activate(
-                app,
-                &matches_copy,
-                Some(input_data),
-                app_cmdline_copy.clone(),
-            ),
-            None => {
-                let files = matches_copy
-                    .get_many::<String>("files")
-                    .into_iter()
-                    .flat_map(|v| v.into_iter().cloned())
-                    .collect::<Box<[String]>>();
-                open(app, files, &matches_copy, app_cmdline_copy.clone());
+            match input_data {
+                Some(input_data) => activate(
+                    app,
+                    &args,
+                    Some(input_data),
+                    app_cmdline.clone(),
+                ),
+                None => {
+                    let files = args.files.iter().cloned().collect::<Box<[String]>>();
+                    open(app, files, &args, app_cmdline.clone());
+                }
             }
-        }
-        0
-    });
+            0
+        }),
+    );
 
     // Setup our global style provider
     let css_provider = gtk::CssProvider::new();
@@ -202,13 +265,12 @@ fn main() {
         gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
     );
 
-    let app_ref = app.clone();
-    let matches_copy = matches;
-    let app_cmdline_copy = Arc::clone(&app_cmdline);
     let new_window_action = gio::SimpleAction::new("new-window", None);
-    new_window_action.connect_activate(move |_, _| {
-        activate(&app_ref, &matches_copy, None, app_cmdline_copy.clone())
-    });
+    new_window_action.connect_activate(glib::clone!(
+        @strong app, @strong args, @strong app_cmdline => move |_, _| {
+            activate(&app, &args, None, app_cmdline.clone())
+        }
+    ));
     app.add_action(&new_window_action);
 
     gtk::Window::set_default_icon_name("org.daa.NeovimGtk");
@@ -221,23 +283,23 @@ fn main() {
 fn open(
     app: &gtk::Application,
     files: Box<[String]>,
-    matches: &ArgMatches,
+    args: &Args,
     app_cmdline: Arc<Mutex<Option<ApplicationCommandLine>>>,
 ) {
-    let mut ui = Ui::new(ShellOptions::new(matches, None), files);
+    let mut ui = Ui::new(ShellOptions::new(args, None), files);
 
-    ui.init(app, !matches.get_flag("disable-win-restore"), app_cmdline);
+    ui.init(app, !args.disable_win_restore, app_cmdline);
 }
 
 fn activate(
     app: &gtk::Application,
-    matches: &ArgMatches,
+    args: &Args,
     input_data: Option<String>,
     app_cmdline: Arc<Mutex<Option<ApplicationCommandLine>>>,
 ) {
-    let mut ui = Ui::new(ShellOptions::new(matches, input_data), Box::new([]));
+    let mut ui = Ui::new(ShellOptions::new(args, input_data), Box::new([]));
 
-    ui.init(app, !matches.get_flag("disable-win-restore"), app_cmdline);
+    ui.init(app, !args.disable_win_restore, app_cmdline);
 }
 
 fn read_piped_input() -> Option<String> {

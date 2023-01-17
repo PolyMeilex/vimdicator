@@ -14,7 +14,7 @@ $ nvim-gtk -d
 ? failed
 error: Diff mode (-d) specified but no files provided. 2 or more files must be provided
 
-Usage: nvim-gtk[EXE] [OPTIONS] [files]... [-- [nvim-args]...]
+Usage: nvim-gtk[EXE] [OPTIONS] [FILES]... [-- <NVIM_ARGS>...]
 
 For more information, try '--help'.
 
@@ -22,7 +22,7 @@ $ nvim-gtk -d foo
 ? failed
 error: Diff mode (-d) requires 2 or more files
 
-Usage: nvim-gtk[EXE] [OPTIONS] [files]... [-- [nvim-args]...]
+Usage: nvim-gtk[EXE] [OPTIONS] [FILES]... [-- <NVIM_ARGS>...]
 
 For more information, try '--help'.
 
@@ -37,7 +37,7 @@ Post-config commands
 ```
 $ nvim-gtk -c
 ? failed
-error: a value is required for '-c <cmd>' but none was supplied
+error: a value is required for '-c <CMD>' but none was supplied
 
 For more information, try '--help'.
 
@@ -48,7 +48,7 @@ Commands passed: ['foo']
 
 $ nvim-gtk -c foo -c
 ? failed
-error: a value is required for '-c <cmd>' but none was supplied
+error: a value is required for '-c <CMD>' but none was supplied
 
 For more information, try '--help'.
 

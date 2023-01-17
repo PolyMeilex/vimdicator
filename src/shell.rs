@@ -46,6 +46,7 @@ use crate::render::CellMetrics;
 use crate::subscriptions::{SubscriptionHandle, SubscriptionKey, Subscriptions};
 use crate::tabline::Tabline;
 use crate::ui::{Components, UiMutex};
+use crate::Args;
 
 const DEFAULT_FONT_NAME: &str = "DejaVu Sans Mono 12";
 pub const MINIMUM_SUPPORTED_NVIM_VERSION: &str = "0.3.2";
@@ -801,27 +802,19 @@ pub struct ShellOptions {
 }
 
 impl ShellOptions {
-    pub fn new(matches: &clap::ArgMatches, input_data: Option<String>) -> Self {
+    pub fn new(args: &Args, input_data: Option<String>) -> Self {
         ShellOptions {
             input_data,
-            cterm_colors: matches.get_flag("cterm-colors"),
-            mode: if matches.get_flag("diff-mode") {
+            cterm_colors: args.cterm_colors,
+            mode: if args.diff_mode {
                 StartMode::Diff
             } else {
                 StartMode::Normal
             },
-            nvim_bin_path: matches.get_one("nvim-bin-path").cloned(),
-            timeout: matches.get_one("timeout").map(|v| Duration::from_secs(*v)),
-            args_for_neovim: matches
-                .get_many::<String>("nvim-args")
-                .into_iter()
-                .flat_map(|v| v.into_iter().cloned())
-                .collect(),
-            post_config_cmds: matches
-                .get_many::<String>("post-config-cmds")
-                .into_iter()
-                .flat_map(|v| v.into_iter().cloned())
-                .collect(),
+            nvim_bin_path: args.nvim_bin_path.clone(),
+            timeout: *args.timeout,
+            args_for_neovim: args.nvim_args.clone(),
+            post_config_cmds: args.post_config_cmds.iter().cloned().collect(),
         }
     }
 
