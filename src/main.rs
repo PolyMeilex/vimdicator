@@ -156,8 +156,9 @@ pub struct Args {
     ///
     /// * Are not filenames
     ///
-    /// When possible, the equivalent neovim-gtk arguments should be used instead of being passed
-    /// via this option.
+    /// Trying to pass arguments which match any of the above criteria may result in hangs. As such,
+    /// the equivalent neovim-gtk arguments should be used instead of being passed via this option
+    /// whenever possible.
     #[arg(last = true)]
     pub nvim_args: Vec<String>,
 
