@@ -1,12 +1,10 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::convert::TryFrom;
-use std::mem;
 use std::ops::Deref;
 use std::rc::Rc;
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
-use std::time::Duration;
 
 use log::{debug, error};
 
@@ -211,7 +209,7 @@ pub struct State {
     im_context: gtk::IMMulticontext,
     error_area: crate::error::ErrorArea,
 
-    pub options: RefCell<ShellOptions>,
+    pub options: RefCell<Args>,
     transparency_settings: TransparencySettings,
 
     detach_cb: Option<DetachedCallback>,
@@ -226,7 +224,7 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(settings: Rc<RefCell<Settings>>, options: ShellOptions) -> State {
+    pub fn new(settings: Rc<RefCell<Settings>>, options: Args) -> State {
         let nvim_viewport = NvimViewport::new();
 
         let pango_context = nvim_viewport.create_pango_context();
@@ -782,57 +780,6 @@ impl UiState {
     }
 }
 
-/// The mode to start the neovim instance in, this is the equivalent of nvim's TUI client's -b, -d,
-/// -e, etc. options
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum StartMode {
-    Normal,
-    Diff,
-}
-
-#[derive(Clone)]
-pub struct ShellOptions {
-    nvim_bin_path: Option<String>,
-    timeout: Option<Duration>,
-    args_for_neovim: Vec<String>,
-    input_data: Option<String>,
-    cterm_colors: bool,
-    pub mode: StartMode,
-    post_config_cmds: Box<[String]>,
-}
-
-impl ShellOptions {
-    pub fn new(args: &Args, input_data: Option<String>) -> Self {
-        ShellOptions {
-            input_data,
-            cterm_colors: args.cterm_colors,
-            mode: if args.diff_mode {
-                StartMode::Diff
-            } else {
-                StartMode::Normal
-            },
-            nvim_bin_path: args.nvim_bin_path.clone(),
-            timeout: *args.timeout,
-            args_for_neovim: args.nvim_args.clone(),
-            post_config_cmds: args.post_config_cmds.iter().cloned().collect(),
-        }
-    }
-
-    /// Remove input data from original shell option, as it need to be used only once
-    pub fn input_data(&mut self) -> Self {
-        let input_data = self.input_data.take();
-        let mut clone = self.clone();
-        clone.input_data = input_data;
-
-        clone
-    }
-
-    /// Steal the post config commands, since they're only needed once
-    pub fn post_config_cmds(&mut self) -> Box<[String]> {
-        mem::take(&mut self.post_config_cmds)
-    }
-}
-
 async fn gtk_drop_receive(drop: &gdk::Drop) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     // Big fat hack: GDK language bindings for 4.x before 4.6 don't provide us with
     // GDK_FILE_LIST_TYPE. Waiting for 4.6 would be lame and we're too cool for that, so let's just
@@ -924,7 +871,7 @@ pub struct Shell {
 }
 
 impl Shell {
-    pub fn new(settings: Rc<RefCell<Settings>>, options: ShellOptions) -> Shell {
+    pub fn new(settings: Rc<RefCell<Settings>>, options: Args) -> Shell {
         let shell = Shell {
             state: Arc::new(UiMutex::new(State::new(settings, options))),
             ui_state: Rc::new(RefCell::new(UiState::new())),
@@ -1517,7 +1464,7 @@ fn init_nvim_async(
     comps: Arc<UiMutex<Components>>,
     resize_status: Arc<ResizeState>,
     nvim_handler: NvimHandler,
-    options: ShellOptions,
+    options: Args,
     cols: i32,
     rows: i32,
 ) {
@@ -1525,8 +1472,8 @@ fn init_nvim_async(
     let (session, io_future) = match nvim::start(
         nvim_handler,
         options.nvim_bin_path.clone(),
-        options.timeout,
-        options.args_for_neovim,
+        *options.timeout,
+        options.nvim_args,
     ) {
         Ok(session) => session,
         Err(err) => {

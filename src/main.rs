@@ -41,6 +41,7 @@ use std::{
     cell::RefCell,
     convert::*,
     io::Read,
+    mem,
     num::ParseIntError,
     ops::Deref,
     str::FromStr,
@@ -51,7 +52,6 @@ use std::{
 #[cfg(unix)]
 use fork::{daemon, Fork};
 
-use crate::shell::ShellOptions;
 use crate::ui::Ui;
 
 use clap::*;
@@ -115,33 +115,33 @@ pub struct Args {
 
     /// Open two or more files in diff mode (same as 'nvim -d ...')
     #[arg(short)]
-    diff_mode: bool,
+    pub diff_mode: bool,
 
     /// Don't detach from the console (!= Windows only)
     #[arg(long)]
-    no_fork: bool,
+    pub no_fork: bool,
 
     /// Don't restore the last saved window size at start
     #[arg(long)]
-    disable_win_restore: bool,
+    pub disable_win_restore: bool,
 
     /// RPC timeout (0 for none)
     ///
     /// If nvim doesn't respond to an RPC call unexpectedly within <SECONDS>, we give up.
     #[arg(long, default_value_t = TimeoutDuration::new(10), value_name = "SECONDS")]
-    timeout: TimeoutDuration,
+    pub timeout: TimeoutDuration,
 
     #[arg(long)]
     /// Use ctermfg/ctermbg instead of guifg/guibg
-    cterm_colors: bool,
+    pub cterm_colors: bool,
 
     #[arg()]
     /// Files to open
-    files: Vec<String>,
+    pub files: Vec<String>,
 
     #[arg(long)]
     /// Path to the nvim binary
-    nvim_bin_path: Option<String>,
+    pub nvim_bin_path: Option<String>,
 
     /// Arguments that will be passed to nvim (see more with '--help' before using!)
     ///
@@ -159,7 +159,26 @@ pub struct Args {
     /// When possible, the equivalent neovim-gtk arguments should be used instead of being passed
     /// via this option.
     #[arg(last = true)]
-    nvim_args: Vec<String>,
+    pub nvim_args: Vec<String>,
+
+    /// Input data from stdin
+    /// TODO: Get rid of this (#57)
+    #[arg(skip)]
+    input_data: Option<String>,
+}
+
+impl Args {
+    /// Steal the post config commands, since they're only needed once
+    pub fn post_config_cmds(&mut self) -> Vec<String> {
+        mem::take(&mut self.post_config_cmds)
+    }
+
+    /// Steal the input data, since it's only used once
+    pub fn input_data(&mut self) -> Self {
+        let ret = self.clone();
+        self.input_data = None;
+        ret
+    }
 }
 
 fn main() {
@@ -239,12 +258,15 @@ fn main() {
                 .filter(|_input| !args.files.is_empty());
 
             match input_data {
-                Some(input_data) => activate(
-                    app,
-                    &args,
-                    Some(input_data),
-                    app_cmdline.clone(),
-                ),
+                Some(_) => {
+                    let mut args = args.clone();
+                    args.input_data = input_data;
+                    activate(
+                        app,
+                        &args,
+                        app_cmdline.clone(),
+                    );
+                }
                 None => {
                     let files = args.files.iter().cloned().collect::<Box<[String]>>();
                     open(app, files, &args, app_cmdline.clone());
@@ -268,7 +290,7 @@ fn main() {
     let new_window_action = gio::SimpleAction::new("new-window", None);
     new_window_action.connect_activate(glib::clone!(
         @strong app, @strong args, @strong app_cmdline => move |_, _| {
-            activate(&app, &args, None, app_cmdline.clone())
+            activate(&app, &args, app_cmdline.clone())
         }
     ));
     app.add_action(&new_window_action);
@@ -286,7 +308,7 @@ fn open(
     args: &Args,
     app_cmdline: Arc<Mutex<Option<ApplicationCommandLine>>>,
 ) {
-    let mut ui = Ui::new(ShellOptions::new(args, None), files);
+    let mut ui = Ui::new(args.clone(), files);
 
     ui.init(app, !args.disable_win_restore, app_cmdline);
 }
@@ -294,10 +316,9 @@ fn open(
 fn activate(
     app: &gtk::Application,
     args: &Args,
-    input_data: Option<String>,
     app_cmdline: Arc<Mutex<Option<ApplicationCommandLine>>>,
 ) {
-    let mut ui = Ui::new(ShellOptions::new(args, input_data), Box::new([]));
+    let mut ui = Ui::new(args.clone(), Box::new([]));
 
     ui.init(app, !args.disable_win_restore, app_cmdline);
 }

@@ -23,9 +23,10 @@ use crate::nvim::*;
 use crate::plug_manager;
 use crate::project::Projects;
 use crate::settings::{Settings, SettingsLoader};
-use crate::shell::{self, HeaderBarButtons, Shell, ShellOptions, StartMode};
+use crate::shell::{self, HeaderBarButtons, Shell};
 use crate::shell_dlg;
 use crate::subscriptions::{SubscriptionHandle, SubscriptionKey};
+use crate::Args;
 
 macro_rules! clone {
     (@param _) => ( _ );
@@ -106,7 +107,7 @@ impl Components {
 }
 
 impl Ui {
-    pub fn new(options: ShellOptions, open_paths: Box<[String]>) -> Ui {
+    pub fn new(options: Args, open_paths: Box<[String]>) -> Ui {
         let plug_manager = plug_manager::Manager::new();
 
         let plug_manager = Arc::new(UiMutex::new(plug_manager));
@@ -329,11 +330,11 @@ impl Ui {
 
         shell.grab_focus();
 
-        let (post_config_cmds, mode) = {
+        let (post_config_cmds, diff_mode) = {
             let state_ref = state_ref.borrow();
             let mut options = state_ref.options.borrow_mut();
 
-            (options.post_config_cmds(), options.mode)
+            (options.post_config_cmds(), options.diff_mode)
         };
 
         state.set_action_widgets(header_bar, file_browser_ref.borrow().clone());
@@ -356,7 +357,7 @@ impl Ui {
                 &files_list,
                 &autocmds,
                 post_config_cmds.as_ref(),
-                mode,
+                diff_mode,
             );
         })));
 
@@ -377,7 +378,7 @@ impl Ui {
         files_list: &[String],
         subscriptions: &[SubscriptionHandle],
         post_config_cmds: &[String],
-        mode: StartMode,
+        diff_mode: bool,
     ) {
         plug_manager
             .borrow_mut()
@@ -390,17 +391,7 @@ impl Ui {
 
         let mut commands = Vec::<String>::new();
         if !files_list.is_empty() {
-            if mode == StartMode::Normal {
-                commands.reserve(1 + post_config_cmds.len());
-                commands.push(format!(
-                    r"try|ar {}|cat /^Vim(\a\+):E325:/|endt",
-                    files_list
-                        .iter()
-                        .map(|f| misc::escape_filename(f))
-                        .collect::<Box<_>>()
-                        .join(" ")
-                ));
-            } else {
+            if diff_mode {
                 commands.reserve(files_list.len() + post_config_cmds.len());
                 commands.push(format!(
                     r"try|e {}|cat /^Vim(\a\+):E325:/|endt|difft",
@@ -412,6 +403,16 @@ impl Ui {
                         misc::escape_filename(file)
                     ));
                 }
+            } else {
+                commands.reserve(1 + post_config_cmds.len());
+                commands.push(format!(
+                    r"try|ar {}|cat /^Vim(\a\+):E325:/|endt",
+                    files_list
+                        .iter()
+                        .map(|f| misc::escape_filename(f))
+                        .collect::<Box<_>>()
+                        .join(" ")
+                ));
             }
         }
 
