@@ -134,7 +134,7 @@ impl Ui {
     pub fn init(
         &mut self,
         app: &gtk::Application,
-        restore_win_state: bool,
+        args: &crate::Args,
         app_cmdline: Arc<Mutex<Option<ApplicationCommandLine>>>,
     ) {
         if self.initialized {
@@ -181,7 +181,7 @@ impl Ui {
                     .set_property("gtk-application-prefer-dark-theme", true);
             }
 
-            if restore_win_state {
+            let sidebar_width = if !args.disable_win_restore {
                 if comps.window_state.is_maximized {
                     window.maximize();
                 }
@@ -191,11 +191,13 @@ impl Ui {
                     comps.window_state.current_height,
                 );
 
-                main.set_position(comps.window_state.sidebar_width);
+                comps.window_state.sidebar_width
             } else {
                 window.set_default_size(DEFAULT_WIDTH, DEFAULT_HEIGHT);
-                main.set_position(DEFAULT_SIDEBAR_WIDTH);
-            }
+                DEFAULT_SIDEBAR_WIDTH
+            };
+
+            main.set_position(if args.hide_sidebar { 0 } else { sidebar_width });
         }
 
         // Client side decorations including the toolbar are disabled via NVIM_GTK_NO_HEADERBAR=1
@@ -277,7 +279,7 @@ impl Ui {
 
         window.show();
 
-        if restore_win_state {
+        if !args.disable_win_restore {
             // Hide sidebar, if it wasn't shown last time.
             // Has to be done after show_all(), so it won't be shown again.
             let show_sidebar = comps_ref.borrow().window_state.show_sidebar;

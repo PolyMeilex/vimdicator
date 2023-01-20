@@ -129,9 +129,13 @@ pub struct Args {
     ///
     /// * Whether or not the window was maximized
     ///
-    /// * The visibility of the sidebar (will be shown by default)
+    /// * The visibility of the sidebar (will be shown by default, use --hide-sidebar to disable)
     #[arg(long)]
     pub disable_win_restore: bool,
+
+    /// Hide the sidebar by default on start
+    #[arg(long)]
+    pub hide_sidebar: bool,
 
     /// RPC timeout (0 for none)
     ///
@@ -319,7 +323,7 @@ fn open(
 ) {
     let mut ui = Ui::new(args.clone(), files);
 
-    ui.init(app, !args.disable_win_restore, app_cmdline);
+    ui.init(app, args, app_cmdline);
 }
 
 fn activate(
@@ -329,7 +333,7 @@ fn activate(
 ) {
     let mut ui = Ui::new(args.clone(), Box::new([]));
 
-    ui.init(app, !args.disable_win_restore, app_cmdline);
+    ui.init(app, args, app_cmdline);
 }
 
 fn read_piped_input() -> Option<String> {
