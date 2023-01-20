@@ -121,7 +121,15 @@ pub struct Args {
     #[arg(long)]
     pub no_fork: bool,
 
-    /// Don't restore the last saved window size at start
+    /// Don't restore any previously saved window state
+    ///
+    /// This includes:
+    ///
+    /// * The size of the window
+    ///
+    /// * Whether or not the window was maximized
+    ///
+    /// * The visibility of the sidebar (will be shown by default)
     #[arg(long)]
     pub disable_win_restore: bool,
 
