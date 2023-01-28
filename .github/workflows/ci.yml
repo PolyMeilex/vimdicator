@@ -71,7 +71,7 @@ jobs:
         uses: actions/cache/save@v3
         if: steps.dnf-metadata.outputs.refreshed == '1'
         with:
-          key: "dnf-${{ steps.fedora-release.outputs.version }}-${{ steps.dnf-metadata.outputs.hash }}"
+          key: "dnf-${{ steps.fedora-release.outputs.version }}-${{ steps.dnf-metadata.outputs.time }}"
           path: /var/cache/dnf
 
       - uses: Swatinem/rust-cache@v2
