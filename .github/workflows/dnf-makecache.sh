@@ -1,4 +1,4 @@
-#!/bin/sh -x
+#!/bin/sh
 # Check if we need to refresh the metadata cache, and signal back to the Github job if so
 echo "::group::Refreshing metadata"
 if [[ -e /var/cache/dnf/last_makecache ]]; then
