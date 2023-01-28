@@ -126,12 +126,11 @@ impl error::Error for NvimInitError {
     }
 
     fn cause(&self) -> Option<&dyn error::Error> {
-        if let Self::ResponseError { ref source, .. } = self {
-            Some(source.as_ref())
-        } else if let Self::TcpConnectError { ref source, .. } = self {
-            Some(source.as_ref())
-        } else {
-            None
+        match self {
+            Self::ResponseError { ref source, .. } | Self::TcpConnectError { ref source, .. } => {
+                Some(source.as_ref())
+            }
+            Self::MissingCapability(_) => None,
         }
     }
 }
