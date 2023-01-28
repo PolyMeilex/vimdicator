@@ -27,9 +27,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # TODO: Windows, most of the instructions for this should be in ./appveyor.yml from
-        # a5dd25c31ef03b47e87e68225a04d4b7852d9e09~1
-        # TODO: OSX, this should be a bit easier hopefully
         os: [ubuntu-latest]
         include:
           - os: ubuntu-latest
