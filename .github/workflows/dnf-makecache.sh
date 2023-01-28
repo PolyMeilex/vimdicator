@@ -2,7 +2,7 @@
 # Check if we need to refresh the metadata cache, and signal back to the Github job if so
 echo "::group::Refreshing metadata"
 if [[ -e /var/cache/dnf/last_makecache ]]; then
-    old_date=$(date -Iseconds -r /var/cache/dnf/last_makecache)
+    old_time=$(date -Iseconds -r /var/cache/dnf/last_makecache)
 fi
 dnf makecache --timer
 new_time=$(date -Iseconds -r /var/cache/dnf/last_makecache)
