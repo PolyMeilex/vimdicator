@@ -90,7 +90,7 @@ pub fn snapshot_nvim(
     let (rows, columns) = (ui_model.rows, ui_model.columns);
 
     // Various operations for text formatting come at the end, so store them in a list until then.
-    // We set the capacity to twice the size of the grid, since at most each cell can have
+    // We set the capacity to three times the size of the grid, since at most each cell can have
     // strikethrough + a type of underline + the second line in an underdouble. Most of the time
     // though, we optimistically expect this list to be much smaller than iterating through the UI
     // model.
