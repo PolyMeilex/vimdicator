@@ -54,6 +54,8 @@ impl<'a> RenderStep<'a> {
                 snapshot_underdouble(snapshot, cell_metrics, self.color, pos, len),
             RenderStepKind::Underdot =>
                 snapshot_underdot(snapshot, cell_metrics, self.color, pos, len),
+            RenderStepKind::Underdash =>
+                snapshot_underdash(snapshot, cell_metrics, self.color, pos, len),
         }
     }
 
@@ -74,6 +76,7 @@ enum RenderStepKind {
     Underline,
     Underdouble,
     Underdot,
+    Underdash,
     Strikethrough,
 }
 
@@ -245,7 +248,15 @@ pub fn snapshot_cursor<T: CursorRedrawCb + 'static>(
         snapshot_strikethrough(snapshot, cell_metrics, &fg, (x, y), clip_width);
     }
 
-    if cell.hl.underdotted {
+    if cell.hl.underdashed {
+        snapshot_underdash(
+            snapshot,
+            cell_metrics,
+            &underline_color(cell, hl).fade(hl.bg(), fade_percentage),
+            (x, y),
+            clip_width,
+        );
+    } else if cell.hl.underdotted {
         snapshot_underdot(
             snapshot,
             cell_metrics,
@@ -376,6 +387,44 @@ fn snapshot_underdot(
     snapshot.pop();
 }
 
+fn snapshot_underdash(
+    snapshot: &gtk::Snapshot,
+    cell_metrics: &CellMetrics,
+    color: &color::Color,
+    (x, mut y): (f64, f64),
+    len: f64,
+) {
+    let CellMetrics {
+        underline_position,
+        underline_thickness,
+        char_width,
+        ..
+    } = *cell_metrics;
+
+    /* Same trick as in snapshot_underdot() */
+    let dash_width = char_width / 4.0;
+    let start_x = x - (x % dash_width);
+
+    y = (y + underline_position).floor();
+
+    let (x, y, len, underline_thickness) =
+        (x as f32, y as f32, len as f32, underline_thickness as f32);
+    snapshot.push_repeat(
+        &Rect::new(x, y, len, underline_thickness),
+        Some(&Rect::new(
+            start_x as f32,
+            y,
+            (dash_width * 2.0) as f32,
+            underline_thickness,
+        )),
+    );
+    snapshot.append_color(
+        &color.into(),
+        &Rect::new(x, y, dash_width as f32, underline_thickness),
+    );
+    snapshot.pop();
+}
+
 fn plan_and_snapshot_cell_bg<'a>(
     snapshot: &gtk::Snapshot,
     pending_bg: &mut Option<RenderStep<'a>>,
@@ -433,7 +482,9 @@ fn plan_underline_strikethrough<'a>(
         *pending_strikethrough = None;
     }
 
-    let (kind, color) = if cell.hl.underdotted {
+    let (kind, color) = if cell.hl.underdashed {
+        (RenderStepKind::Underdash, underline_color(cell, hl))
+    } else if cell.hl.underdotted {
         (RenderStepKind::Underdot, underdotted_color(cell, hl))
     } else if cell.hl.underline {
         (RenderStepKind::Underline, underline_color(cell, hl))

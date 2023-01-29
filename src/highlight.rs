@@ -261,6 +261,7 @@ pub struct Highlight {
     pub underline: bool,
     pub underdouble: bool, // underline should always be true if this is true
     pub underdotted: bool,
+    pub underdashed: bool,
     pub strikethrough: bool,
     pub foreground: Option<Color>,
     pub background: Option<Color>,
@@ -279,6 +280,7 @@ impl Highlight {
             underline: false,
             underdouble: false,
             underdotted: false,
+            underdashed: false,
             strikethrough: false,
             reverse: false,
         }
@@ -318,6 +320,7 @@ impl Highlight {
                 }
                 // TODO: Add support for real undercurls and don't just draw them as underdots (#42)
                 "underdotted" | "undercurl" => model_attrs.underdotted = true,
+                "underdashed" => model_attrs.underdashed = true,
                 "strikethrough" => model_attrs.strikethrough = true,
                 "blend" => (),
                 attr_key => error!("unknown attribute {}", attr_key),
