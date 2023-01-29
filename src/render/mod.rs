@@ -52,8 +52,8 @@ impl<'a> RenderStep<'a> {
                 snapshot_underline(snapshot, cell_metrics, self.color, pos, len),
             RenderStepKind::Underdouble =>
                 snapshot_underdouble(snapshot, cell_metrics, self.color, pos, len),
-            RenderStepKind::Undercurl =>
-                snapshot_undercurl(snapshot, cell_metrics, self.color, pos, len),
+            RenderStepKind::Underdot =>
+                snapshot_underdot(snapshot, cell_metrics, self.color, pos, len),
         }
     }
 
@@ -73,7 +73,7 @@ enum RenderStepKind {
     Background,
     Underline,
     Underdouble,
-    Undercurl,
+    Underdot,
     Strikethrough,
 }
 
@@ -245,11 +245,11 @@ pub fn snapshot_cursor<T: CursorRedrawCb + 'static>(
         snapshot_strikethrough(snapshot, cell_metrics, &fg, (x, y), clip_width);
     }
 
-    if cell.hl.undercurl {
-        snapshot_undercurl(
+    if cell.hl.underdotted {
+        snapshot_underdot(
             snapshot,
             cell_metrics,
-            &undercurl_color(cell, hl).fade(hl.bg(), fade_percentage),
+            &underdotted_color(cell, hl).fade(hl.bg(), fade_percentage),
             (x, y),
             clip_width,
         );
@@ -328,7 +328,7 @@ fn snapshot_underdouble(
     )
 }
 
-fn snapshot_undercurl(
+fn snapshot_underdot(
     snapshot: &gtk::Snapshot,
     cell_metrics: &CellMetrics,
     color: &color::Color,
@@ -337,7 +337,7 @@ fn snapshot_undercurl(
 ) {
     let CellMetrics {
         underline_position,
-        /* Ideally we always want to make sure that the undercurl comes out as a distinct set of
+        /* Ideally we always want to make sure that the underdot comes out as a distinct set of
          * repeating dots, always equally spaced, and as large as possible within the descent area
          * starting from the underline position to the bottom of the line.
          */
@@ -405,7 +405,7 @@ fn underline_color<'a>(cell: &'a ui_model::Cell, hl: &'a HighlightMap) -> &'a co
     hl.cell_sp(cell).unwrap_or_else(|| hl.actual_cell_fg(cell))
 }
 
-fn undercurl_color<'a>(cell: &'a ui_model::Cell, hl: &'a HighlightMap) -> &'a color::Color {
+fn underdotted_color<'a>(cell: &'a ui_model::Cell, hl: &'a HighlightMap) -> &'a color::Color {
     hl.cell_sp(cell).unwrap_or(&color::COLOR_RED)
 }
 
@@ -433,8 +433,8 @@ fn plan_underline_strikethrough<'a>(
         *pending_strikethrough = None;
     }
 
-    let (kind, color) = if cell.hl.undercurl {
-        (RenderStepKind::Undercurl, undercurl_color(cell, hl))
+    let (kind, color) = if cell.hl.underdotted {
+        (RenderStepKind::Underdot, underdotted_color(cell, hl))
     } else if cell.hl.underline {
         (RenderStepKind::Underline, underline_color(cell, hl))
     } else {
