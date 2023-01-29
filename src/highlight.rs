@@ -259,6 +259,7 @@ pub struct Highlight {
     pub italic: bool,
     pub bold: bool,
     pub underline: bool,
+    pub underdouble: bool, // underline should always be true if this is true
     pub undercurl: bool,
     pub strikethrough: bool,
     pub foreground: Option<Color>,
@@ -276,6 +277,7 @@ impl Highlight {
             italic: false,
             bold: false,
             underline: false,
+            underdouble: false,
             undercurl: false,
             strikethrough: false,
             reverse: false,
@@ -310,6 +312,10 @@ impl Highlight {
                 "bold" => model_attrs.bold = true,
                 "italic" => model_attrs.italic = true,
                 "underline" => model_attrs.underline = true,
+                "underdouble" => {
+                    model_attrs.underline = true;
+                    model_attrs.underdouble = true;
+                }
                 "undercurl" => model_attrs.undercurl = true,
                 "strikethrough" => model_attrs.strikethrough = true,
                 "blend" => (),

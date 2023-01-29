@@ -50,6 +50,8 @@ impl<'a> RenderStep<'a> {
                 snapshot_strikethrough(snapshot, cell_metrics, self.color, pos, len),
             RenderStepKind::Underline =>
                 snapshot_underline(snapshot, cell_metrics, self.color, pos, len),
+            RenderStepKind::Underdouble =>
+                snapshot_underdouble(snapshot, cell_metrics, self.color, pos, len),
             RenderStepKind::Undercurl =>
                 snapshot_undercurl(snapshot, cell_metrics, self.color, pos, len),
         }
@@ -70,6 +72,7 @@ impl<'a> RenderStep<'a> {
 enum RenderStepKind {
     Background,
     Underline,
+    Underdouble,
     Undercurl,
     Strikethrough,
 }
@@ -85,9 +88,10 @@ pub fn snapshot_nvim(
 
     // Various operations for text formatting come at the end, so store them in a list until then.
     // We set the capacity to twice the size of the grid, since at most each cell can have
-    // strikethrough + a type of underline. Most of the time though, we optimistically expect this
-    // list to be much smaller than iterating through the UI model.
-    let mut text_fmt_steps = Vec::with_capacity(columns * rows * 2);
+    // strikethrough + a type of underline + the second line in an underdouble. Most of the time
+    // though, we optimistically expect this list to be much smaller than iterating through the UI
+    // model.
+    let mut text_fmt_steps = Vec::with_capacity(columns * rows * 3);
 
     // Note that we group each batch of nodes based on their type, since GTK+ does a better job of
     // optimizing contiguous series of similar drawing operations (source: Company)
@@ -96,6 +100,7 @@ pub fn snapshot_nvim(
         let mut pending_bg = None;
         let mut pending_strikethrough = None;
         let mut pending_underline = None;
+        let mut pending_double_underline = None;
 
         for (col, cell) in line.line.iter().enumerate() {
             // Plan each step of the process of creating this snapshot as much as possible. We use
@@ -120,6 +125,7 @@ pub fn snapshot_nvim(
             plan_underline_strikethrough(
                 &mut pending_strikethrough,
                 &mut pending_underline,
+                &mut pending_double_underline,
                 &mut text_fmt_steps,
                 hl,
                 cell,
@@ -256,6 +262,16 @@ pub fn snapshot_cursor<T: CursorRedrawCb + 'static>(
             clip_width,
         );
     }
+
+    if cell.hl.underdouble {
+        snapshot_underdouble(
+            snapshot,
+            cell_metrics,
+            &underline_color(cell, hl).fade(hl.bg(), fade_percentage),
+            (x, y),
+            clip_width,
+        );
+    }
 }
 
 fn snapshot_strikethrough(
@@ -293,6 +309,23 @@ fn snapshot_underline(
     len: f64,
 ) {
     snapshot.append_color(&color.into(), &underline_rect(cell_metrics, (x, y), len))
+}
+
+fn snapshot_underdouble(
+    snapshot: &gtk::Snapshot,
+    cell_metrics: &CellMetrics,
+    color: &color::Color,
+    pos: (f64, f64),
+    len: f64,
+) {
+    /* We only need to handle the lower underline, the upper underline will be drawn by
+     * snapshot_underline()
+     */
+    snapshot.append_color(
+        &color.into(),
+        &underline_rect(cell_metrics, pos, len)
+            .offset_r(0.0, (cell_metrics.underline_thickness * 2.0) as f32),
+    )
 }
 
 fn snapshot_undercurl(
@@ -379,6 +412,7 @@ fn undercurl_color<'a>(cell: &'a ui_model::Cell, hl: &'a HighlightMap) -> &'a co
 fn plan_underline_strikethrough<'a>(
     pending_strikethrough: &mut Option<usize>,
     pending_underline: &mut Option<usize>,
+    pending_underdouble: &mut Option<usize>,
     pending_fmt_ops: &mut Vec<RenderStep<'a>>,
     hl: &'a HighlightMap,
     cell: &'a ui_model::Cell,
@@ -405,16 +439,29 @@ fn plan_underline_strikethrough<'a>(
         (RenderStepKind::Underline, underline_color(cell, hl))
     } else {
         *pending_underline = None;
+        *pending_underdouble = None;
         return;
     };
 
+    let mut extended = false;
     if let Some(idx) = *pending_underline {
-        if pending_fmt_ops[idx].extend(kind, color) {
-            return;
-        }
+        extended = pending_fmt_ops[idx].extend(kind, color);
     }
-    *pending_underline = Some(pending_fmt_ops.len());
-    pending_fmt_ops.push(RenderStep::new(kind, color, pos));
+
+    if !extended {
+        *pending_underline = Some(pending_fmt_ops.len());
+        pending_fmt_ops.push(RenderStep::new(kind, color, pos));
+    }
+
+    if cell.hl.underdouble {
+        if let Some(idx) = *pending_underdouble {
+            if pending_fmt_ops[idx].extend(RenderStepKind::Underdouble, color) {
+                return;
+            }
+        }
+        *pending_underdouble = Some(pending_fmt_ops.len());
+        pending_fmt_ops.push(RenderStep::new(RenderStepKind::Underdouble, color, pos));
+    }
 }
 
 #[inline]
