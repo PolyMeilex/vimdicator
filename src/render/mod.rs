@@ -401,18 +401,30 @@ fn snapshot_underdash(
         ..
     } = *cell_metrics;
 
-    /* Same trick as in snapshot_underdot() */
-    let dash_width = char_width / 4.0;
-    let start_x = x - (x % dash_width);
+    /* Same trick as in snapshot_underdot(). Note that we need to make sure to round the dash width
+     * though, because otherwise subpixel rendering and floating point imprecision will cause dashes
+     * to become misaligned as they're repeated
+     *
+     * It would be nice not to have to round them though 🙄
+     */
+    let dash_width = (char_width / 3.0).round();
+    let pattern_width = dash_width * 2.0;
+    let start_x = x - (x % pattern_width);
 
     y = (y + underline_position).floor();
 
-    let (x, y, len, underline_thickness) =
-        (x as f32, y as f32, len as f32, underline_thickness as f32);
+    let (x, start_x, y, len, underline_thickness) = (
+        x as f32,
+        start_x as f32,
+        y as f32,
+        len as f32,
+        underline_thickness as f32,
+    );
+
     snapshot.push_repeat(
         &Rect::new(x, y, len, underline_thickness),
         Some(&Rect::new(
-            start_x as f32,
+            start_x,
             y,
             (dash_width * 2.0) as f32,
             underline_thickness,
@@ -420,7 +432,7 @@ fn snapshot_underdash(
     );
     snapshot.append_color(
         &color.into(),
-        &Rect::new(x, y, dash_width as f32, underline_thickness),
+        &Rect::new(start_x, y, dash_width as f32, underline_thickness),
     );
     snapshot.pop();
 }
