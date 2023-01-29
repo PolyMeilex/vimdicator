@@ -41,17 +41,17 @@ impl<'a> RenderStep<'a> {
         snapshot: &gtk::Snapshot,
         cell_metrics: &CellMetrics
     ) {
-        let (x, y) = cell_metrics.get_pixel_coords(self.pos);
+        let pos = cell_metrics.get_pixel_coords(self.pos);
         let len = cell_metrics.get_cell_len(self.len);
         match self.kind {
             RenderStepKind::Background =>
-                snapshot_bg(snapshot, cell_metrics, self.color, (x, y), len),
+                snapshot_bg(snapshot, cell_metrics, self.color, pos, len),
             RenderStepKind::Strikethrough =>
-                snapshot_strikethrough(snapshot, cell_metrics, self.color, (x, y), len),
+                snapshot_strikethrough(snapshot, cell_metrics, self.color, pos, len),
             RenderStepKind::Underline =>
-                snapshot_underline(snapshot, cell_metrics, self.color, (x, y), len),
+                snapshot_underline(snapshot, cell_metrics, self.color, pos, len),
             RenderStepKind::Undercurl =>
-                snapshot_undercurl(snapshot, cell_metrics, self.color, (x, y), len),
+                snapshot_undercurl(snapshot, cell_metrics, self.color, pos, len),
         }
     }
 
