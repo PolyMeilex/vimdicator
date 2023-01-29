@@ -103,7 +103,7 @@ pub fn snapshot_nvim(
         let mut pending_bg = None;
         let mut pending_strikethrough = None;
         let mut pending_underline = None;
-        let mut pending_double_underline = None;
+        let mut pending_underdouble = None;
 
         for (col, cell) in line.line.iter().enumerate() {
             // Plan each step of the process of creating this snapshot as much as possible. We use
@@ -128,7 +128,7 @@ pub fn snapshot_nvim(
             plan_underline_strikethrough(
                 &mut pending_strikethrough,
                 &mut pending_underline,
-                &mut pending_double_underline,
+                &mut pending_underdouble,
                 &mut text_fmt_steps,
                 hl,
                 cell,
