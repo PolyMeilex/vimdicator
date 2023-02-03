@@ -116,7 +116,7 @@ impl ObjectImpl for NvimViewportObject {
                     "completion-popover",
                     "Completion popover",
                     "Popover to use for completion results from neovim",
-                    gtk::Popover::static_type(),
+                    PopupMenuPopover::static_type(),
                     glib::ParamFlags::READWRITE,
                 ),
                 glib::ParamSpecObject::new(
