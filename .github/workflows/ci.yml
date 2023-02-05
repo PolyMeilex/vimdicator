@@ -34,45 +34,18 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Get Fedora release ID
-        id: fedora-release
-        run: |
-          source /etc/os-release
-          echo version=$ID-$VERSION_ID >> $GITHUB_OUTPUT
-
-      - name: Restore dnf cache
-        uses: actions/cache/restore@v3
+      - uses: Lyude/setup-dnf@main
         with:
-          key: "dnf-${{ steps.fedora-release.outputs.version }}"
-          path: /var/cache/dnf
-
-      - name: Update dnf metadata cache
-        id: dnf-metadata
-        run: $GITHUB_WORKSPACE/.github/workflows/dnf-makecache.sh
-
-      - name: Configure dnf
-        run: |
-          OPTS="--setopt=keepcache=true --setopt=install_weak_deps=False --setopt=tsflags=nodocs"
-          dnf install $OPTS 'dnf-command(config-manager)' -y
-          dnf config-manager $OPTS --save
-
-      - name: Run dnf update
-        run: dnf update -y
-
-      - name: Install dependencies
-        run: |
-          dnf install -y rust cargo rustfmt clippy atk-devel glib2-devel pango-devel gtk4-devel
-
-      - name: Prune dnf package cache
-        if: steps.dnf-metadata.outputs.refreshed == '1'
-        run: $GITHUB_WORKSPACE/.github/workflows/dnf-prune.sh
-
-      - name: Save dnf cache
-        uses: actions/cache/save@v3
-        if: steps.dnf-metadata.outputs.refreshed == '1'
-        with:
-          key: "dnf-${{ steps.fedora-release.outputs.version }}-${{ steps.dnf-metadata.outputs.time }}"
-          path: /var/cache/dnf
+          update: true
+          install: >-
+            rust
+            cargo
+            rustfmt
+            clippy
+            atk-devel
+            glib2-devel
+            pango-devel
+            gtk4-devel
 
       - uses: Swatinem/rust-cache@v2
 
