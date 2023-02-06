@@ -148,10 +148,6 @@ pub struct Args {
     /// Use ctermfg/ctermbg instead of guifg/guibg
     pub cterm_colors: bool,
 
-    #[arg()]
-    /// Files to open
-    pub files: Vec<String>,
-
     #[arg(long)]
     /// Path to the nvim binary
     pub nvim_bin_path: Option<String>,
@@ -159,6 +155,10 @@ pub struct Args {
     #[arg(long)]
     /// Nvim server to connect to (currently TCP only)
     pub server: Option<SocketAddr>,
+
+    #[arg()]
+    /// Files to open
+    pub files: Vec<String>,
 
     /// Arguments that will be passed to nvim (see more with '--help' before using!)
     ///
