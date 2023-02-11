@@ -323,7 +323,7 @@ impl Highlight {
                 "underdashed" => model_attrs.underdashed = true,
                 "strikethrough" => model_attrs.strikethrough = true,
                 "blend" => (),
-                attr_key => error!("unknown attribute {}", attr_key),
+                attr_key => error!("unknown attribute {attr_key}={val:?}"),
             };
         }
 
