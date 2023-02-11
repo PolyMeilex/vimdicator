@@ -41,7 +41,7 @@ use std::net::SocketAddr;
 use std::{
     cell::RefCell,
     convert::*,
-    io::Read,
+    io::{self, Read},
     mem,
     num::ParseIntError,
     ops::Deref,
@@ -342,9 +342,10 @@ fn activate(
 }
 
 fn read_piped_input() -> Option<String> {
-    if !std::io::stdout().is_terminal() {
+    let mut stdin = io::stdin();
+    if !stdin.is_terminal() {
         let mut buf = String::new();
-        match std::io::stdin().read_to_string(&mut buf) {
+        match stdin.read_to_string(&mut buf) {
             Ok(size) if size > 0 => Some(buf),
             Ok(_) => None,
             Err(err) => {
