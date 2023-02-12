@@ -115,7 +115,7 @@ pub struct Args {
     post_config_cmds: Vec<String>,
 
     /// Open two or more files in diff mode (same as 'nvim -d ...')
-    #[arg(short)]
+    #[arg(short, requires = "files")]
     pub diff_mode: bool,
 
     /// Don't detach from the console (!= Windows only)
@@ -208,20 +208,13 @@ fn main() {
     let input_data = RefCell::new(read_piped_input());
 
     // Additional argument parsing
-    if args.diff_mode {
-        if args.files.is_empty() {
-            command.error(
-                clap::error::ErrorKind::MissingRequiredArgument,
-                "Diff mode (-d) specified but no files provided. 2 or more files must be provided",
-            ).exit();
-        } else if args.files.len() < 2 {
-            command
-                .error(
-                    clap::error::ErrorKind::TooFewValues,
-                    "Diff mode (-d) requires 2 or more files",
-                )
-                .exit();
-        }
+    if args.diff_mode && args.files.len() < 2 {
+        command
+            .error(
+                clap::error::ErrorKind::TooFewValues,
+                "Diff mode (-d) requires 2 or more files",
+            )
+            .exit();
     }
 
     command.build();

@@ -12,9 +12,10 @@ Diff mode tests
 ```
 $ nvim-gtk -d
 ? failed
-error: Diff mode (-d) specified but no files provided. 2 or more files must be provided
+error: the following required arguments were not provided:
+  <FILES>...
 
-Usage: nvim-gtk[EXE] [OPTIONS] [FILES]... [-- <NVIM_ARGS>...]
+Usage: nvim-gtk[EXE] -d <FILES>... [-- <NVIM_ARGS>...]
 
 For more information, try '--help'.
 
