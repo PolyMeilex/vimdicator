@@ -76,7 +76,7 @@ jobs:
         run: brew update
 
       - name: Install dependencies
-        run: brew install gtk4
+        run: brew install gtk4 pkg-config
 
       - uses: Swatinem/rust-cache@v2
 
