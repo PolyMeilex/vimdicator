@@ -27,7 +27,7 @@ use std::{
 use tokio::{
     io::{self, AsyncWrite},
     process::{ChildStdin, Command},
-    runtime::Runtime,
+    runtime::{Builder as RuntimeBuilder, Runtime},
     task::JoinHandle,
     time::{error::Elapsed, timeout},
 };
@@ -240,7 +240,14 @@ impl NvimSession {
         handler: NvimHandler,
         timeout: Duration,
     ) -> Result<(NvimSession, IoFuture<'a>), NvimInitError> {
-        let runtime = Arc::new(Runtime::new().map_err(|e| NvimInitError::new(&cmd, e))?);
+        let runtime = Arc::new(
+            RuntimeBuilder::new_multi_thread()
+                .worker_threads(1)
+                .enable_io()
+                .enable_time()
+                .build()
+                .map_err(|e| NvimInitError::new(&cmd, e))?,
+        );
         let mut child = runtime
             .block_on(async move { cmd.spawn().map_err(|e| NvimInitError::new(&cmd, e)) })?;
 
