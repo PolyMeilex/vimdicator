@@ -123,7 +123,6 @@ impl ResizeState {
 
 /// A collection of all header bar buttons used in nvim-gtk
 pub struct HeaderBarButtons {
-    open_btn: MenuButton,
     new_tab_btn: Button,
     paste_btn: Button,
     save_btn: Button,
@@ -132,14 +131,12 @@ pub struct HeaderBarButtons {
 
 impl HeaderBarButtons {
     pub fn new(
-        open_btn: MenuButton,
         new_tab_btn: Button,
         paste_btn: Button,
         save_btn: Button,
         primary_menu_btn: MenuButton,
     ) -> Self {
         Self {
-            open_btn,
             new_tab_btn,
             paste_btn,
             primary_menu_btn,
@@ -152,11 +149,6 @@ impl HeaderBarButtons {
         self.paste_btn.set_sensitive(enabled);
         self.save_btn.set_sensitive(enabled);
         self.primary_menu_btn.set_sensitive(enabled);
-
-        // Use an idle callback for open_btn, as we might be calling this from one of its own
-        // callbacks which would result in borrowing it mutably twice
-        let open_btn = self.open_btn.clone();
-        glib::idle_add_local_once(move || open_btn.set_sensitive(enabled));
     }
 }
 

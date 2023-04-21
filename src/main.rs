@@ -23,7 +23,6 @@ mod misc;
 mod nvim;
 mod nvim_viewport;
 mod popup_menu;
-mod project;
 mod render;
 mod settings;
 mod shell;

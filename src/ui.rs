@@ -18,7 +18,6 @@ use crate::file_browser::FileBrowserWidget;
 use crate::highlight::BackgroundState;
 use crate::misc::{self, BoolExt};
 use crate::nvim::*;
-use crate::project::Projects;
 use crate::settings::{Settings, SettingsLoader};
 use crate::shell::{self, HeaderBarButtons, Shell};
 use crate::shell_dlg;
@@ -58,7 +57,6 @@ pub struct Ui {
     comps: Arc<UiMutex<Components>>,
     settings: Rc<RefCell<Settings>>,
     shell: Rc<RefCell<Shell>>,
-    projects: Arc<UiMutex<Projects>>,
     file_browser: Arc<UiMutex<FileBrowserWidget>>,
 }
 
@@ -110,14 +108,11 @@ impl Ui {
         let file_browser = Arc::new(UiMutex::new(FileBrowserWidget::new(&shell.borrow().state)));
         settings.borrow_mut().set_shell(Rc::downgrade(&shell));
 
-        let projects = Projects::new(shell.clone());
-
         Ui {
             initialized: false,
             comps,
             shell,
             settings,
-            projects,
             file_browser,
             open_paths,
         }
@@ -332,10 +327,9 @@ impl Ui {
 
         let sidebar_action = UiMutex::new(show_sidebar_action);
         let comps_ref = comps_ref.clone();
-        let projects = self.projects.clone();
         shell.set_nvim_command_cb(Some(
             move |shell: &mut shell::State, command: NvimCommand| {
-                Ui::nvim_command(shell, command, &sidebar_action, &projects, &comps_ref);
+                Ui::nvim_command(shell, command, &sidebar_action, &comps_ref);
             },
         ));
     }
@@ -429,12 +423,12 @@ impl Ui {
         shell: &mut shell::State,
         command: NvimCommand,
         sidebar_action: &UiMutex<SimpleAction>,
-        projects: &Arc<UiMutex<Projects>>,
         comps: &UiMutex<Components>,
     ) {
         match command {
             NvimCommand::ShowProjectView => {
-                glib::idle_add_once(clone!(projects => move || projects.borrow_mut().show()));
+                // TODO:
+                // glib::idle_add_once(clone!(projects => move || projects.borrow_mut().show()));
             }
             NvimCommand::ShowGtkInspector => {
                 comps
@@ -515,10 +509,6 @@ impl Ui {
 
         let window = comps.window.as_ref().unwrap();
 
-        let projects = self.projects.borrow();
-        let open_btn = projects.open_btn();
-        header_bar.pack_start(open_btn);
-
         let new_tab_btn = Button::from_icon_name("tab-new-symbolic");
         let shell_ref = Rc::clone(&self.shell);
         new_tab_btn.connect_clicked(move |_| shell_ref.borrow().new_tab());
@@ -559,7 +549,6 @@ impl Ui {
         (
             update_subtitle,
             Box::new(HeaderBarButtons::new(
-                open_btn.clone(),
                 new_tab_btn,
                 paste_btn,
                 save_btn,
