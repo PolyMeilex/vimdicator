@@ -22,7 +22,6 @@ mod input;
 mod misc;
 mod nvim;
 mod nvim_viewport;
-mod plug_manager;
 mod popup_menu;
 mod project;
 mod render;

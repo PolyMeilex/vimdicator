@@ -20,7 +20,6 @@ use crate::file_browser::FileBrowserWidget;
 use crate::highlight::BackgroundState;
 use crate::misc::{self, BoolExt};
 use crate::nvim::*;
-use crate::plug_manager;
 use crate::project::Projects;
 use crate::settings::{Settings, SettingsLoader};
 use crate::shell::{self, HeaderBarButtons, Shell};
@@ -62,7 +61,6 @@ pub struct Ui {
     settings: Rc<RefCell<Settings>>,
     shell: Rc<RefCell<Shell>>,
     projects: Arc<UiMutex<Projects>>,
-    plug_manager: Arc<UiMutex<plug_manager::Manager>>,
     file_browser: Arc<UiMutex<FileBrowserWidget>>,
 }
 
@@ -108,9 +106,6 @@ impl Components {
 
 impl Ui {
     pub fn new(options: Args, open_paths: Box<[String]>) -> Ui {
-        let plug_manager = plug_manager::Manager::new();
-
-        let plug_manager = Arc::new(UiMutex::new(plug_manager));
         let comps = Arc::new(UiMutex::new(Components::new()));
         let settings = Rc::new(RefCell::new(Settings::new()));
         let shell = Rc::new(RefCell::new(Shell::new(settings.clone(), options)));
@@ -125,7 +120,6 @@ impl Ui {
             shell,
             settings,
             projects,
-            plug_manager,
             file_browser,
             open_paths,
         }
@@ -350,11 +344,9 @@ impl Ui {
 
         shell.set_nvim_started_cb(Some(glib::clone!(
             @strong file_browser_ref,
-            @strong self.plug_manager as plug_manager,
             @strong self.open_paths as files_list => move || {
             Ui::nvim_started(
                 &state_ref.borrow(),
-                &plug_manager,
                 &file_browser_ref,
                 &files_list,
                 &autocmds,
@@ -375,16 +367,12 @@ impl Ui {
 
     fn nvim_started(
         shell: &shell::State,
-        plug_manager: &UiMutex<plug_manager::Manager>,
         file_browser: &UiMutex<FileBrowserWidget>,
         files_list: &[String],
         subscriptions: &[SubscriptionHandle],
         post_config_cmds: &[String],
         diff_mode: bool,
     ) {
-        plug_manager
-            .borrow_mut()
-            .init_nvim_client(shell.nvim_clone());
         file_browser.borrow_mut().init();
         shell.set_autocmds();
         for subscription in subscriptions.iter() {
@@ -599,7 +587,6 @@ impl Ui {
         app: &gtk::Application,
         window: &gtk::ApplicationWindow,
     ) -> gtk::MenuButton {
-        let plug_manager = self.plug_manager.clone();
         let btn = gtk::MenuButton::builder()
             .focusable(false)
             .icon_name("open-menu-symbolic")
@@ -624,23 +611,16 @@ impl Ui {
         menu.append_section(None, &section);
 
         let section = Menu::new();
-        section.append_item(&MenuItem::new(Some("Plugins"), Some("app.Plugins")));
         section.append_item(&MenuItem::new(Some("About"), Some("app.HelpAbout")));
         menu.append_section(None, &section);
 
         menu.freeze();
-
-        let plugs_action = SimpleAction::new("Plugins", None);
-        plugs_action.connect_activate(
-            clone!(window => move |_, _| plug_manager::Ui::new(&plug_manager).show(&window)),
-        );
 
         let about_action = SimpleAction::new("HelpAbout", None);
         about_action.connect_activate(clone!(window => move |_, _| on_help_about(&window)));
         about_action.set_enabled(true);
 
         app.add_action(&about_action);
-        app.add_action(&plugs_action);
 
         btn.set_menu_model(Some(&menu));
 
