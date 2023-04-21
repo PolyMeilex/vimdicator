@@ -166,7 +166,7 @@ impl HeaderBarButtons {
 pub struct ActionWidgets {
     header_bar: Option<Box<HeaderBarButtons>>,
     tabs: Notebook,
-    file_browser: gtk::Box,
+    file_browser: gtk::Revealer,
 }
 
 impl ActionWidgets {
@@ -302,7 +302,7 @@ impl State {
     pub fn set_action_widgets(
         &self,
         header_bar: Option<Box<HeaderBarButtons>>,
-        file_browser: gtk::Box,
+        file_browser: gtk::Revealer,
     ) {
         self.action_widgets.replace(Some(ActionWidgets {
             header_bar,

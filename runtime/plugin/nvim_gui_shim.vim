@@ -8,8 +8,10 @@ if exists('g:GuiInternalClipboard')
     let g:clipboard = {
             \   'name': 'neovim-gtk',
             \   'copy': {
-            \       '+': { lines, regtype -> rpcnotify(1, 'Gui', 'Clipboard', 'Set', regtype, join(lines, '')) },
-            \       '*': { lines, regtype -> rpcnotify(1, 'Gui', 'Clipboard', 'Set', regtype, join(lines, '')) },
+            \       '+': { lines, regtype -> rpcnotify(1, 'Gui', 'Clipboard', 'Set', regtype, join(lines, '
+')) },
+            \       '*': { lines, regtype -> rpcnotify(1, 'Gui', 'Clipboard', 'Set', regtype, join(lines, '
+')) },
             \   },
             \   'paste': {
             \       '+': { -> rpcrequest(1, 'Gui', 'Clipboard', 'Get', '+') },
@@ -66,3 +68,4 @@ command! -nargs=+ NGTransparency call rpcnotify(1, 'Gui', 'Command', 'Transparen
 command! -nargs=1 NGPreferDarkTheme call rpcnotify(1, 'Gui', 'Command', 'PreferDarkTheme', <q-args>)
 command! -nargs=1 NGSetCursorBlink call rpcnotify(1, 'Gui', 'Command', 'SetCursorBlink', <q-args>)
 
+nnoremap <C-e> :NGToggleSidebar<CR>

@@ -7,12 +7,10 @@ use std::{env, thread};
 
 use log::{debug, warn};
 
-use gio::prelude::*;
+use adw::prelude::*;
 use gio::{ApplicationCommandLine, Menu, MenuItem, SimpleAction};
 use glib::variant::FromVariant;
-use gtk::{
-    prelude::*, AboutDialog, ApplicationWindow, Button, HeaderBar, Inhibit, Orientation, Paned,
-};
+use gtk::{AboutDialog, Button, Inhibit, Orientation, Paned};
 
 use serde::{Deserialize, Serialize};
 
@@ -65,7 +63,7 @@ pub struct Ui {
 }
 
 pub struct Components {
-    window: Option<ApplicationWindow>,
+    window: Option<adw::ApplicationWindow>,
     window_state: ToplevelState,
     title_label: Option<gtk::Label>,
     pub exit_confirmed: bool,
@@ -85,7 +83,7 @@ impl Components {
         self.window.as_ref().unwrap().close();
     }
 
-    pub fn window(&self) -> &ApplicationWindow {
+    pub fn window(&self) -> &adw::ApplicationWindow {
         self.window.as_ref().unwrap()
     }
 
@@ -139,7 +137,7 @@ impl Ui {
         let mut settings = self.settings.borrow_mut();
         settings.init();
 
-        let window = ApplicationWindow::new(app);
+        let window = adw::ApplicationWindow::new(app);
 
         // For some reason, having a transparent window breaks window behavior on macOS.
         // See #46
@@ -215,11 +213,15 @@ impl Ui {
             app.set_accels_for_action("app.quit", &[]);
         }
 
-        let (update_subtitle, header_bar) = if use_header_bar {
-            let (subscription, header_bar) = self.create_header_bar(app);
-            (Some(subscription), Some(header_bar))
+        let (update_subtitle, header_bar, header_bar_widget) = if use_header_bar {
+            let (subscription, header_bar, header_bar_widget) = self.create_header_bar(app);
+            (
+                Some(subscription),
+                Some(header_bar),
+                Some(header_bar_widget),
+            )
         } else {
-            (None, None)
+            (None, None, None)
         };
 
         let show_sidebar_action =
@@ -229,7 +231,7 @@ impl Ui {
                 if let Some(value) = value {
                     action.set_state(value.clone());
                     let is_active = value.get::<bool>().unwrap();
-                    file_browser_ref.borrow().set_visible(is_active);
+                    file_browser_ref.borrow().set_reveal_child(is_active);
                     comps_ref.borrow_mut().window_state.show_sidebar = is_active;
                 }
             }),
@@ -267,9 +269,25 @@ impl Ui {
 
         let shell = self.shell.borrow();
         let file_browser = self.file_browser.borrow();
-        main.set_start_child(Some(&**file_browser));
-        main.set_end_child(Some(&**shell));
-        window.set_child(Some(&main));
+
+        let main_box = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        main_box.append(&**file_browser);
+        main_box.append(&**shell);
+
+        // main.set_start_child(Some(&rev));
+        // main.set_end_child(Some(&**shell));
+        main.set_start_child(Some(&gtk::Label::new(Some("A"))));
+        main.set_end_child(Some(&gtk::Label::new(Some("B"))));
+
+        let b = gtk::Box::new(gtk::Orientation::Vertical, 0);
+
+        if let Some(header_bar_widget) = header_bar_widget {
+            b.append(&header_bar_widget);
+        }
+
+        b.append(&main_box);
+
+        window.set_content(Some(&b));
 
         window.show();
 
@@ -499,7 +517,7 @@ impl Ui {
     fn create_header_bar(
         &self,
         app: &gtk::Application,
-    ) -> (SubscriptionHandle, Box<HeaderBarButtons>) {
+    ) -> (SubscriptionHandle, Box<HeaderBarButtons>, adw::HeaderBar) {
         let header_bar_title = gtk::Label::builder()
             .css_classes(vec!["title".to_string()])
             .vexpand(true)
@@ -519,7 +537,7 @@ impl Ui {
             .build();
         header_bar_box.append(&header_bar_title);
         header_bar_box.append(&header_bar_subtitle);
-        let header_bar = HeaderBar::builder()
+        let header_bar = adw::HeaderBar::builder()
             .title_widget(&header_bar_box)
             .focusable(false)
             .build();
@@ -560,7 +578,7 @@ impl Ui {
         save_btn.set_sensitive(false);
         header_bar.pack_end(&save_btn);
 
-        window.set_titlebar(Some(&header_bar));
+        // window.set_titlebar(Some(&header_bar));
 
         let shell = self.shell.borrow();
 
@@ -579,13 +597,14 @@ impl Ui {
                 save_btn,
                 primary_menu_btn,
             )),
+            header_bar,
         )
     }
 
     fn create_primary_menu_btn(
         &self,
         app: &gtk::Application,
-        window: &gtk::ApplicationWindow,
+        window: &adw::ApplicationWindow,
     ) -> gtk::MenuButton {
         let btn = gtk::MenuButton::builder()
             .focusable(false)
@@ -643,7 +662,7 @@ impl Ui {
     }
 }
 
-fn on_help_about(window: &gtk::ApplicationWindow) {
+fn on_help_about(window: &adw::ApplicationWindow) {
     let about = AboutDialog::new();
     about.set_transient_for(Some(window));
     about.set_program_name(Some("NeovimGtk"));
@@ -681,9 +700,9 @@ fn gtk_close_request(comps: &Arc<UiMutex<Components>>, shell: &Rc<RefCell<Shell>
 }
 
 fn gtk_window_resize(
-    app_window: &gtk::ApplicationWindow,
+    app_window: &adw::ApplicationWindow,
     comps: &mut Components,
-    main: &Paned,
+    main: &gtk::Paned,
     orientation: gtk::Orientation,
 ) {
     if !app_window.is_maximized() {

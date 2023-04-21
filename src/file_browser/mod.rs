@@ -45,16 +45,16 @@ struct State {
 pub struct FileBrowserWidget {
     store: gtk::TreeStore,
     tree: TreeView,
-    widget: gtk::Box,
+    widget: gtk::Revealer,
     shell_state: Arc<UiMutex<shell::State>>,
     comps: Components,
     state: Rc<RefCell<State>>,
 }
 
 impl Deref for FileBrowserWidget {
-    type Target = gtk::Box;
+    type Target = gtk::Revealer;
 
-    fn deref(&self) -> &gtk::Box {
+    fn deref(&self) -> &gtk::Revealer {
         &self.widget
     }
 }
@@ -76,9 +76,9 @@ impl FileBrowserWidget {
     pub fn new(shell_state: &Arc<UiMutex<shell::State>>) -> Self {
         let widget = gtk::Box::builder()
             .focusable(false)
-            .sensitive(false) // Will be enabled when nvim is ready
             .width_request(150)
             .orientation(gtk::Orientation::Vertical)
+            .css_name("file_browser")
             .build();
         widget.style_context().add_class("view");
 
@@ -169,6 +169,13 @@ impl FileBrowserWidget {
         menu.append_section(None, &section);
 
         context_menu.set_menu_model(Some(&menu));
+
+        let widget = gtk::Revealer::builder()
+            .transition_type(gtk::RevealerTransitionType::SlideRight)
+            // Will be enabled when nvim is ready
+            .sensitive(false) 
+            .child(&widget)
+            .build();
 
         FileBrowserWidget {
             store,
