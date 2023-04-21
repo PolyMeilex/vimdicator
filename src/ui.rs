@@ -10,7 +10,7 @@ use log::{debug, warn};
 use adw::prelude::*;
 use gio::{ApplicationCommandLine, Menu, MenuItem, SimpleAction};
 use glib::variant::FromVariant;
-use gtk::{AboutDialog, Button, Inhibit, Orientation, Paned};
+use gtk::{Button, Inhibit, Orientation, Paned};
 
 use serde::{Deserialize, Serialize};
 
@@ -627,23 +627,21 @@ impl Ui {
 }
 
 fn on_help_about(window: &adw::ApplicationWindow) {
-    let about = AboutDialog::new();
-    about.set_transient_for(Some(window));
-    about.set_program_name(Some("NeovimGtk"));
-    about.set_version(Some(
-        crate::GIT_BUILD_VERSION.unwrap_or(env!("CARGO_PKG_VERSION")),
-    ));
-    about.set_logo_icon_name(Some("org.daa.NeovimGtk"));
-    about.set_authors(
-        env!("CARGO_PKG_AUTHORS")
-            .split(':')
-            .collect::<Vec<_>>()
-            .as_slice(),
-    );
-    about.set_comments(Some(misc::about_comments().as_str()));
-    about.set_modal(true);
-
-    about.show();
+    adw::AboutWindow::builder()
+        .transient_for(window)
+        .application_name("Vimdicator")
+        .version(crate::GIT_BUILD_VERSION.unwrap_or(env!("CARGO_PKG_VERSION")))
+        .application_icon("nvim")
+        .developers(
+            env!("CARGO_PKG_AUTHORS")
+                .split(':')
+                .collect::<Vec<_>>()
+                .as_slice(),
+        )
+        .comments(misc::about_comments().as_str())
+        .modal(true)
+        .build()
+        .show();
 }
 
 fn gtk_close_request(comps: &Arc<UiMutex<Components>>, shell: &Rc<RefCell<Shell>>) -> Inhibit {
