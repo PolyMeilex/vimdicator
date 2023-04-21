@@ -139,12 +139,6 @@ impl Ui {
 
         let window = adw::ApplicationWindow::new(app);
 
-        // For some reason, having a transparent window breaks window behavior on macOS.
-        // See #46
-        if cfg!(not(target_os = "macos")) {
-            window.add_css_class("nvim-background");
-        }
-
         let main = Paned::builder()
             .orientation(Orientation::Horizontal)
             .focusable(false)
@@ -163,15 +157,6 @@ impl Ui {
             let mut comps = comps_ref.borrow_mut();
 
             comps.window = Some(window.clone());
-
-            let prefer_dark_theme = env::var("NVIM_GTK_PREFER_DARK_THEME")
-                .map(|opt| opt.trim() == "1")
-                .unwrap_or(false);
-            if prefer_dark_theme {
-                window
-                    .settings()
-                    .set_property("gtk-application-prefer-dark-theme", true);
-            }
 
             let sidebar_width = if !args.disable_win_restore {
                 if comps.window_state.is_maximized {
@@ -192,19 +177,6 @@ impl Ui {
             main.set_position(if args.hide_sidebar { 0 } else { sidebar_width });
         }
 
-        // Client side decorations including the toolbar are disabled via NVIM_GTK_NO_HEADERBAR=1
-        let use_header_bar = env::var("NVIM_GTK_NO_HEADERBAR")
-            .map(|opt| opt.trim() != "1")
-            .unwrap_or(true);
-
-        let disable_window_decoration = env::var("NVIM_GTK_NO_WINDOW_DECORATION")
-            .map(|opt| opt.trim() == "1")
-            .unwrap_or(false);
-
-        if disable_window_decoration {
-            window.set_decorated(false);
-        }
-
         // Override default shortcuts which are easy to press accidentally
         if let Some(app) = window.application() {
             app.set_accels_for_action("app.preferences", &[]);
@@ -213,16 +185,7 @@ impl Ui {
             app.set_accels_for_action("app.quit", &[]);
         }
 
-        let (update_subtitle, header_bar, header_bar_widget) = if use_header_bar {
-            let (subscription, header_bar, header_bar_widget) = self.create_header_bar(app);
-            (
-                Some(subscription),
-                Some(header_bar),
-                Some(header_bar_widget),
-            )
-        } else {
-            (None, None, None)
-        };
+        let (update_subtitle, header_bar, header_bar_widget) = self.create_header_bar(app);
 
         let show_sidebar_action =
             SimpleAction::new_stateful("show-sidebar", None, false.to_variant());
@@ -280,11 +243,7 @@ impl Ui {
         main.set_end_child(Some(&gtk::Label::new(Some("B"))));
 
         let b = gtk::Box::new(gtk::Orientation::Vertical, 0);
-
-        if let Some(header_bar_widget) = header_bar_widget {
-            b.append(&header_bar_widget);
-        }
-
+        b.append(&header_bar_widget);
         b.append(&main_box);
 
         window.set_content(Some(&b));
@@ -333,9 +292,7 @@ impl Ui {
                 glib::clone!(@weak shell_ref => move |args| set_background(&shell_ref, args)),
             ),
         ];
-        if let Some(autocmd) = update_subtitle {
-            autocmds.push(autocmd);
-        }
+        autocmds.push(update_subtitle);
 
         window.connect_close_request(glib::clone!(
             @weak shell_ref, @weak comps_ref => @default-return gtk::Inhibit(false),
@@ -542,6 +499,17 @@ impl Ui {
             .focusable(false)
             .build();
 
+        {
+            let flap_btn = gtk::ToggleButton::builder()
+                .focusable(false)
+                // TODO: Use meson and include this icon
+                // .icon_name("flap-symbolic")
+                .icon_name("system-file-manager-symbolic")
+                .action_name("app.show-sidebar")
+                .build();
+            header_bar.pack_start(&flap_btn);
+        }
+
         let mut comps = self.comps.borrow_mut();
         comps.title_label = Some(header_bar_title);
 
@@ -623,10 +591,6 @@ impl Ui {
 
         let section = Menu::new();
         section.append_item(&MenuItem::new(Some("New Window"), Some("app.new-window")));
-        menu.append_section(None, &section);
-
-        let section = Menu::new();
-        section.append_item(&MenuItem::new(Some("Sidebar"), Some("app.show-sidebar")));
         menu.append_section(None, &section);
 
         let section = Menu::new();
@@ -909,6 +873,7 @@ impl<T: ?Sized> UiMutex<T> {
         self.data.borrow()
     }
 
+    #[track_caller]
     pub fn borrow_mut(&self) -> RefMut<T> {
         self.assert_ui_thread();
         self.data.borrow_mut()

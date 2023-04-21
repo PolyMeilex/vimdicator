@@ -164,7 +164,7 @@ impl HeaderBarButtons {
 /// RPC calls. They are grouped together so that they may be easily enabled/disabled when nvim is
 /// blocked/unblocked.
 pub struct ActionWidgets {
-    header_bar: Option<Box<HeaderBarButtons>>,
+    header_bar: Box<HeaderBarButtons>,
     tabs: Notebook,
     file_browser: gtk::Revealer,
 }
@@ -172,9 +172,7 @@ pub struct ActionWidgets {
 impl ActionWidgets {
     /// Enable or disable all widgets
     pub fn set_enabled(&self, enabled: bool) {
-        if let Some(ref header_bar) = self.header_bar {
-            header_bar.set_enabled(enabled);
-        }
+        self.header_bar.set_enabled(enabled);
         self.tabs.set_sensitive(enabled);
         self.file_browser.set_sensitive(enabled);
     }
@@ -301,7 +299,7 @@ impl State {
 
     pub fn set_action_widgets(
         &self,
-        header_bar: Option<Box<HeaderBarButtons>>,
+        header_bar: Box<HeaderBarButtons>,
         file_browser: gtk::Revealer,
     ) {
         self.action_widgets.replace(Some(ActionWidgets {
