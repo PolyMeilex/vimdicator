@@ -1,16 +1,22 @@
 [package]
 name = "nvim-gtk"
 version = "1.1.0-devel"
-authors = [
-    "daa84 <daa84@inbox.ru>",
-    "Lyude Paul <thatslyude@gmail.com>",
-]
+authors = ["daa84 <daa84@inbox.ru>", "Lyude Paul <thatslyude@gmail.com>"]
 build = "build.rs"
 edition = "2018"
 license = "GPLv3"
 
 [dependencies]
-clap = { version = "4.0", features = ["color", "help", "std", "usage", "error-context", "suggestions", "wrap_help", "derive"] }
+clap = { version = "4.0", features = [
+    "color",
+    "help",
+    "std",
+    "usage",
+    "error-context",
+    "suggestions",
+    "wrap_help",
+    "derive",
+] }
 glib = "0.17.0"
 gio = "0.17.0"
 async-trait = "0.1.0"
@@ -35,6 +41,9 @@ toml = "0.5.0"
 serde_json = "1.0"
 
 is-terminal = "0.4.0"
+
+# TODO: Just do it ourselves, in lazy fashion
+fs-tree = "0.2.2"
 
 [target.'cfg(unix)'.dependencies]
 fork = "0.1.0"

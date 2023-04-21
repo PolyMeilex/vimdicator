@@ -301,6 +301,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "file_type_enum"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "36060ff176ca4452a54d175b58daedbad25b204f73aef93dd593d22eabf1a3ad"
+
+[[package]]
 name = "filetime"
 version = "0.2.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -325,6 +331,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9788ce090af4bf8d6e8f43d3f7d12305c787456387bd2d88856fcda3aa1f0dca"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "fs-tree"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a819f51cc7c923beff7f6385d090a44ef340a475270ab1fd25356ae600ff2f3"
+dependencies = [
+ "file_type_enum",
 ]
 
 [[package]]
@@ -955,6 +970,7 @@ dependencies = [
  "env_logger",
  "fnv",
  "fork",
+ "fs-tree",
  "futures 0.3.26",
  "gdk4",
  "gdk4-sys",

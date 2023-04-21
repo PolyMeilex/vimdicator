@@ -1,3 +1,4 @@
+mod list_view;
 mod tree_view;
 
 use std::cell::RefCell;
@@ -24,6 +25,8 @@ use crate::ui::UiMutex;
 
 use tree_view::TreeView;
 
+use self::list_view::FileTreeView;
+
 const ICON_FOLDER_CLOSED: &str = "folder-symbolic";
 const ICON_FOLDER_OPEN: &str = "folder-open-symbolic";
 const ICON_FILE: &str = "text-x-generic-symbolic";
@@ -42,6 +45,7 @@ struct State {
 
 pub struct FileBrowserWidget {
     store: gtk::TreeStore,
+    file_tree_view: FileTreeView,
     tree: TreeView,
     widget: gtk::Revealer,
     shell_state: Arc<UiMutex<shell::State>>,
@@ -76,7 +80,6 @@ impl FileBrowserWidget {
             .focusable(false)
             .width_request(150)
             .orientation(gtk::Orientation::Vertical)
-            .css_name("file_browser")
             .build();
         widget.style_context().add_class("view");
 
@@ -117,11 +120,15 @@ impl FileBrowserWidget {
 
         tree.append_column(&tree_column);
 
+        let file_tree_view = FileTreeView::new();
+
         let window = gtk::ScrolledWindow::builder()
+            .hscrollbar_policy(gtk::PolicyType::Never)
             .focusable(false)
             .vexpand(true)
             .valign(gtk::Align::Fill)
-            .child(&tree)
+            .child(&file_tree_view)
+            // .child(&tree)
             .build();
         widget.append(&window);
 
@@ -147,6 +154,7 @@ impl FileBrowserWidget {
 
         FileBrowserWidget {
             store,
+            file_tree_view,
             tree,
             widget,
             comps: Components {
@@ -278,24 +286,29 @@ impl FileBrowserWidget {
         );
 
         // Reveal the file of an entered buffer in the file browser and select the entry.
-        let tree = &self.tree;
+        let file_tree_view = self.file_tree_view.clone();
         let subscription = shell_state.subscribe(
             SubscriptionKey::from("BufEnter"),
             &["getcwd()", "expand('%:p')"],
-            clone!(tree, store => move |args| {
+            move |args| {
                 let mut args_iter = args.into_iter();
                 let dir = args_iter.next().unwrap();
                 let file_path = args_iter.next().unwrap();
                 let could_reveal =
                     if let Ok(rel_path) = Path::new(&file_path).strip_prefix(Path::new(&dir)) {
-                        reveal_path_in_tree(&store, &tree, rel_path)
+                        reveal_path_in_tree(&file_tree_view, rel_path)
                     } else {
                         false
                     };
                 if !could_reveal {
-                    tree.selection().unselect_all();
+                    file_tree_view
+                        .list_view()
+                        .model()
+                        .and_downcast::<gtk::SingleSelection>()
+                        .unwrap()
+                        .unselect_all();
                 }
-            }),
+            },
         );
         shell_state.run_now(&subscription);
     }
@@ -325,6 +338,24 @@ impl FileBrowserWidget {
                     shell_state_ref.borrow().open_file(&file_path);
                 }
             }));
+
+        self.file_tree_view.list_view().connect_activate({
+            let shell_state_ref = shell_state_ref.clone();
+            move |list_view, position| {
+                let item = list_view.model().unwrap().item(position).unwrap();
+                let item = item.downcast::<gtk::TreeListRow>().unwrap();
+
+                let item = item.item().and_downcast::<list_view::ListItem>().unwrap();
+
+                let tree = item.tree();
+                if tree.is_regular() {
+                    let file_path = &tree.path().to_string_lossy();
+                    let file_path = escape_filename(file_path);
+
+                    shell_state_ref.borrow().open_file(&file_path);
+                }
+            }
+        });
 
         let context_menu = &self.comps.context_menu;
         let cd_action = &self.comps.cd_action;
@@ -520,27 +551,53 @@ fn get_current_dir(nvim: &NvimSession) -> Option<String> {
 /// Reveals and selects the given file in the file browser.
 ///
 /// Returns `true` if the file could be successfully revealed.
-fn reveal_path_in_tree(store: &gtk::TreeStore, tree: &TreeView, rel_file_path: &Path) -> bool {
-    let mut tree_path = gtk::TreePath::new();
-    'components: for component in rel_file_path.components() {
-        if let Component::Normal(component) = component {
-            tree_path.down();
-            while let Some(iter) = store.iter(&tree_path) {
-                let entry: String = store.get(&iter, Column::Filename as i32);
-                if component == entry.as_str() {
-                    tree.expand_row(&tree_path, false);
-                    continue 'components;
+fn reveal_path_in_tree(file_tree_view: &FileTreeView, rel_file_path: &Path) -> bool {
+    let list_view = file_tree_view.list_view();
+    let single_selection_model = list_view
+        .model()
+        .and_downcast::<gtk::SingleSelection>()
+        .unwrap();
+    let tree_model = single_selection_model
+        .model()
+        .and_downcast::<gtk::TreeListModel>()
+        .unwrap();
+
+    // TODO:
+    let mut segments = rel_file_path.components();
+    {
+        let root_model = tree_model.model();
+
+        let n1 = segments.next().unwrap();
+        if let Component::Normal(name) = n1 {
+            let (id, _) = root_model
+                .iter::<list_view::ListItem>()
+                .enumerate()
+                .flat_map(|(id, item)| item.ok().map(|item| (id, item)))
+                .find(|(_, item)| item.name() == name.to_string_lossy())
+                .unwrap();
+
+            let root = tree_model.child_row(id as u32).unwrap();
+            root.set_expanded(true);
+
+            if let Some(model) = root.children() {
+                let n2 = segments.next().unwrap();
+                if let Component::Normal(name) = n2 {
+                    let (id, _) = model
+                        .iter::<list_view::ListItem>()
+                        .enumerate()
+                        .flat_map(|(id, item)| item.ok().map(|item| (id, item)))
+                        .find(|(_, item)| item.name() == name.to_string_lossy())
+                        .unwrap();
+
+                    let root = root.child_row(id as u32).unwrap();
+                    root.set_expanded(true);
+                    let list_pos = root.position();
+                    single_selection_model.select_item(list_pos, true);
+                    return true;
                 }
-                tree_path.next();
             }
-            return false;
-        } else {
-            return false;
         }
     }
-    if tree_path.depth() == 0 {
-        return false;
-    }
-    gtk::prelude::TreeViewExt::set_cursor(tree, &tree_path, None, false);
-    true
+
+    false
 }
