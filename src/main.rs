@@ -276,6 +276,7 @@ fn main() {
     }
 
     gtk::init().expect("Failed to initialize GTK+");
+    adw::init().expect("Failed to initialize Adw");
 
     let app_flags = gio::ApplicationFlags::HANDLES_OPEN
         | gio::ApplicationFlags::HANDLES_COMMAND_LINE

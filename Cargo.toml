@@ -53,6 +53,10 @@ trycmd = "0.14.0"
 features = ["v1_46"]
 version = "0.17.0"
 
+[dependencies.adw]
+package = "libadwaita"
+version = "0.4.1"
+
 [dependencies.gtk]
 package = "gtk4"
 version = "0.6.0"
