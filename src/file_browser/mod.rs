@@ -6,7 +6,7 @@ use std::fs;
 use std::fs::DirEntry;
 use std::io;
 use std::ops::Deref;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Component, Path};
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -29,8 +29,6 @@ const ICON_FOLDER_OPEN: &str = "folder-open-symbolic";
 const ICON_FILE: &str = "text-x-generic-symbolic";
 
 struct Components {
-    dir_list_model: gtk::TreeStore,
-    dir_list: gtk::ComboBox,
     context_menu: gtk::PopoverMenu,
     show_hidden_action: gio::SimpleAction,
     cd_action: gio::SimpleAction,
@@ -81,36 +79,6 @@ impl FileBrowserWidget {
             .css_name("file_browser")
             .build();
         widget.style_context().add_class("view");
-
-        let dir_list_model =
-            gtk::TreeStore::new(&[glib::Type::STRING, glib::Type::STRING, glib::Type::STRING]);
-        let dir_list = gtk::ComboBox::builder()
-            .can_focus(false)
-            .focus_on_click(false)
-            .margin_top(6)
-            .margin_bottom(6)
-            .margin_start(6)
-            .margin_end(6)
-            .model(&dir_list_model)
-            .valign(gtk::Align::Fill)
-            .build();
-
-        let text_renderer = gtk::CellRendererText::builder()
-            .xpad(6)
-            .ellipsize(pango::EllipsizeMode::End)
-            .wrap_width(1) // TODO: Verify this is correct
-            .build();
-        dir_list.pack_end(&text_renderer, false);
-        dir_list.add_attribute(&text_renderer, "text", 0);
-
-        #[rustfmt::skip]
-        let pixbuf_renderer = gtk::CellRendererPixbuf::builder()
-            .xpad(6)
-            .build();
-        dir_list.pack_start(&pixbuf_renderer, false);
-        dir_list.add_attribute(&pixbuf_renderer, "icon-name", 1);
-
-        widget.append(&dir_list);
 
         let store = gtk::TreeStore::new(&[
             glib::Type::STRING,
@@ -170,10 +138,10 @@ impl FileBrowserWidget {
 
         context_menu.set_menu_model(Some(&menu));
 
+        // Sensitive will be enabled when nvim is ready
         let widget = gtk::Revealer::builder()
             .transition_type(gtk::RevealerTransitionType::SlideRight)
-            // Will be enabled when nvim is ready
-            .sensitive(false) 
+            .sensitive(false)
             .child(&widget)
             .build();
 
@@ -182,8 +150,6 @@ impl FileBrowserWidget {
             tree,
             widget,
             comps: Components {
-                dir_list_model,
-                dir_list,
                 context_menu,
                 cd_action: gio::SimpleAction::new("cd", None),
                 show_hidden_action: gio::SimpleAction::new_stateful(
@@ -208,7 +174,6 @@ impl FileBrowserWidget {
     pub fn init(&mut self) {
         // Initialize values.
         if let Some(dir) = get_current_dir(&self.nvim().unwrap()) {
-            update_dir_list(&dir, &self.comps.dir_list_model, &self.comps.dir_list);
             self.state.borrow_mut().current_dir = dir;
         }
 
@@ -300,16 +265,13 @@ impl FileBrowserWidget {
         // Always set the current working directory as the root of the file browser.
         let store = &self.store;
         let state_ref = &self.state;
-        let dir_list_model = &self.comps.dir_list_model;
-        let dir_list = &self.comps.dir_list;
         shell_state.subscribe(
             SubscriptionKey::from("DirChanged"),
             &["getcwd()"],
-            clone!(store, state_ref, dir_list_model, dir_list => move |args| {
+            clone!(store, state_ref => move |args| {
                 let dir = args.into_iter().next().unwrap();
                 if dir != state_ref.borrow().current_dir {
                     state_ref.borrow_mut().current_dir = dir.to_owned();
-                    update_dir_list(&dir, &dir_list_model, &dir_list);
                     tree_reload(&store, &state_ref.borrow());
                 }
             }),
@@ -363,25 +325,6 @@ impl FileBrowserWidget {
                     shell_state_ref.borrow().open_file(&file_path);
                 }
             }));
-
-        // Connect directory list.
-        let dir_list_model = &self.comps.dir_list_model;
-        self.comps.dir_list.connect_changed(
-            clone!(state_ref, dir_list_model, store => move |dir_list| {
-                    if let Some(iter) = dir_list.active_iter() {
-                        let dir: String = dir_list.model().unwrap().get(&iter, 2);
-                        let mut state_ref = state_ref.borrow_mut();
-                        let current_dir = &mut state_ref.current_dir;
-
-                        if dir != *current_dir {
-                            *current_dir = dir.to_owned();
-                            update_dir_list(&dir, &dir_list_model, dir_list);
-                            tree_reload(&store, &state_ref);
-                        }
-                    }
-                }
-            ),
-        );
 
         let context_menu = &self.comps.context_menu;
         let cd_action = &self.comps.cd_action;
@@ -485,86 +428,6 @@ fn tree_reload(store: &gtk::TreeStore, state: &State) {
     let dir = &state.current_dir;
     store.clear();
     populate_tree_nodes(store, state, dir, None);
-}
-
-/// Updates the directory list on top of the file browser.
-///
-/// The list represents the path the the current working directory.  If the new cwd is a parent of
-/// the old one, the list is kept and only the active entry is updated. Otherwise, the list is
-/// replaced with the new path and the last entry is marked active.
-fn update_dir_list(dir: &str, dir_list_model: &gtk::TreeStore, dir_list: &gtk::ComboBox) {
-    // The current working directory path.
-    let complete_path = Path::new(dir);
-    let mut path = PathBuf::new();
-    let mut components = complete_path.components();
-    let mut next = components.next();
-
-    // Iterator over existing dir_list model.
-    let mut dir_list_iter = dir_list_model.iter_first();
-
-    // Whether existing entries up to the current position of dir_list_iter are a prefix of the
-    // new current working directory path.
-    let mut is_prefix = true;
-
-    // Iterate over components of the cwd. Simultaneously move dir_list_iter forward.
-    while let Some(dir) = next {
-        next = components.next();
-        let dir_name = &*dir.as_os_str().to_string_lossy();
-        // Assemble path up to current component.
-        path.push(Path::new(&dir));
-        let path_str = path.to_str().unwrap_or_else(|| {
-            error!(
-                "Could not convert path to string: {}\n
-                    Directory chooser will not work for that entry.",
-                path.to_string_lossy()
-            );
-            ""
-        });
-        // Use the current entry of dir_list, if any, otherwise append a new one.
-        let current_iter = dir_list_iter.unwrap_or_else(|| dir_list_model.append(None));
-        // Check if the current entry is still part of the new cwd.
-        if is_prefix && dir_list_model.get_value(&current_iter, 0).get::<&str>() != Ok(dir_name) {
-            is_prefix = false;
-        }
-        if next.is_some() {
-            // Update dir_list entry.
-            dir_list_model.set(
-                &current_iter,
-                &[(0, &dir_name), (1, &ICON_FOLDER_CLOSED), (2, &path_str)],
-            );
-        } else {
-            // We reached the last component of the new cwd path. Set the active entry of dir_list
-            // to this one.
-            dir_list_model.set(
-                &current_iter,
-                &[(0, &dir_name), (1, &ICON_FOLDER_OPEN), (2, &path_str)],
-            );
-            dir_list.set_active_iter(Some(&current_iter));
-        };
-        // Advance dir_list_iter.
-        dir_list_iter = if dir_list_model.iter_next(&current_iter) {
-            Some(current_iter)
-        } else {
-            None
-        }
-    }
-    // We updated the dir list to the point of the current working directory.
-    if let Some(iter) = dir_list_iter {
-        if is_prefix {
-            // If we didn't change any entries to this point and the list contains further entries,
-            // the remaining ones are subdirectories of the cwd and we keep them.
-            loop {
-                dir_list_model.set(&iter, &[(1, &ICON_FOLDER_CLOSED)]);
-                if !dir_list_model.iter_next(&iter) {
-                    break;
-                }
-            }
-        } else {
-            // If we needed to change entries, the following ones are not directories under the
-            // cwd and we clear them.
-            while dir_list_model.remove(&iter) {}
-        }
-    }
 }
 
 /// Populates one level, i.e. one directory of the file browser tree.
