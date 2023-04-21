@@ -91,7 +91,7 @@ impl TransparencySettings {
 impl Default for TransparencySettings {
     fn default() -> Self {
         TransparencySettings {
-            background_alpha: 1.0,
+            background_alpha: 0.0,
             filled_alpha: 1.0,
         }
     }
