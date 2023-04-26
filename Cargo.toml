@@ -62,9 +62,14 @@ trycmd = "0.14.0"
 features = ["v1_46"]
 version = "0.17.0"
 
+[dependencies.libpanel]
+package = "libpanel"
+version = "0.2.0"
+features = []
+
 [dependencies.adw]
 package = "libadwaita"
-version = "0.4.1"
+version = "0.3.1"
 features = ["v1_2"]
 
 [dependencies.gtk]
