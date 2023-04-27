@@ -29,6 +29,7 @@ mod shell;
 mod shell_dlg;
 mod subscriptions;
 mod tabline;
+mod window;
 
 use log::error;
 
@@ -287,6 +288,10 @@ fn main() {
     } else {
         gtk::Application::new(Some("org.daa.NeovimGtk"), app_flags)
     };
+
+    app.connect_startup(|_| {
+        libpanel::init();
+    });
 
     let app_cmdline = Arc::new(Mutex::new(None));
     app.connect_command_line(

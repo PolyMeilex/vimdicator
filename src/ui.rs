@@ -9,8 +9,8 @@ use log::{debug, warn};
 
 use adw::prelude::*;
 use gio::{ApplicationCommandLine, Menu, MenuItem, SimpleAction};
-use glib::variant::FromVariant;
 use gtk::{Button, Inhibit, Orientation, Paned};
+use libpanel::prelude::*;
 
 use serde::{Deserialize, Serialize};
 
@@ -22,6 +22,7 @@ use crate::settings::{Settings, SettingsLoader};
 use crate::shell::{self, HeaderBarButtons, Shell};
 use crate::shell_dlg;
 use crate::subscriptions::{SubscriptionHandle, SubscriptionKey};
+use crate::window::VimdicatorWindow;
 use crate::Args;
 
 macro_rules! clone {
@@ -61,7 +62,7 @@ pub struct Ui {
 }
 
 pub struct Components {
-    window: Option<adw::ApplicationWindow>,
+    pub window: Option<VimdicatorWindow>,
     window_state: ToplevelState,
     title_label: Option<gtk::Label>,
     pub exit_confirmed: bool,
@@ -81,7 +82,7 @@ impl Components {
         self.window.as_ref().unwrap().close();
     }
 
-    pub fn window(&self) -> &adw::ApplicationWindow {
+    pub fn window(&self) -> &VimdicatorWindow {
         self.window.as_ref().unwrap()
     }
 
@@ -132,7 +133,7 @@ impl Ui {
         let mut settings = self.settings.borrow_mut();
         settings.init();
 
-        let window = adw::ApplicationWindow::new(app);
+        let window = VimdicatorWindow::new(app);
 
         let main = Paned::builder()
             .orientation(Orientation::Horizontal)
@@ -180,7 +181,7 @@ impl Ui {
             app.set_accels_for_action("app.quit", &[]);
         }
 
-        let (update_subtitle, header_bar, header_bar_widget) = self.create_header_bar(app);
+        let (update_subtitle, header_bar) = self.create_header_bar(app, &window);
 
         let show_sidebar_action =
             SimpleAction::new_stateful("show-sidebar", None, false.to_variant());
@@ -189,7 +190,11 @@ impl Ui {
                 if let Some(value) = value {
                     action.set_state(value.clone());
                     let is_active = value.get::<bool>().unwrap();
-                    file_browser_ref.borrow().set_reveal_child(is_active);
+
+                    if let Some(window) = comps_ref.borrow_mut().window.as_ref(){
+                        window.dock().set_reveal_start(is_active);
+                    }
+
                     comps_ref.borrow_mut().window_state.show_sidebar = is_active;
                 }
             }),
@@ -228,22 +233,9 @@ impl Ui {
         let shell = self.shell.borrow();
         let file_browser = self.file_browser.borrow();
 
-        let main_box = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-        main_box.append(&**file_browser);
-        main_box.append(&**shell);
-
-        // main.set_start_child(Some(&rev));
-        // main.set_end_child(Some(&**shell));
-        main.set_start_child(Some(&gtk::Label::new(Some("A"))));
-        main.set_end_child(Some(&gtk::Label::new(Some("B"))));
-
-        let b = gtk::Box::new(gtk::Orientation::Vertical, 0);
-        b.append(&header_bar_widget);
-        b.append(&main_box);
-
-        window.set_content(Some(&b));
-
-        window.show();
+        window.start_panel().append(&**file_browser);
+        window.main_panel().append(&**shell);
+        window.present();
 
         if !args.disable_win_restore {
             // Hide sidebar, if it wasn't shown last time.
@@ -325,11 +317,10 @@ impl Ui {
             );
         })));
 
-        let sidebar_action = UiMutex::new(show_sidebar_action);
         let comps_ref = comps_ref.clone();
         shell.set_nvim_command_cb(Some(
             move |shell: &mut shell::State, command: NvimCommand| {
-                Ui::nvim_command(shell, command, &sidebar_action, &comps_ref);
+                Ui::nvim_command(shell, command, &comps_ref);
             },
         ));
     }
@@ -419,12 +410,7 @@ impl Ui {
         });
     }
 
-    fn nvim_command(
-        shell: &mut shell::State,
-        command: NvimCommand,
-        sidebar_action: &UiMutex<SimpleAction>,
-        comps: &UiMutex<Components>,
-    ) {
+    fn nvim_command(shell: &mut shell::State, command: NvimCommand, comps: &UiMutex<Components>) {
         match command {
             NvimCommand::ShowProjectView => {
                 // TODO:
@@ -439,9 +425,11 @@ impl Ui {
                     .emit_enable_debugging(false);
             }
             NvimCommand::ToggleSidebar => {
-                let action = sidebar_action.borrow();
-                let state = !bool::from_variant(&action.state().unwrap()).unwrap();
-                action.change_state(&state.to_variant());
+                let comps = comps.borrow();
+                if let Some(window) = comps.window.as_ref() {
+                    let is = window.dock().reveals_start();
+                    window.dock().set_reveal_start(!is);
+                }
             }
             NvimCommand::Transparency(background_alpha, filled_alpha) => {
                 let comps = comps.borrow();
@@ -468,7 +456,8 @@ impl Ui {
     fn create_header_bar(
         &self,
         app: &gtk::Application,
-    ) -> (SubscriptionHandle, Box<HeaderBarButtons>, adw::HeaderBar) {
+        window: &VimdicatorWindow,
+    ) -> (SubscriptionHandle, Box<HeaderBarButtons>) {
         let header_bar_title = gtk::Label::builder()
             .css_classes(vec!["title".to_string()])
             .vexpand(true)
@@ -488,21 +477,9 @@ impl Ui {
             .build();
         header_bar_box.append(&header_bar_title);
         header_bar_box.append(&header_bar_subtitle);
-        let header_bar = adw::HeaderBar::builder()
-            .title_widget(&header_bar_box)
-            .focusable(false)
-            .build();
 
-        {
-            let flap_btn = gtk::ToggleButton::builder()
-                .focusable(false)
-                // TODO: Use meson and include this icon
-                // .icon_name("flap-symbolic")
-                .icon_name("system-file-manager-symbolic")
-                .action_name("app.show-sidebar")
-                .build();
-            header_bar.pack_start(&flap_btn);
-        }
+        let header_bar = window.header_bar();
+        header_bar.set_title_widget(Some(&header_bar_box));
 
         let mut comps = self.comps.borrow_mut();
         comps.title_label = Some(header_bar_title);
@@ -554,14 +531,13 @@ impl Ui {
                 save_btn,
                 primary_menu_btn,
             )),
-            header_bar,
         )
     }
 
     fn create_primary_menu_btn(
         &self,
         app: &gtk::Application,
-        window: &adw::ApplicationWindow,
+        window: &VimdicatorWindow,
     ) -> gtk::MenuButton {
         let btn = gtk::MenuButton::builder()
             .focusable(false)
@@ -615,7 +591,7 @@ impl Ui {
     }
 }
 
-fn on_help_about(window: &adw::ApplicationWindow) {
+fn on_help_about(window: &VimdicatorWindow) {
     adw::AboutWindow::builder()
         .transient_for(window)
         .application_name("Vimdicator")
@@ -651,7 +627,7 @@ fn gtk_close_request(comps: &Arc<UiMutex<Components>>, shell: &Rc<RefCell<Shell>
 }
 
 fn gtk_window_resize(
-    app_window: &adw::ApplicationWindow,
+    app_window: &VimdicatorWindow,
     comps: &mut Components,
     main: &gtk::Paned,
     orientation: gtk::Orientation,
@@ -823,6 +799,7 @@ impl SettingsLoader for ToplevelState {
 #[derive(Debug)]
 pub struct UiMutex<T: ?Sized> {
     thread: thread::ThreadId,
+    location: RefCell<Option<String>>,
     data: RefCell<T>,
 }
 
@@ -844,6 +821,7 @@ impl<T> UiMutex<T> {
     pub fn new(t: T) -> UiMutex<T> {
         UiMutex {
             thread: thread::current().id(),
+            location: Default::default(),
             data: RefCell::new(t),
         }
     }
@@ -855,15 +833,40 @@ impl<T> UiMutex<T> {
 }
 
 impl<T: ?Sized> UiMutex<T> {
+    #[track_caller]
     pub fn borrow(&self) -> Ref<T> {
         self.assert_ui_thread();
-        self.data.borrow()
+
+        let res = self.data.try_borrow();
+
+        if res.is_err() {
+            dbg!(&self.location);
+        } else {
+            let loc = std::panic::Location::caller();
+            *self.location.borrow_mut() = Some(format!("{loc:?}"));
+        }
+
+        res.unwrap()
+    }
+
+    pub fn try_borrow_mut(&self) -> Option<RefMut<T>> {
+        self.data.try_borrow_mut().ok()
     }
 
     #[track_caller]
     pub fn borrow_mut(&self) -> RefMut<T> {
         self.assert_ui_thread();
-        self.data.borrow_mut()
+
+        let res = self.data.try_borrow_mut();
+
+        if res.is_err() {
+            dbg!(&self.location);
+        } else {
+            let loc = std::panic::Location::caller();
+            *self.location.borrow_mut() = Some(format!("{loc:?}"));
+        }
+
+        res.unwrap()
     }
 
     #[inline]

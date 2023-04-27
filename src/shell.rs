@@ -158,7 +158,7 @@ impl HeaderBarButtons {
 pub struct ActionWidgets {
     header_bar: Box<HeaderBarButtons>,
     tabs: Notebook,
-    file_browser: gtk::Revealer,
+    file_browser: gtk::Box,
 }
 
 impl ActionWidgets {
@@ -289,11 +289,7 @@ impl State {
         self.nvim.clone()
     }
 
-    pub fn set_action_widgets(
-        &self,
-        header_bar: Box<HeaderBarButtons>,
-        file_browser: gtk::Revealer,
-    ) {
+    pub fn set_action_widgets(&self, header_bar: Box<HeaderBarButtons>, file_browser: gtk::Box) {
         self.action_widgets.replace(Some(ActionWidgets {
             header_bar,
             tabs: self.tabs.clone(),
@@ -1020,14 +1016,22 @@ impl Shell {
 
         let focus_controller = gtk::EventControllerFocus::new();
         focus_controller.connect_enter(glib::clone!(@weak state_ref => move |_| {
-            let mut state = state_ref.borrow_mut();
-            let redraw_mode = state.cursor.as_mut().unwrap().set_widget_focus(true);
-            state.queue_draw(redraw_mode);
+            let state = state_ref.try_borrow_mut();
+            if let Some(mut state) = state {
+                let redraw_mode = state.cursor.as_mut().unwrap().set_widget_focus(true);
+                state.queue_draw(redraw_mode);
+            } else {
+                log::error!("Failed to borrow mut on focus enter");
+            }
         }));
         focus_controller.connect_leave(glib::clone!(@weak state_ref => move |_| {
-            let mut state = state_ref.borrow_mut();
-            let redraw_mode = state.cursor.as_mut().unwrap().set_widget_focus(false);
-            state.queue_draw(redraw_mode);
+            let state = state_ref.try_borrow_mut();
+            if let Some(mut state) = state {
+                let redraw_mode = state.cursor.as_mut().unwrap().set_widget_focus(false);
+                state.queue_draw(redraw_mode);
+            } else {
+                log::error!("Failed to borrow mut on focus leave");
+            }
         }));
         state.nvim_viewport.add_controller(focus_controller);
 

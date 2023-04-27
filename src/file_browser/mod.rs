@@ -47,16 +47,16 @@ pub struct FileBrowserWidget {
     store: gtk::TreeStore,
     file_tree_view: FileTreeView,
     tree: TreeView,
-    widget: gtk::Revealer,
+    widget: gtk::Box,
     shell_state: Arc<UiMutex<shell::State>>,
     comps: Components,
     state: Rc<RefCell<State>>,
 }
 
 impl Deref for FileBrowserWidget {
-    type Target = gtk::Revealer;
+    type Target = gtk::Box;
 
-    fn deref(&self) -> &gtk::Revealer {
+    fn deref(&self) -> &gtk::Box {
         &self.widget
     }
 }
@@ -78,6 +78,7 @@ impl FileBrowserWidget {
     pub fn new(shell_state: &Arc<UiMutex<shell::State>>) -> Self {
         let widget = gtk::Box::builder()
             .focusable(false)
+            .sensitive(false)
             .width_request(150)
             .orientation(gtk::Orientation::Vertical)
             .build();
@@ -123,12 +124,10 @@ impl FileBrowserWidget {
         let file_tree_view = FileTreeView::new();
 
         let window = gtk::ScrolledWindow::builder()
-            .hscrollbar_policy(gtk::PolicyType::Never)
             .focusable(false)
             .vexpand(true)
             .valign(gtk::Align::Fill)
             .child(&file_tree_view)
-            // .child(&tree)
             .build();
         widget.append(&window);
 
@@ -144,13 +143,6 @@ impl FileBrowserWidget {
         menu.append_section(None, &section);
 
         context_menu.set_menu_model(Some(&menu));
-
-        // Sensitive will be enabled when nvim is ready
-        let widget = gtk::Revealer::builder()
-            .transition_type(gtk::RevealerTransitionType::SlideRight)
-            .sensitive(false)
-            .child(&widget)
-            .build();
 
         FileBrowserWidget {
             store,

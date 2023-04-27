@@ -75,6 +75,19 @@ impl ObjectSubclass for NvimViewportObject {
 }
 
 impl ObjectImpl for NvimViewportObject {
+    fn constructed(&self) {
+        self.parent_constructed();
+
+        let gesture = gtk::GestureClick::new();
+        gesture.connect_released(|gesture, _, _, _| {
+            if gesture.widget().gets_focus_on_click() && !gesture.widget().has_focus() {
+                gesture.widget().grab_focus();
+            }
+        });
+
+        self.obj().add_controller(gesture);
+    }
+
     fn dispose(&self) {
         if let Some(popover_menu) = self.context_menu.upgrade() {
             popover_menu.unparent();
