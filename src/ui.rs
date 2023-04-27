@@ -179,23 +179,20 @@ impl Ui {
             app.set_accels_for_action("gtkinternal.hide", &[]);
             app.set_accels_for_action("gtkinternal.hide-others", &[]);
             app.set_accels_for_action("app.quit", &[]);
+
+            app.set_accels_for_action("app.show-sidebar", &["<Ctrl>e"]);
         }
 
         let (update_subtitle, header_bar) = self.create_header_bar(app, &window);
 
-        let show_sidebar_action =
-            SimpleAction::new_stateful("show-sidebar", None, false.to_variant());
-        show_sidebar_action.connect_change_state(
-            glib::clone!(@strong file_browser_ref, @weak comps_ref => move |action, value| {
-                if let Some(value) = value {
-                    action.set_state(value.clone());
-                    let is_active = value.get::<bool>().unwrap();
-
-                    if let Some(window) = comps_ref.borrow_mut().window.as_ref(){
-                        window.dock().set_reveal_start(is_active);
-                    }
-
-                    comps_ref.borrow_mut().window_state.show_sidebar = is_active;
+        let show_sidebar_action = SimpleAction::new("show-sidebar", None);
+        show_sidebar_action.connect_activate(
+            glib::clone!(@strong file_browser_ref, @weak comps_ref => move |_, _| {
+                let mut comps_ref = comps_ref.borrow_mut();
+                if let Some(window) = comps_ref.window.as_ref(){
+                    let is_active = window.dock().reveals_start();
+                    window.dock().set_reveal_start(!is_active);
+                    comps_ref.window_state.show_sidebar = !is_active;
                 }
             }),
         );
