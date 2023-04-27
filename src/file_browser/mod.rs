@@ -167,6 +167,10 @@ impl FileBrowserWidget {
         }
     }
 
+    pub fn file_tree_view(&self) -> &FileTreeView {
+        &self.file_tree_view
+    }
+
     fn nvim(&self) -> Option<NvimSession> {
         self.shell_state.borrow().nvim()
     }

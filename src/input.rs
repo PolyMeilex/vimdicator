@@ -100,8 +100,13 @@ pub fn gtk_key_press(
         nvim.block_timeout(nvim.input(&input))
             .ok_and_report()
             .expect("Failed to send input command to nvim");
+
         // TODO: Be smarter about this one?
-        Inhibit(false)
+        if keyval == gdk::Key::Tab {
+            Inhibit(true)
+        } else {
+            Inhibit(false)
+        }
     } else {
         Inhibit(false)
     }

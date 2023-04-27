@@ -186,13 +186,31 @@ impl Ui {
         let (update_subtitle, header_bar) = self.create_header_bar(app, &window);
 
         let show_sidebar_action = SimpleAction::new("show-sidebar", None);
+        let sidebar_list_view = self.file_browser.borrow().file_tree_view().list_view();
         show_sidebar_action.connect_activate(
             glib::clone!(@strong file_browser_ref, @weak comps_ref => move |_, _| {
-                let mut comps_ref = comps_ref.borrow_mut();
+                let comps_ref = &mut *comps_ref.borrow_mut();
                 if let Some(window) = comps_ref.window.as_ref(){
-                    let is_active = window.dock().reveals_start();
-                    window.dock().set_reveal_start(!is_active);
-                    comps_ref.window_state.show_sidebar = !is_active;
+                    let is_visible = window.dock().reveals_start();
+                    let is_focused = is_visible && (window.start_panel().is_focus() || window.start_panel().focus_child().is_some());
+
+
+                    let new;
+
+                    if is_visible  {
+                        if is_focused {
+                            new = false;
+                        } else {
+                            sidebar_list_view.grab_focus();
+                            new = true;
+                        }
+                    } else {
+                        sidebar_list_view.grab_focus();
+                        new = true;
+                    }
+
+                    window.dock().set_reveal_start(new);
+                    comps_ref.window_state.show_sidebar = new;
                 }
             }),
         );
@@ -238,7 +256,10 @@ impl Ui {
             // Hide sidebar, if it wasn't shown last time.
             // Has to be done after show_all(), so it won't be shown again.
             let show_sidebar = comps_ref.borrow().window_state.show_sidebar;
-            show_sidebar_action.change_state(&show_sidebar.to_variant());
+
+            if let Some(window) = comps_ref.borrow().window.as_ref() {
+                window.dock().set_reveal_start(show_sidebar);
+            }
         }
 
         let state_ref = shell_ref.borrow().state.clone();
