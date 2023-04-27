@@ -229,28 +229,23 @@ impl State {
             .set_model(Some(&PopupMenuModel::new(&self.items)));
     }
 
-    fn update_css(&self, hl: &HighlightMap, font_ctx: &render::Context) {
+    fn update_css(&self, _hl: &HighlightMap, font_ctx: &render::Context) {
         let font_desc = font_ctx.font_description();
 
         self.css_provider.load_from_data(&format!(
             "listview.nvim-popupmenu-list {{\
-                    background-color: {bg};\
+                    background-color: transparent;\
                     font-family: \"{font}\";\
                     font-size: {size}pt;\
                 }}\
                 listview.nvim-popupmenu-list > row {{\
-                    padding: {margin}px;\
-                    color: {fg};\
+                    padding: 5px;\
+                    border-radius: 6px;\
                 }}\
                 listview.nvim-popupmenu-list > row:selected {{\
-                    background-color: {bg_sel};\
-                    color: {fg_sel};\
+                    background-color: @accent_bg_color;\
+                    color: @accent_fg_color;\
                 }}",
-            margin = PADDING,
-            fg_sel = hl.pmenu_fg_sel().to_hex(),
-            bg_sel = hl.pmenu_bg_sel().to_hex(),
-            fg = hl.pmenu_fg().to_hex(),
-            bg = hl.pmenu_bg().to_hex(),
             font = font_desc.family().unwrap().as_str(),
             size = (font_desc.size() as f64 / pango::SCALE as f64),
         ));

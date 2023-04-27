@@ -1,6 +1,6 @@
 /* CSS stylings for neovim-gtk that don't change  */
 popover.nvim-popover > contents {
-    padding: 3px;
+    padding: 8px;
 }
 
 listview.nvim-popupmenu-list {
