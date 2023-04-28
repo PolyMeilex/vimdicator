@@ -102,7 +102,10 @@ pub fn gtk_key_press(
             .expect("Failed to send input command to nvim");
 
         // TODO: Be smarter about this one?
-        if keyval == gdk::Key::Tab {
+        if matches!(
+            keyval,
+            gdk::Key::Tab | gdk::Key::Up | gdk::Key::Down | gdk::Key::Left | gdk::Key::Right
+        ) {
             Inhibit(true)
         } else {
             Inhibit(false)
