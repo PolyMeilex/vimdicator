@@ -46,7 +46,7 @@ impl FileTreeView {
 }
 
 fn get_tree_model() -> gtk::TreeListModel {
-    let path = "/home/poly/dev/neovim-gtk";
+    let path = "./";
 
     let tree = fs_tree::FileTree::from_path(path).unwrap();
 
