@@ -6,6 +6,7 @@ use std::iter;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use glib::clone;
 use log::error;
 
 use gtk::prelude::*;
@@ -317,7 +318,7 @@ impl CmdLine {
         scroll.set_child(Some(&tree));
 
         let controller = gtk::GestureClick::builder().button(1).build();
-        controller.connect_pressed(clone!(state => move |controller, _, x, y| {
+        controller.connect_pressed(clone!(@strong state => move |controller, _, x, y| {
             let state = state.borrow_mut();
             let nvim = state.nvim.as_ref().unwrap().nvim();
             let tree = controller.widget().downcast().unwrap();

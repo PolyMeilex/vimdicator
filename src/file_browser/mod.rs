@@ -11,6 +11,7 @@ use std::path::{Component, Path};
 use std::rc::Rc;
 use std::sync::Arc;
 
+use glib::clone;
 use log::error;
 
 use gio::prelude::*;
@@ -186,8 +187,8 @@ impl FileBrowserWidget {
 
         let store = &self.store;
         let state_ref = &self.state;
-        self.tree
-            .connect_test_expand_row(clone!(store, state_ref => move |_, iter, _| {
+        self.tree.connect_test_expand_row(
+            clone!(@strong store, @strong state_ref => move |_, iter, _| {
                 store.set(iter, &[(Column::IconName as u32, &ICON_FOLDER_OPEN)]);
                 // We cannot recursively populate all directories. Instead, we have prepared a single
                 // empty child entry for all non-empty directories, so the row will be expandable. Now,
@@ -214,10 +215,11 @@ impl FileBrowserWidget {
                     }
                 }
                 Inhibit(false)
-            }));
+            }),
+        );
 
         self.tree
-            .connect_row_collapsed(clone!(store => move |_, iter, _| {
+            .connect_row_collapsed(clone!(@strong store => move |_, iter, _| {
                 store.set(iter, &[(Column::IconName as u32, &ICON_FOLDER_CLOSED)]);
             }));
 
@@ -235,13 +237,13 @@ impl FileBrowserWidget {
         let nvim_ref = self.shell_state.borrow().nvim_clone();
 
         let reload_action = gio::SimpleAction::new("reload", None);
-        reload_action.connect_activate(clone!(store, state_ref => move |_, _| {
+        reload_action.connect_activate(clone!(@strong store, @strong state_ref => move |_, _| {
             tree_reload(&store, &state_ref.borrow());
         }));
         actions.add_action(&reload_action);
 
         let cd_action = &self.comps.cd_action;
-        cd_action.connect_activate(clone!(state_ref, nvim_ref => move |_, _| {
+        cd_action.connect_activate(clone!(@strong state_ref, @strong nvim_ref => move |_, _| {
             let nvim = nvim_ref.nvim().unwrap();
             if let Some(ref path) = &state_ref.borrow().selected_path {
                 let path = path.clone();
@@ -252,12 +254,14 @@ impl FileBrowserWidget {
 
         // Show / hide hidden files when corresponding menu item is toggled.
         let show_hidden_action = &self.comps.show_hidden_action;
-        show_hidden_action.connect_activate(clone!(state_ref, store => move |action, _| {
-            let mut state = state_ref.borrow_mut();
-            state.show_hidden = !state.show_hidden;
-            action.set_state(state.show_hidden.to_variant());
-            tree_reload(&store, &state);
-        }));
+        show_hidden_action.connect_activate(
+            clone!(@strong state_ref, @strong store => move |action, _| {
+                let mut state = state_ref.borrow_mut();
+                state.show_hidden = !state.show_hidden;
+                action.set_state(state.show_hidden.to_variant());
+                tree_reload(&store, &state);
+            }),
+        );
         actions.add_action(show_hidden_action);
 
         self.comps
@@ -272,7 +276,7 @@ impl FileBrowserWidget {
         shell_state.subscribe(
             SubscriptionKey::from("DirChanged"),
             &["getcwd()"],
-            clone!(store, state_ref => move |args| {
+            clone!(@strong store, @strong state_ref => move |args| {
                 let dir = args.into_iter().next().unwrap();
                 if dir != state_ref.borrow().current_dir {
                     state_ref.borrow_mut().current_dir = dir;
@@ -315,8 +319,8 @@ impl FileBrowserWidget {
         let state_ref = &self.state;
         let shell_state_ref = &self.shell_state;
 
-        self.tree
-            .connect_row_activated(clone!(store, shell_state_ref => move |tree, path, _| {
+        self.tree.connect_row_activated(
+            clone!(@strong store, @strong shell_state_ref => move |tree, path, _| {
                 let iter = store.iter(path).unwrap();
                 let file_type: u8 = store.get(&iter, Column::FileType as i32);
                 let file_path: String = store.get(&iter, Column::Path as i32);
@@ -333,7 +337,8 @@ impl FileBrowserWidget {
 
                     shell_state_ref.borrow().open_file(&file_path);
                 }
-            }));
+            }),
+        );
 
         self.file_tree_view.list_view().connect_activate({
             let shell_state_ref = shell_state_ref.clone();
@@ -360,7 +365,7 @@ impl FileBrowserWidget {
             .button(3)
             .build();
         right_click_controller.connect_pressed(
-            clone!(store, state_ref, context_menu, cd_action => move |controller, _, x, y| {
+            clone!(@strong store, @strong state_ref, @strong context_menu, @strong cd_action => move |controller, _, x, y| {
                 open_context_menu(
                     controller,
                     x,
@@ -379,7 +384,7 @@ impl FileBrowserWidget {
             .touch_only(true)
             .build();
         long_tap_controller.connect_pressed(
-            clone!(store, state_ref, context_menu, cd_action => move |controller, x, y| {
+            clone!(@strong store, @strong state_ref, @strong context_menu, @strong cd_action => move |controller, x, y| {
                 open_context_menu(
                     controller,
                     x,

@@ -5,6 +5,7 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::{env, thread};
 
+use glib::clone;
 use log::{debug, warn};
 
 use adw::prelude::*;
@@ -24,29 +25,6 @@ use crate::shell_dlg;
 use crate::subscriptions::{SubscriptionHandle, SubscriptionKey};
 use crate::window::VimdicatorWindow;
 use crate::Args;
-
-macro_rules! clone {
-    (@param _) => ( _ );
-    (@param $x:ident) => ( $x );
-    ($($n:ident),+ => move || $body:expr) => (
-        {
-            $( let $n = $n.clone(); )+
-                move || $body
-        }
-    );
-    ($($n:ident),+ => move |$($p:tt),+| $body:expr) => (
-        {
-            $( let $n = $n.clone(); )+
-                move |$(clone!(@param $p),)+| $body
-        }
-    );
-    ($($n:ident),+ => async move $body:expr) => {
-        {
-            $( let $n = $n.clone(); )+
-                async move { $body }
-        }
-    };
-}
 
 const DEFAULT_WIDTH: i32 = 800;
 const DEFAULT_HEIGHT: i32 = 600;
@@ -512,7 +490,7 @@ impl Ui {
         app.add_action(&save_all_action);
 
         let about_action = SimpleAction::new("HelpAbout", None);
-        about_action.connect_activate(clone!(window => move |_, _| on_help_about(&window)));
+        about_action.connect_activate(clone!(@strong window => move |_, _| on_help_about(&window)));
         about_action.set_enabled(true);
 
         app.add_action(&about_action);
@@ -609,7 +587,7 @@ fn set_background(shell: &RefCell<Shell>, args: Vec<String>) {
 
     // Neovim won't send us a redraw to update the default colors on the screen, so do it ourselves
     glib::idle_add_once(
-        clone!(state => move || state.borrow_mut().queue_draw(RedrawMode::ClearCache)),
+        clone!(@strong state => move || state.borrow_mut().queue_draw(RedrawMode::ClearCache)),
     );
 }
 
