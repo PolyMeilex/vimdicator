@@ -19,7 +19,7 @@ use crate::highlight::BackgroundState;
 use crate::misc::{self, BoolExt};
 use crate::nvim::*;
 use crate::settings::{Settings, SettingsLoader};
-use crate::shell::{self, HeaderBarButtons, Shell};
+use crate::shell::{self, Shell};
 use crate::shell_dlg;
 use crate::subscriptions::{SubscriptionHandle, SubscriptionKey};
 use crate::window::VimdicatorWindow;
@@ -183,7 +183,7 @@ impl Ui {
             app.set_accels_for_action("app.show-sidebar", &["<Ctrl>e"]);
         }
 
-        let (update_subtitle, header_bar) = self.create_header_bar(app);
+        let update_subtitle = self.create_header_bar(app);
 
         let show_sidebar_action = SimpleAction::new("show-sidebar", None);
         let sidebar_list_view = self.file_browser.borrow().file_tree_view().list_view();
@@ -313,7 +313,7 @@ impl Ui {
             (options.post_config_cmds(), options.diff_mode)
         };
 
-        state.set_action_widgets(header_bar, file_browser_ref.borrow().clone());
+        state.set_action_widgets(window.header_bar(), file_browser_ref.borrow().clone());
 
         drop(state);
         shell.set_detach_cb(Some(glib::clone!(@strong comps_ref => move || {
@@ -471,10 +471,7 @@ impl Ui {
         }
     }
 
-    fn create_header_bar(
-        &self,
-        app: &gtk::Application,
-    ) -> (SubscriptionHandle, Box<HeaderBarButtons>) {
+    fn create_header_bar(&self, app: &gtk::Application) -> SubscriptionHandle {
         let comps = self.comps.borrow_mut();
 
         let window = comps.window.as_ref().unwrap();
@@ -492,7 +489,7 @@ impl Ui {
             },
         );
 
-        (update_subtitle, Box::new(HeaderBarButtons::new()))
+        update_subtitle
     }
 
     fn create_actions(&self, app: &gtk::Application, window: &VimdicatorWindow) {

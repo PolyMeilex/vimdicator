@@ -30,6 +30,7 @@ use crate::nvim::{
 };
 use crate::settings::{FontSource, Settings};
 use crate::ui_model::ModelRect;
+use crate::window::headerbar::VimdicatorHeaderBar;
 use crate::{spawn_timeout, spawn_timeout_user_err, NvimTransport};
 
 use crate::cmd_line::{CmdLine, CmdLineContext};
@@ -121,24 +122,11 @@ impl ResizeState {
     }
 }
 
-/// A collection of all header bar buttons used in nvim-gtk
-pub struct HeaderBarButtons {}
-
-impl HeaderBarButtons {
-    pub fn new() -> Self {
-        Self {}
-    }
-
-    pub fn set_enabled(&self, enabled: bool) {
-        // TODO:
-    }
-}
-
 /// A struct containing all of the widgets in neovim-gtk that interact with Neovim in some way using
 /// RPC calls. They are grouped together so that they may be easily enabled/disabled when nvim is
 /// blocked/unblocked.
 pub struct ActionWidgets {
-    header_bar: Box<HeaderBarButtons>,
+    header_bar: VimdicatorHeaderBar,
     tabs: Notebook,
     file_browser: gtk::Box,
 }
@@ -146,7 +134,7 @@ pub struct ActionWidgets {
 impl ActionWidgets {
     /// Enable or disable all widgets
     pub fn set_enabled(&self, enabled: bool) {
-        self.header_bar.set_enabled(enabled);
+        self.header_bar.set_sensitive(enabled);
         self.tabs.set_sensitive(enabled);
         self.file_browser.set_sensitive(enabled);
     }
@@ -271,7 +259,7 @@ impl State {
         self.nvim.clone()
     }
 
-    pub fn set_action_widgets(&self, header_bar: Box<HeaderBarButtons>, file_browser: gtk::Box) {
+    pub fn set_action_widgets(&self, header_bar: VimdicatorHeaderBar, file_browser: gtk::Box) {
         self.action_widgets.replace(Some(ActionWidgets {
             header_bar,
             tabs: self.tabs.clone(),
