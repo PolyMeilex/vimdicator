@@ -15,7 +15,7 @@ use tokio::sync::{Mutex as AsyncMutex, Notify};
 use gdk::{prelude::*, Display, ModifierType};
 use gio::ApplicationCommandLine;
 use gtk::prelude::*;
-use gtk::{Button, MenuButton, Notebook};
+use gtk::Notebook;
 use pango::FontDescription;
 
 use nvim_rs::Value;
@@ -122,25 +122,15 @@ impl ResizeState {
 }
 
 /// A collection of all header bar buttons used in nvim-gtk
-pub struct HeaderBarButtons {
-    new_tab_btn: Button,
-    paste_btn: Button,
-    primary_menu_btn: MenuButton,
-}
+pub struct HeaderBarButtons {}
 
 impl HeaderBarButtons {
-    pub fn new(new_tab_btn: Button, paste_btn: Button, primary_menu_btn: MenuButton) -> Self {
-        Self {
-            new_tab_btn,
-            paste_btn,
-            primary_menu_btn,
-        }
+    pub fn new() -> Self {
+        Self {}
     }
 
     pub fn set_enabled(&self, enabled: bool) {
-        self.new_tab_btn.set_sensitive(enabled);
-        self.paste_btn.set_sensitive(enabled);
-        self.primary_menu_btn.set_sensitive(enabled);
+        // TODO:
     }
 }
 

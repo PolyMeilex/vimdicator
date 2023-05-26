@@ -3,7 +3,7 @@ name = "nvim-gtk"
 version = "1.1.0-devel"
 authors = ["daa84 <daa84@inbox.ru>", "Lyude Paul <thatslyude@gmail.com>"]
 build = "build.rs"
-edition = "2018"
+edition = "2021"
 license = "GPLv3"
 
 [dependencies]

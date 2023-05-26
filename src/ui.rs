@@ -8,8 +8,8 @@ use std::{env, thread};
 use log::{debug, warn};
 
 use adw::prelude::*;
-use gio::{ApplicationCommandLine, Menu, MenuItem, SimpleAction};
-use gtk::{Button, Inhibit, Orientation, Paned};
+use gio::{ApplicationCommandLine, SimpleAction};
+use gtk::{Inhibit, Orientation, Paned};
 use libpanel::prelude::*;
 
 use serde::{Deserialize, Serialize};
@@ -64,7 +64,6 @@ pub struct Ui {
 pub struct Components {
     pub window: Option<VimdicatorWindow>,
     window_state: ToplevelState,
-    title_label: Option<gtk::Label>,
     pub exit_confirmed: bool,
 }
 
@@ -73,7 +72,6 @@ impl Components {
         Components {
             window: None,
             window_state: ToplevelState::load(),
-            title_label: None,
             exit_confirmed: false,
         }
     }
@@ -88,9 +86,11 @@ impl Components {
 
     pub fn set_title(&self, short_title: &str, long_title: &str) {
         self.window.as_ref().unwrap().set_title(Some(long_title));
-        if let Some(ref title_label) = self.title_label {
-            title_label.set_label(short_title);
-        }
+        self.window
+            .as_ref()
+            .unwrap()
+            .header_bar()
+            .set_title(short_title);
     }
 
     pub fn saved_size(&self) -> (i32, i32) {
@@ -183,7 +183,7 @@ impl Ui {
             app.set_accels_for_action("app.show-sidebar", &["<Ctrl>e"]);
         }
 
-        let (update_subtitle, header_bar) = self.create_header_bar(app, &window);
+        let (update_subtitle, header_bar) = self.create_header_bar(app);
 
         let show_sidebar_action = SimpleAction::new("show-sidebar", None);
         let sidebar_list_view = self.file_browser.borrow().file_tree_view().list_view();
@@ -474,112 +474,45 @@ impl Ui {
     fn create_header_bar(
         &self,
         app: &gtk::Application,
-        window: &VimdicatorWindow,
     ) -> (SubscriptionHandle, Box<HeaderBarButtons>) {
-        let header_bar_title = gtk::Label::builder()
-            .css_classes(vec!["title".to_string()])
-            .vexpand(true)
-            .valign(gtk::Align::Center)
-            .ellipsize(pango::EllipsizeMode::Middle)
-            .build();
-        let header_bar_subtitle = gtk::Label::builder()
-            .css_classes(vec!["subtitle".to_string()])
-            .vexpand(true)
-            .valign(gtk::Align::Center)
-            .ellipsize(pango::EllipsizeMode::Middle)
-            .build();
-        let header_bar_box = gtk::Box::builder()
-            .orientation(Orientation::Vertical)
-            .vexpand(true)
-            .valign(gtk::Align::Center)
-            .build();
-        header_bar_box.append(&header_bar_title);
-        header_bar_box.append(&header_bar_subtitle);
-
-        let header_bar = window.header_bar();
-        header_bar.set_title_widget(Some(&header_bar_box));
-
-        let mut comps = self.comps.borrow_mut();
-        comps.title_label = Some(header_bar_title);
+        let comps = self.comps.borrow_mut();
 
         let window = comps.window.as_ref().unwrap();
 
-        let new_tab_btn = Button::from_icon_name("tab-new-symbolic");
-        let shell_ref = Rc::clone(&self.shell);
-        new_tab_btn.connect_clicked(move |_| shell_ref.borrow().new_tab());
-        new_tab_btn.set_focusable(false);
-        new_tab_btn.set_tooltip_text(Some("Open a new tab"));
-        new_tab_btn.set_sensitive(false);
-        header_bar.pack_start(&new_tab_btn);
-
-        let primary_menu_btn = self.create_primary_menu_btn(app, window);
-        primary_menu_btn.set_sensitive(false);
-        header_bar.pack_end(&primary_menu_btn);
-
-        let paste_btn = Button::from_icon_name("edit-paste-symbolic");
-        let shell = self.shell.clone();
-        paste_btn.connect_clicked(move |_| shell.borrow().edit_paste());
-        paste_btn.set_focusable(false);
-        paste_btn.set_tooltip_text(Some("Paste from clipboard"));
-        paste_btn.set_sensitive(false);
-        header_bar.pack_end(&paste_btn);
+        self.create_actions(app, window);
 
         let shell = self.shell.borrow();
 
+        let header_bar = window.header_bar().clone();
         let update_subtitle = shell.state.borrow().subscribe(
             SubscriptionKey::from("DirChanged"),
             &["getcwd()"],
-            move |args| header_bar_subtitle.set_label(&shorten_file_path(&args[0])),
+            move |args| {
+                header_bar.set_subtitle(shorten_file_path(&args[0]));
+            },
         );
 
-        (
-            update_subtitle,
-            Box::new(HeaderBarButtons::new(
-                new_tab_btn,
-                paste_btn,
-                primary_menu_btn,
-            )),
-        )
+        (update_subtitle, Box::new(HeaderBarButtons::new()))
     }
 
-    fn create_primary_menu_btn(
-        &self,
-        app: &gtk::Application,
-        window: &VimdicatorWindow,
-    ) -> gtk::MenuButton {
-        let btn = gtk::MenuButton::builder()
-            .focusable(false)
-            .icon_name("open-menu-symbolic")
-            .build();
-
-        // Make sure the child button isn't focusable either
-        btn.first_child()
-            .unwrap()
-            .downcast::<gtk::ToggleButton>()
-            .unwrap()
-            .set_focusable(false);
-
-        // note actions created in application menu
-        let menu = Menu::new();
-
-        let section = Menu::new();
-        section.append_item(&MenuItem::new(Some("New Window"), Some("app.new-window")));
-        section.append_item(&MenuItem::new(Some("Save All"), Some("app.save-all")));
-        menu.append_section(None, &section);
-
-        let section = Menu::new();
-        section.append_item(&MenuItem::new(Some("About"), Some("app.HelpAbout")));
-        menu.append_section(None, &section);
-
-        menu.freeze();
-
-        let about_action = SimpleAction::new("save-all", None);
-
+    fn create_actions(&self, app: &gtk::Application, window: &VimdicatorWindow) {
+        let edit_paste_action = SimpleAction::new("edit-paste", None);
         let shell = self.shell.clone();
-        about_action.connect_activate(move |_, _| shell.borrow().edit_save_all());
-        about_action.set_enabled(true);
+        edit_paste_action.connect_activate(move |_, _| shell.borrow().edit_paste());
+        edit_paste_action.set_enabled(true);
+        app.add_action(&edit_paste_action);
 
-        app.add_action(&about_action);
+        let new_tab_action = SimpleAction::new("new-tab", None);
+        let shell = self.shell.clone();
+        new_tab_action.connect_activate(move |_, _| shell.borrow().new_tab());
+        new_tab_action.set_enabled(true);
+        app.add_action(&new_tab_action);
+
+        let save_all_action = SimpleAction::new("save-all", None);
+        let shell = self.shell.clone();
+        save_all_action.connect_activate(move |_, _| shell.borrow().edit_save_all());
+        save_all_action.set_enabled(true);
+        app.add_action(&save_all_action);
 
         let about_action = SimpleAction::new("HelpAbout", None);
         about_action.connect_activate(clone!(window => move |_, _| on_help_about(&window)));
@@ -587,24 +520,20 @@ impl Ui {
 
         app.add_action(&about_action);
 
-        btn.set_menu_model(Some(&menu));
+        // let shell = &self.shell;
+        // btn.connect_realize(clone!(shell => move |btn| {
+        //     let drawing_area = shell.borrow().state.borrow().nvim_viewport.clone();
 
-        let shell = &self.shell;
-        btn.connect_realize(clone!(shell => move |btn| {
-            let drawing_area = shell.borrow().state.borrow().nvim_viewport.clone();
-
-            btn
-                .popover()
-                .unwrap()
-                .downcast_ref::<gtk::Popover>()
-                .unwrap()
-                .connect_closed(move |_| {
-                    drawing_area.grab_focus();
-                });
-            }
-        ));
-
-        btn
+        //     btn
+        //         .popover()
+        //         .unwrap()
+        //         .downcast_ref::<gtk::Popover>()
+        //         .unwrap()
+        //         .connect_closed(move |_| {
+        //             drawing_area.grab_focus();
+        //         });
+        //     }
+        // ));
     }
 }
 

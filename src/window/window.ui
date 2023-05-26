@@ -10,15 +10,9 @@
         <property name="orientation">vertical</property>
 
         <child>
-          <object class="AdwHeaderBar" id="headerbar">
+          <object class="VimdicatorHeaderBar" id="headerbar">
             <property name="focusable">false</property>
-            
-            <child type="start">
-              <object class="PanelToggleButton">
-                <property name="dock">dock</property>
-                <property name="area">start</property>
-              </object>
-            </child>
+            <property name="dock">dock</property>
           </object>
         </child>
 

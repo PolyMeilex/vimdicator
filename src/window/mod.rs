@@ -1,14 +1,19 @@
 use gdk::subclass::prelude::ObjectSubclassIsExt;
 
+pub mod headerbar;
+
 mod imp {
     use adw::subclass::prelude::*;
+    use glib::StaticType;
     use gtk::{glib, CompositeTemplate};
+
+    use super::headerbar;
 
     #[derive(Debug, Default, CompositeTemplate)]
     #[template(file = "window.ui")]
     pub struct VimdicatorWindow {
         #[template_child]
-        pub headerbar: TemplateChild<adw::HeaderBar>,
+        pub headerbar: TemplateChild<headerbar::VimdicatorHeaderBar>,
 
         #[template_child]
         pub dock: TemplateChild<libpanel::Dock>,
@@ -27,6 +32,8 @@ mod imp {
 
         fn class_init(klass: &mut Self::Class) {
             klass.bind_template();
+
+            headerbar::VimdicatorHeaderBar::static_type();
         }
 
         fn instance_init(obj: &glib::subclass::InitializingObject<Self>) {
@@ -55,7 +62,7 @@ impl VimdicatorWindow {
         glib::Object::builder().property("application", app).build()
     }
 
-    pub fn header_bar(&self) -> adw::HeaderBar {
+    pub fn header_bar(&self) -> headerbar::VimdicatorHeaderBar {
         self.imp().headerbar.get()
     }
 
