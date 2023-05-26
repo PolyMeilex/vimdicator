@@ -275,7 +275,6 @@ fn main() {
     }
 
     gtk::init().expect("Failed to initialize GTK+");
-    adw::init().expect("Failed to initialize Adw");
 
     let app_flags = gio::ApplicationFlags::HANDLES_OPEN
         | gio::ApplicationFlags::HANDLES_COMMAND_LINE
@@ -284,9 +283,9 @@ fn main() {
     glib::set_program_name(Some("NeovimGtk"));
 
     let app = if cfg!(debug_assertions) {
-        gtk::Application::new(Some("org.daa.NeovimGtkDebug"), app_flags)
+        adw::Application::new(Some("org.daa.NeovimGtkDebug"), app_flags)
     } else {
-        gtk::Application::new(Some("org.daa.NeovimGtk"), app_flags)
+        adw::Application::new(Some("org.daa.NeovimGtk"), app_flags)
     };
 
     app.connect_startup(|_| {
@@ -347,7 +346,7 @@ fn main() {
 }
 
 fn open(
-    app: &gtk::Application,
+    app: &adw::Application,
     files: Box<[String]>,
     args: &Args,
     app_cmdline: Arc<Mutex<Option<ApplicationCommandLine>>>,
@@ -358,7 +357,7 @@ fn open(
 }
 
 fn activate(
-    app: &gtk::Application,
+    app: &adw::Application,
     args: &Args,
     app_cmdline: Arc<Mutex<Option<ApplicationCommandLine>>>,
 ) {

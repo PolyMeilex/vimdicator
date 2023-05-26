@@ -99,7 +99,7 @@ impl Ui {
 
     pub fn init(
         &mut self,
-        app: &gtk::Application,
+        app: &adw::Application,
         args: &crate::Args,
         app_cmdline: Arc<Mutex<Option<ApplicationCommandLine>>>,
     ) {
@@ -161,7 +161,7 @@ impl Ui {
             app.set_accels_for_action("app.show-sidebar", &["<Ctrl>e"]);
         }
 
-        let update_subtitle = self.create_header_bar(app);
+        let update_subtitle = self.create_header_bar(app, &window);
 
         let show_sidebar_action = SimpleAction::new("show-sidebar", None);
         let sidebar_list_view = self.file_browser.borrow().file_tree_view().list_view();
@@ -449,17 +449,15 @@ impl Ui {
         }
     }
 
-    fn create_header_bar(&self, app: &gtk::Application) -> SubscriptionHandle {
-        let comps = self.comps.borrow_mut();
-
-        let window = comps.window.as_ref().unwrap();
-
+    fn create_header_bar(
+        &self,
+        app: &adw::Application,
+        window: &VimdicatorWindow,
+    ) -> SubscriptionHandle {
         self.create_actions(app, window);
 
-        let shell = self.shell.borrow();
-
         let header_bar = window.header_bar();
-        let update_subtitle = shell.state.borrow().subscribe(
+        let update_subtitle = self.shell.borrow().state.borrow().subscribe(
             SubscriptionKey::from("DirChanged"),
             &["getcwd()"],
             move |args| {
@@ -470,7 +468,7 @@ impl Ui {
         update_subtitle
     }
 
-    fn create_actions(&self, app: &gtk::Application, window: &VimdicatorWindow) {
+    fn create_actions(&self, app: &adw::Application, window: &VimdicatorWindow) {
         let edit_paste_action = SimpleAction::new("edit-paste", None);
         let shell = self.shell.clone();
         edit_paste_action.connect_activate(move |_, _| shell.borrow().edit_paste());
