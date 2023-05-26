@@ -3,13 +3,14 @@ use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::ops::Deref;
 use std::rc::Rc;
-use std::sync::{Arc, Condvar, Mutex};
-use std::thread;
+use std::sync::{Arc, Mutex};
 
+use futures::future::BoxFuture;
 use log::{debug, error};
 
-use futures::{executor::block_on, FutureExt};
+use futures::executor::block_on;
 
+use nvim_rs::error::LoopError;
 use tokio::sync::{Mutex as AsyncMutex, Notify};
 
 use gdk::{prelude::*, Display, ModifierType};
@@ -31,6 +32,7 @@ use crate::nvim::{
 use crate::settings::{FontSource, Settings};
 use crate::ui_model::ModelRect;
 use crate::window::headerbar::VimdicatorHeaderBar;
+use crate::window::VimdicatorWindow;
 use crate::{spawn_timeout, spawn_timeout_user_err, NvimTransport};
 
 use crate::cmd_line::{CmdLine, CmdLineContext};
@@ -1390,48 +1392,38 @@ fn gtk_motion_notify(
     ui_state.set_cursor_visible(&shell.nvim_viewport, true);
 }
 
-fn show_nvim_start_error(
-    err: &nvim::NvimInitError,
-    state_arc: Arc<UiMutex<State>>,
-    comps: Arc<UiMutex<Components>>,
-) {
+fn show_nvim_start_error(err: &nvim::NvimInitError, state: &State, window: VimdicatorWindow) {
     match err {
         NvimInitError::ResponseError { .. } => {
             let source = err.source();
             let cmd = err.cmd().unwrap().to_owned();
-            glib::idle_add_once(move || {
-                let state = state_arc.borrow();
-                state.nvim.set_error();
-                comps.borrow().window().remove_css_class("nvim-background");
-                state.error_area.show_nvim_start_error(&source, &cmd);
-                state.show_error_area();
-            });
+
+            state.nvim.set_error();
+            window.remove_css_class("nvim-background");
+            state.error_area.show_nvim_start_error(&source, &cmd);
+            state.show_error_area();
         }
         NvimInitError::MissingCapability(_) => unreachable!(),
         NvimInitError::TcpConnectError { ref addr, .. } => {
             let addr = addr.to_string();
             let source = err.source();
-            glib::idle_add_once(move || {
-                let state = state_arc.borrow();
-                state.nvim.set_error();
-                comps.borrow().window().remove_css_class("nvim-background");
-                state.error_area.show_nvim_tcp_connect_error(&source, &addr);
-                state.show_error_area();
-            });
+
+            state.nvim.set_error();
+            window.remove_css_class("nvim-background");
+            state.error_area.show_nvim_tcp_connect_error(&source, &addr);
+            state.show_error_area();
         }
         #[cfg(unix)]
         NvimInitError::UnixConnectError { ref addr, .. } => {
             let addr = addr.to_string_lossy().to_string();
             let source = err.source();
-            glib::idle_add_once(move || {
-                let state = state_arc.borrow();
-                state.nvim.set_error();
-                comps.borrow().window().remove_css_class("nvim-background");
-                state
-                    .error_area
-                    .show_nvim_unix_connect_error(&source, &addr);
-                state.show_error_area();
-            });
+
+            state.nvim.set_error();
+            window.remove_css_class("nvim-background");
+            state
+                .error_area
+                .show_nvim_unix_connect_error(&source, &addr);
+            state.show_error_area();
         }
     }
 }
@@ -1452,19 +1444,16 @@ fn show_nvim_init_error(
     });
 }
 
-fn init_nvim_async(
-    state_arc: Arc<UiMutex<State>>,
-    comps: Arc<UiMutex<Components>>,
-    resize_status: Arc<ResizeState>,
+type IoFuture<'a> = BoxFuture<'a, Result<(), Box<LoopError>>>;
+
+fn start_nvim<'a>(
     nvim_handler: NvimHandler,
     options: Args,
-    cols: i32,
-    rows: i32,
-) {
-    let nvim_result = match options.server {
+) -> Result<(NvimSession, IoFuture<'a>), NvimInitError> {
+    match options.server {
         None => nvim::start(
             nvim_handler,
-            options.nvim_bin_path.clone(),
+            options.nvim_bin_path,
             *options.timeout,
             options.nvim_args,
         ),
@@ -1475,79 +1464,6 @@ fn init_nvim_async(
         Some(NvimTransport::UnixSocket(addr)) => {
             nvim::start_unix_socket_client(nvim_handler, addr, *options.timeout)
         }
-    };
-
-    let (session, io_future) = match nvim_result {
-        Ok(session) => session,
-        Err(err) => {
-            show_nvim_start_error(&err, state_arc, comps);
-            return;
-        }
-    };
-
-    set_nvim_to_state(state_arc.clone(), &session);
-
-    // add callback on session end
-    let cb_state_arc = state_arc.clone();
-    session.spawn(io_future.map(|r| {
-        if let Err(e) = r {
-            if !e.is_reader_error() {
-                error!("{}", e);
-            }
-        }
-
-        glib::idle_add_once(move || {
-            cb_state_arc.borrow().nvim.clear();
-            if let Some(ref cb) = cb_state_arc.borrow().detach_cb {
-                (*cb.borrow_mut())();
-            }
-        });
-    }));
-
-    // attach ui
-    let input_data = options.input_data;
-    session.clone().spawn(async move {
-        let mut initialized = false;
-
-        match nvim::post_start_init(session.clone(), resize_status, input_data, rows, cols).await {
-            Ok(api_info) => {
-                set_nvim_initialized(state_arc.clone(), api_info);
-                initialized = true;
-            }
-            Err(ref e) => show_nvim_init_error(e, state_arc.clone(), comps.clone()),
-        }
-
-        if initialized {
-            if let Err(ref e) = session
-                .timeout(session.command("runtime! ginit.vim"))
-                .await
-                .map_err(NvimInitError::new_post_init)
-            {
-                show_nvim_init_error(e, state_arc, comps);
-            }
-        }
-    });
-}
-
-fn set_nvim_to_state(state_arc: Arc<UiMutex<State>>, nvim: &NvimSession) {
-    let pair = Arc::new((Mutex::new(None), Condvar::new()));
-    let pair2 = pair.clone();
-    let nvim = Some(nvim.clone());
-
-    glib::idle_add_once(move || {
-        state_arc.borrow().nvim.set(nvim.clone().unwrap());
-
-        let (lock, cvar) = &*pair2;
-        let mut started = lock.lock().unwrap();
-        *started = Some(nvim.clone());
-        cvar.notify_one();
-    });
-
-    // Wait idle set nvim properly
-    let (lock, cvar) = &*pair;
-    let mut started = lock.lock().unwrap();
-    while started.is_none() {
-        started = cvar.wait(started).unwrap();
     }
 }
 
@@ -1577,22 +1493,67 @@ fn init_nvim(
 
         let nvim_handler = NvimHandler::new(state_ref.clone(), state.resize_status());
         let options = state.options.borrow_mut().input_data();
-        thread::spawn(glib::clone!(
-            @strong state_ref,
-            @strong components,
-            @strong resize_state
-            => move || {
-                init_nvim_async(
-                    state_ref,
-                    components,
-                    resize_state,
-                    nvim_handler,
-                    options,
-                    cols,
-                    rows,
-                )
+
+        let (nvim, io_future) = match start_nvim(nvim_handler, options.clone()) {
+            Ok(session) => session,
+            Err(err) => {
+                show_nvim_start_error(
+                    &err,
+                    &state_ref.borrow(),
+                    components.borrow().window().clone(),
+                );
+                return;
             }
-        ));
+        };
+
+        state.nvim.set(nvim.clone());
+
+        drop(state);
+
+        // add callback on session end
+        let cb_state_arc = state_ref.clone();
+        nvim.spawn(async move {
+            if let Err(e) = io_future.await {
+                if !e.is_reader_error() {
+                    error!("{}", e);
+                }
+            }
+
+            glib::idle_add_once(move || {
+                cb_state_arc.borrow().nvim.clear();
+                if let Some(ref cb) = cb_state_arc.borrow().detach_cb {
+                    (*cb.borrow_mut())();
+                }
+            });
+        });
+
+        let state_ref = state_ref.clone();
+        let components = components.clone();
+        let resize_state = resize_state.clone();
+
+        // attach ui
+        let input_data = options.input_data;
+        nvim.clone().spawn(async move {
+            let mut initialized = false;
+
+            match nvim::post_start_init(nvim.clone(), resize_state, input_data, rows, cols).await {
+                Ok(api_info) => {
+                    set_nvim_initialized(state_ref.clone(), api_info);
+                    initialized = true;
+                }
+                Err(ref e) => show_nvim_init_error(e, state_ref.clone(), components.clone()),
+            }
+
+            if initialized {
+                if let Err(ref e) = nvim
+                    .timeout(nvim.command("runtime! ginit.vim"))
+                    .await
+                    .map_err(NvimInitError::new_post_init)
+                {
+                    show_nvim_init_error(e, state_ref, components);
+                }
+            }
+        });
     }
 }
 
