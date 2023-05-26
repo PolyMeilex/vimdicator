@@ -125,29 +125,21 @@ impl ResizeState {
 pub struct HeaderBarButtons {
     new_tab_btn: Button,
     paste_btn: Button,
-    save_btn: Button,
     primary_menu_btn: MenuButton,
 }
 
 impl HeaderBarButtons {
-    pub fn new(
-        new_tab_btn: Button,
-        paste_btn: Button,
-        save_btn: Button,
-        primary_menu_btn: MenuButton,
-    ) -> Self {
+    pub fn new(new_tab_btn: Button, paste_btn: Button, primary_menu_btn: MenuButton) -> Self {
         Self {
             new_tab_btn,
             paste_btn,
             primary_menu_btn,
-            save_btn,
         }
     }
 
     pub fn set_enabled(&self, enabled: bool) {
         self.new_tab_btn.set_sensitive(enabled);
         self.paste_btn.set_sensitive(enabled);
-        self.save_btn.set_sensitive(enabled);
         self.primary_menu_btn.set_sensitive(enabled);
     }
 }

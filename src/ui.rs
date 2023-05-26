@@ -524,15 +524,6 @@ impl Ui {
         paste_btn.set_sensitive(false);
         header_bar.pack_end(&paste_btn);
 
-        let save_btn = Button::with_label("Save All");
-        let shell = self.shell.clone();
-        save_btn.connect_clicked(move |_| shell.borrow().edit_save_all());
-        save_btn.set_focusable(false);
-        save_btn.set_sensitive(false);
-        header_bar.pack_end(&save_btn);
-
-        // window.set_titlebar(Some(&header_bar));
-
         let shell = self.shell.borrow();
 
         let update_subtitle = shell.state.borrow().subscribe(
@@ -546,7 +537,6 @@ impl Ui {
             Box::new(HeaderBarButtons::new(
                 new_tab_btn,
                 paste_btn,
-                save_btn,
                 primary_menu_btn,
             )),
         )
@@ -574,6 +564,7 @@ impl Ui {
 
         let section = Menu::new();
         section.append_item(&MenuItem::new(Some("New Window"), Some("app.new-window")));
+        section.append_item(&MenuItem::new(Some("Save All"), Some("app.save-all")));
         menu.append_section(None, &section);
 
         let section = Menu::new();
@@ -581,6 +572,14 @@ impl Ui {
         menu.append_section(None, &section);
 
         menu.freeze();
+
+        let about_action = SimpleAction::new("save-all", None);
+
+        let shell = self.shell.clone();
+        about_action.connect_activate(move |_, _| shell.borrow().edit_save_all());
+        about_action.set_enabled(true);
+
+        app.add_action(&about_action);
 
         let about_action = SimpleAction::new("HelpAbout", None);
         about_action.connect_activate(clone!(window => move |_, _| on_help_about(&window)));
