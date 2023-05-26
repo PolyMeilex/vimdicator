@@ -480,7 +480,7 @@ impl Ui {
 
         let shell = self.shell.borrow();
 
-        let header_bar = window.header_bar().clone();
+        let header_bar = window.header_bar();
         let update_subtitle = shell.state.borrow().subscribe(
             SubscriptionKey::from("DirChanged"),
             &["getcwd()"],

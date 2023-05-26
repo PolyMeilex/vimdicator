@@ -275,7 +275,7 @@ impl FileBrowserWidget {
             clone!(store, state_ref => move |args| {
                 let dir = args.into_iter().next().unwrap();
                 if dir != state_ref.borrow().current_dir {
-                    state_ref.borrow_mut().current_dir = dir.to_owned();
+                    state_ref.borrow_mut().current_dir = dir;
                     tree_reload(&store, &state_ref.borrow());
                 }
             }),

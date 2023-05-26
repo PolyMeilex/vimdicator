@@ -7,13 +7,8 @@ pub use list_item::ListItem;
 mod imp {
     use adw::subclass::prelude::*;
 
+    #[derive(Debug, Default)]
     pub struct FileTreeView {}
-
-    impl Default for FileTreeView {
-        fn default() -> Self {
-            Self {}
-        }
-    }
 
     #[glib::object_subclass]
     impl ObjectSubclass for FileTreeView {
