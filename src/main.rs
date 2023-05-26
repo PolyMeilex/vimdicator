@@ -147,7 +147,7 @@ pub struct Args {
 
     /// Don't detach from the console (!= Windows only)
     #[arg(long)]
-    pub no_fork: bool,
+    pub fork: bool,
 
     /// Don't restore any previously saved window state
     ///
@@ -249,7 +249,7 @@ fn main() {
 
     // fork to background by default
     #[cfg(unix)]
-    if !args.no_fork {
+    if args.fork {
         match daemon(true, true) {
             Ok(Fork::Parent(_)) => return,
             Ok(Fork::Child) => (),
