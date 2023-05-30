@@ -15,7 +15,7 @@ use libpanel::prelude::*;
 
 use serde::{Deserialize, Serialize};
 
-use crate::file_browser::FileBrowserWidget;
+use crate::file_browser::VimdicatorFileBrowser;
 use crate::highlight::BackgroundState;
 use crate::misc::{self, BoolExt};
 use crate::nvim::*;
@@ -36,7 +36,7 @@ pub struct Ui {
     comps: Arc<UiMutex<Components>>,
     settings: Rc<RefCell<Settings>>,
     shell: Rc<RefCell<Shell>>,
-    file_browser: Arc<UiMutex<FileBrowserWidget>>,
+    file_browser: VimdicatorFileBrowser,
 }
 
 pub struct Components {
@@ -84,7 +84,7 @@ impl Ui {
         let comps = Arc::new(UiMutex::new(Components::new()));
         let settings = Rc::new(RefCell::new(Settings::new()));
         let shell = Rc::new(RefCell::new(Shell::new(settings.clone(), options)));
-        let file_browser = Arc::new(UiMutex::new(FileBrowserWidget::new(&shell.borrow().state)));
+        let file_browser = VimdicatorFileBrowser::new(&shell.borrow().state);
         settings.borrow_mut().set_shell(Rc::downgrade(&shell));
 
         Ui {
@@ -164,7 +164,7 @@ impl Ui {
         let update_subtitle = self.create_header_bar(app, &window);
 
         let show_sidebar_action = SimpleAction::new("show-sidebar", None);
-        let sidebar_list_view = self.file_browser.borrow().file_tree_view().list_view();
+        let sidebar_list_view = self.file_browser.file_tree_view().list_view();
         show_sidebar_action.connect_activate(
             glib::clone!(@strong file_browser_ref, @weak comps_ref => move |_, _| {
                 let comps_ref = &mut *comps_ref.borrow_mut();
@@ -224,9 +224,8 @@ impl Ui {
         }));
 
         let shell = self.shell.borrow();
-        let file_browser = self.file_browser.borrow();
 
-        window.start_panel().append(&**file_browser);
+        window.start_panel().append(&self.file_browser);
         window.main_panel().append(&**shell);
         window.present();
 
@@ -291,7 +290,7 @@ impl Ui {
             (options.post_config_cmds(), options.diff_mode)
         };
 
-        state.set_action_widgets(window.header_bar(), file_browser_ref.borrow().clone());
+        state.set_action_widgets(window.header_bar(), self.file_browser.clone());
 
         drop(state);
         shell.set_detach_cb(Some(glib::clone!(@strong comps_ref => move || {
@@ -301,11 +300,11 @@ impl Ui {
         })));
 
         shell.set_nvim_started_cb(Some(glib::clone!(
-            @strong file_browser_ref,
+            @strong self.file_browser as file_browser,
             @strong self.open_paths as files_list => move || {
             Ui::nvim_started(
                 &state_ref.borrow(),
-                &file_browser_ref,
+                file_browser.clone(),
                 &files_list,
                 &autocmds,
                 post_config_cmds.as_ref(),
@@ -323,13 +322,13 @@ impl Ui {
 
     fn nvim_started(
         shell: &shell::State,
-        file_browser: &UiMutex<FileBrowserWidget>,
+        file_browser: VimdicatorFileBrowser,
         files_list: &[String],
         subscriptions: &[SubscriptionHandle],
         post_config_cmds: &[String],
         diff_mode: bool,
     ) {
-        file_browser.borrow_mut().init();
+        file_browser.init();
         shell.set_autocmds();
         for subscription in subscriptions.iter() {
             shell.run_now(subscription);

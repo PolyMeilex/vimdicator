@@ -22,6 +22,7 @@ use pango::FontDescription;
 use nvim_rs::Value;
 
 use crate::color::{Color, COLOR_BLACK, COLOR_WHITE};
+use crate::file_browser::VimdicatorFileBrowser;
 use crate::grid::GridMap;
 use crate::highlight::{BackgroundState, HighlightMap};
 use crate::misc::{decode_uri, escape_filename, split_at_comma};
@@ -130,7 +131,7 @@ impl ResizeState {
 pub struct ActionWidgets {
     header_bar: VimdicatorHeaderBar,
     tabs: Notebook,
-    file_browser: gtk::Box,
+    file_browser: VimdicatorFileBrowser,
 }
 
 impl ActionWidgets {
@@ -142,9 +143,9 @@ impl ActionWidgets {
     }
 }
 
-type CommandCallback = Box<dyn FnMut(&mut State, nvim::NvimCommand) + Send + 'static>;
-type DetachedCallback = Box<RefCell<dyn FnMut() + Send + 'static>>;
-type NvimStartedCallback = Box<RefCell<dyn FnMut() + Send + 'static>>;
+type CommandCallback = Box<dyn FnMut(&mut State, nvim::NvimCommand) + 'static>;
+type DetachedCallback = Box<RefCell<dyn FnMut() + 'static>>;
+type NvimStartedCallback = Box<RefCell<dyn FnMut() + 'static>>;
 
 pub struct State {
     pub grids: GridMap,
@@ -261,7 +262,11 @@ impl State {
         self.nvim.clone()
     }
 
-    pub fn set_action_widgets(&self, header_bar: VimdicatorHeaderBar, file_browser: gtk::Box) {
+    pub fn set_action_widgets(
+        &self,
+        header_bar: VimdicatorHeaderBar,
+        file_browser: VimdicatorFileBrowser,
+    ) {
         self.action_widgets.replace(Some(ActionWidgets {
             header_bar,
             tabs: self.tabs.clone(),
@@ -295,7 +300,7 @@ impl State {
 
     pub fn set_nvim_started_cb<F>(&mut self, cb: Option<F>)
     where
-        F: FnMut() + Send + 'static,
+        F: FnMut() + 'static,
     {
         if let Some(c) = cb {
             self.nvim_started_cb = Some(Box::new(RefCell::new(c)));
@@ -306,7 +311,7 @@ impl State {
 
     pub fn set_nvim_command_cb<F>(&mut self, cb: Option<F>)
     where
-        F: FnMut(&mut State, nvim::NvimCommand) + Send + 'static,
+        F: FnMut(&mut State, nvim::NvimCommand) + 'static,
     {
         if let Some(c) = cb {
             self.command_cb = Some(Box::new(c));
@@ -1183,7 +1188,7 @@ impl Shell {
 
     pub fn set_nvim_started_cb<F>(&self, cb: Option<F>)
     where
-        F: FnMut() + Send + 'static,
+        F: FnMut() + 'static,
     {
         let mut state = self.state.borrow_mut();
         state.set_nvim_started_cb(cb);
