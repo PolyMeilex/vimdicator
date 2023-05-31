@@ -1,4 +1,4 @@
-use std::{cell::RefCell, convert::*, rc::Rc, sync::Arc};
+use std::{cell::RefCell, convert::*, rc::Rc};
 
 use log::{error, warn};
 
@@ -7,11 +7,11 @@ use gtk::{ButtonsType, MessageDialog, MessageType};
 
 use crate::nvim::{NeovimClient, NormalError, NvimSession, SessionError};
 use crate::shell::Shell;
-use crate::ui::{Components, UiMutex};
+use crate::ui::Components;
 use nvim_rs::Value;
 
 pub fn can_close_window(
-    comps: &Arc<UiMutex<Components>>,
+    comps: &Rc<RefCell<Components>>,
     shell: &Rc<RefCell<Shell>>,
     nvim: &Rc<NeovimClient>,
 ) -> bool {

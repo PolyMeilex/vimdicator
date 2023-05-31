@@ -1,9 +1,8 @@
-use std::cell::{Ref, RefCell, RefMut};
+use std::cell::RefCell;
 use std::convert::*;
+use std::env;
 use std::path::*;
 use std::rc::Rc;
-use std::sync::{Arc, Mutex};
-use std::{env, thread};
 
 use glib::clone;
 use log::{debug, warn};
@@ -33,7 +32,7 @@ const DEFAULT_SIDEBAR_WIDTH: i32 = 200;
 pub struct Ui {
     open_paths: Box<[String]>,
     initialized: bool,
-    comps: Arc<UiMutex<Components>>,
+    comps: Rc<RefCell<Components>>,
     settings: Rc<RefCell<Settings>>,
     shell: Rc<RefCell<Shell>>,
     file_browser: VimdicatorFileBrowser,
@@ -82,7 +81,7 @@ impl Components {
 
 impl Ui {
     pub fn new(options: Args, open_paths: Box<[String]>) -> Ui {
-        let comps = Arc::new(UiMutex::new(Components::new()));
+        let comps = Rc::new(RefCell::new(Components::new()));
         let settings = Rc::new(RefCell::new(Settings::new()));
         let shell = Rc::new(RefCell::new(Shell::new(settings.clone(), options)));
         let file_browser = VimdicatorFileBrowser::new(&shell.borrow().state);
@@ -123,7 +122,7 @@ impl Ui {
         &mut self,
         app: &adw::Application,
         args: &crate::Args,
-        app_cmdline: Arc<Mutex<Option<ApplicationCommandLine>>>,
+        app_cmdline: Rc<RefCell<Option<ApplicationCommandLine>>>,
     ) {
         if self.initialized {
             return;
@@ -318,7 +317,7 @@ impl Ui {
 
         drop(state);
         shell.set_detach_cb(Some(glib::clone!(@strong comps_ref => move || {
-            glib::idle_add_once(glib::clone!(
+            glib::idle_add_local_once(glib::clone!(
                 @strong comps_ref => move || comps_ref.borrow().close_window()
             ));
         })));
@@ -435,7 +434,7 @@ impl Ui {
         });
     }
 
-    fn nvim_command(shell: &mut shell::State, command: NvimCommand, comps: &UiMutex<Components>) {
+    fn nvim_command(shell: &mut shell::State, command: NvimCommand, comps: &RefCell<Components>) {
         match command {
             NvimCommand::ShowProjectView => {
                 // TODO:
@@ -557,7 +556,7 @@ fn on_help_about(window: &VimdicatorWindow) {
         .show();
 }
 
-fn gtk_close_request(comps: &Arc<UiMutex<Components>>, shell: &Rc<RefCell<Shell>>) -> Inhibit {
+fn gtk_close_request(comps: &Rc<RefCell<Components>>, shell: &Rc<RefCell<Shell>>) -> Inhibit {
     let shell_ref = shell.borrow();
     if !shell_ref.is_nvim_initialized() {
         return Inhibit(false);
@@ -613,7 +612,7 @@ fn set_background(shell: &RefCell<Shell>, args: Vec<String>) {
     state.borrow().set_background(background);
 
     // Neovim won't send us a redraw to update the default colors on the screen, so do it ourselves
-    glib::idle_add_once(
+    glib::idle_add_local_once(
         clone!(@strong state => move || state.borrow_mut().queue_draw(RedrawMode::ClearCache)),
     );
 }
@@ -680,7 +679,7 @@ fn format_window_title(
     parts.join(" ")
 }
 
-fn update_window_title(comps: &Arc<UiMutex<Components>>, args: Vec<String>) {
+fn update_window_title(comps: &Rc<RefCell<Components>>, args: Vec<String>) {
     let file_path = &args[0];
     let dir = Path::new(&args[1]);
     let argidx = args[2].parse::<u32>().unwrap() + 1;
@@ -732,95 +731,5 @@ impl SettingsLoader for ToplevelState {
 
     fn from_str(s: &str) -> Result<Self, String> {
         toml::from_str(s).map_err(|e| format!("{e}"))
-    }
-}
-
-/// Our big thread-safety guard. This guard relies on the following assertions to remain true in
-/// order to provide safety:
-///
-/// 1. T may never be accessed, except from within the same thread the UiMutex was originally
-///    created on
-/// 2. The thread T was created on is destroyed only after all other possible threads with
-///    references to T have been finished execution
-///
-/// Both of these assumptions are verified at runtime, just in case.
-#[derive(Debug)]
-pub struct UiMutex<T: ?Sized> {
-    thread: thread::ThreadId,
-    location: RefCell<Option<String>>,
-    data: RefCell<T>,
-}
-
-unsafe impl<T: ?Sized> Send for UiMutex<T> {}
-unsafe impl<T: ?Sized> Sync for UiMutex<T> {}
-
-impl<T: ?Sized> Drop for UiMutex<T> {
-    fn drop(&mut self) {
-        assert_eq!(
-            self.thread,
-            thread::current().id(),
-            "Value dropped on a different thread than where it was created, this likely means our \
-            async runtime outlived GTK+. That's not good!"
-        );
-    }
-}
-
-impl<T> UiMutex<T> {
-    pub fn new(t: T) -> UiMutex<T> {
-        UiMutex {
-            thread: thread::current().id(),
-            location: Default::default(),
-            data: RefCell::new(t),
-        }
-    }
-
-    pub fn replace(&self, t: T) -> T {
-        self.assert_ui_thread();
-        self.data.replace(t)
-    }
-}
-
-impl<T: ?Sized> UiMutex<T> {
-    #[track_caller]
-    pub fn borrow(&self) -> Ref<T> {
-        self.assert_ui_thread();
-
-        let res = self.data.try_borrow();
-
-        if res.is_err() {
-            dbg!(&self.location);
-        } else {
-            let loc = std::panic::Location::caller();
-            *self.location.borrow_mut() = Some(format!("{loc:?}"));
-        }
-
-        res.unwrap()
-    }
-
-    pub fn try_borrow_mut(&self) -> Option<RefMut<T>> {
-        self.data.try_borrow_mut().ok()
-    }
-
-    #[track_caller]
-    pub fn borrow_mut(&self) -> RefMut<T> {
-        self.assert_ui_thread();
-
-        let res = self.data.try_borrow_mut();
-
-        if res.is_err() {
-            dbg!(&self.location);
-        } else {
-            let loc = std::panic::Location::caller();
-            *self.location.borrow_mut() = Some(format!("{loc:?}"));
-        }
-
-        res.unwrap()
-    }
-
-    #[inline]
-    fn assert_ui_thread(&self) {
-        if thread::current().id() != self.thread {
-            panic!("Can access to UI only from main thread");
-        }
     }
 }

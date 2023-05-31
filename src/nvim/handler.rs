@@ -1,4 +1,6 @@
 use std::{
+    cell::RefCell,
+    rc::Rc,
     result,
     sync::{mpsc, Arc},
 };
@@ -9,11 +11,8 @@ use nvim_rs::{compat::tokio::Compat, Handler, Value};
 
 use async_trait::async_trait;
 
+use crate::nvim::{Neovim, NvimWriter};
 use crate::shell;
-use crate::{
-    nvim::{Neovim, NvimWriter},
-    ui::UiMutex,
-};
 
 use super::{
     redraw_handler::{self, PendingPopupMenu, RedrawMode},
@@ -87,7 +86,7 @@ impl NvimHandler {
 }
 
 pub fn nvim_cb(
-    shell: Arc<UiMutex<shell::State>>,
+    shell: Rc<RefCell<shell::State>>,
     resize_status: Arc<shell::ResizeState>,
     event: NvimEvent,
 ) {
@@ -132,7 +131,7 @@ pub fn nvim_cb(
     }
 }
 
-pub fn nvim_req(shell: Arc<UiMutex<shell::State>>, request: NvimRequest) {
+pub fn nvim_req(shell: Rc<RefCell<shell::State>>, request: NvimRequest) {
     match request {
         NvimRequest::Gui {
             args,
@@ -151,7 +150,7 @@ pub fn nvim_req(shell: Arc<UiMutex<shell::State>>, request: NvimRequest) {
 
 fn call_redraw_handler(
     params: Vec<Value>,
-    ui: &Arc<UiMutex<shell::State>>,
+    ui: &Rc<RefCell<shell::State>>,
 ) -> result::Result<(), String> {
     let mut repaint_mode = RedrawMode::Nothing;
     let mut pending_popupmenu = PendingPopupMenu::None;

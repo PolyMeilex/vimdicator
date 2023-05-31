@@ -1,8 +1,9 @@
 mod list_view;
 mod tree_view;
 
+use std::cell::RefCell;
 use std::path::{Component, Path};
-use std::sync::Arc;
+use std::rc::Rc;
 
 use adw::prelude::*;
 use glib::subclass::types::ObjectSubclassIsExt;
@@ -10,21 +11,21 @@ use gtk::glib;
 
 use list_view::FileTreeView;
 
-use crate::{misc::escape_filename, shell, subscriptions::SubscriptionKey, ui::UiMutex};
+use crate::{misc::escape_filename, shell, subscriptions::SubscriptionKey};
 
 mod imp {
-    use std::sync::Arc;
+    use std::{cell::RefCell, rc::Rc};
 
     use adw::subclass::prelude::*;
     use gtk::glib;
     use once_cell::unsync::OnceCell;
 
-    use crate::{file_browser::list_view::FileTreeView, shell, ui::UiMutex};
+    use crate::{file_browser::list_view::FileTreeView, shell};
 
     #[derive(Default)]
     pub struct VimdicatorFileBrowser {
         pub(super) file_tree_view: OnceCell<FileTreeView>,
-        pub(super) shell_state: OnceCell<Arc<UiMutex<shell::State>>>,
+        pub(super) shell_state: OnceCell<Rc<RefCell<shell::State>>>,
     }
 
     #[glib::object_subclass]
@@ -46,7 +47,7 @@ glib::wrapper! {
 }
 
 impl VimdicatorFileBrowser {
-    pub fn new(shell_state: &Arc<UiMutex<shell::State>>) -> Self {
+    pub fn new(shell_state: &Rc<RefCell<shell::State>>) -> Self {
         let file_tree_view = FileTreeView::new();
 
         let window = gtk::ScrolledWindow::builder()

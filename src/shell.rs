@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::ops::Deref;
 use std::rc::Rc;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use futures::future::BoxFuture;
 use log::{debug, error};
@@ -47,7 +47,7 @@ use crate::render;
 use crate::render::CellMetrics;
 use crate::subscriptions::{SubscriptionHandle, SubscriptionKey, Subscriptions};
 use crate::tabline::Tabline;
-use crate::ui::{Components, UiMutex};
+use crate::ui::Components;
 use crate::Args;
 
 const DEFAULT_FONT_NAME: &str = "DejaVu Sans Mono 12";
@@ -171,9 +171,9 @@ pub struct State {
 
     subscriptions: RefCell<Subscriptions>,
 
-    action_widgets: Arc<UiMutex<Option<ActionWidgets>>>,
+    action_widgets: Rc<RefCell<Option<ActionWidgets>>>,
 
-    app_cmdline: Arc<Mutex<Option<ApplicationCommandLine>>>,
+    app_cmdline: Rc<RefCell<Option<ApplicationCommandLine>>>,
 }
 
 impl State {
@@ -238,9 +238,9 @@ impl State {
 
             subscriptions: RefCell::new(Subscriptions::new()),
 
-            action_widgets: Arc::new(UiMutex::new(None)),
+            action_widgets: Rc::new(RefCell::new(None)),
 
-            app_cmdline: Arc::new(Mutex::new(None)),
+            app_cmdline: Rc::new(RefCell::new(None)),
         }
     }
 
@@ -264,7 +264,7 @@ impl State {
         }));
     }
 
-    pub fn action_widgets(&self) -> Arc<UiMutex<Option<ActionWidgets>>> {
+    pub fn action_widgets(&self) -> Rc<RefCell<Option<ActionWidgets>>> {
         self.action_widgets.clone()
     }
 
@@ -279,7 +279,7 @@ impl State {
 
     pub fn set_detach_cb<F>(&mut self, cb: Option<F>)
     where
-        F: FnMut() + Send + 'static,
+        F: FnMut() + 'static,
     {
         if let Some(c) = cb {
             self.detach_cb = Some(Box::new(RefCell::new(c)));
@@ -378,9 +378,11 @@ impl State {
     }
 
     pub fn set_exit_status(&self, val: i32) {
-        let lock = self.app_cmdline.lock().unwrap();
-        let r: &ApplicationCommandLine = lock.as_ref().unwrap();
-        r.set_exit_status(val);
+        self.app_cmdline
+            .borrow_mut()
+            .as_ref()
+            .unwrap()
+            .set_exit_status(val);
     }
 
     pub fn open_file(&self, path: &str) {
@@ -822,7 +824,7 @@ fn gtk_handle_drop(state: &State, context: &glib::MainContext, drop: &gdk::Drop)
 }
 
 pub struct Shell {
-    pub state: Arc<UiMutex<State>>,
+    pub state: Rc<RefCell<State>>,
     ui_state: Rc<RefCell<UiState>>,
 
     widget: gtk::Box,
@@ -831,13 +833,13 @@ pub struct Shell {
 impl Shell {
     pub fn new(settings: Rc<RefCell<Settings>>, options: Args) -> Shell {
         let shell = Shell {
-            state: Arc::new(UiMutex::new(State::new(settings, options))),
+            state: Rc::new(RefCell::new(State::new(settings, options))),
             ui_state: Rc::new(RefCell::new(UiState::new())),
 
             widget: gtk::Box::new(gtk::Orientation::Vertical, 0),
         };
 
-        let shell_ref = Arc::downgrade(&shell.state);
+        let shell_ref = Rc::downgrade(&shell.state);
         shell.state.borrow_mut().cursor = Some(Cursor::new(shell_ref));
 
         shell
@@ -856,8 +858,8 @@ impl Shell {
 
     pub fn init(
         &mut self,
-        app_cmdline: Arc<Mutex<Option<ApplicationCommandLine>>>,
-        components: &Arc<UiMutex<Components>>,
+        app_cmdline: Rc<RefCell<Option<ApplicationCommandLine>>>,
+        components: &Rc<RefCell<Components>>,
         tx: glib::Sender<NvimHandlerEvent>,
     ) {
         self.state.borrow_mut().app_cmdline = app_cmdline;
@@ -989,7 +991,7 @@ impl Shell {
 
         let focus_controller = gtk::EventControllerFocus::new();
         focus_controller.connect_enter(glib::clone!(@weak state_ref => move |_| {
-            let state = state_ref.try_borrow_mut();
+            let state = state_ref.try_borrow_mut().ok();
             if let Some(mut state) = state {
                 let redraw_mode = state.cursor.as_mut().unwrap().set_widget_focus(true);
                 state.queue_draw(redraw_mode);
@@ -998,7 +1000,7 @@ impl Shell {
             }
         }));
         focus_controller.connect_leave(glib::clone!(@weak state_ref => move |_| {
-            let state = state_ref.try_borrow_mut();
+            let state = state_ref.try_borrow_mut().ok();
             if let Some(mut state) = state {
                 let redraw_mode = state.cursor.as_mut().unwrap().set_widget_focus(false);
                 state.queue_draw(redraw_mode);
@@ -1176,7 +1178,7 @@ impl Shell {
 
     pub fn set_detach_cb<F>(&self, cb: Option<F>)
     where
-        F: FnMut() + Send + 'static,
+        F: FnMut() + 'static,
     {
         let mut state = self.state.borrow_mut();
         state.set_detach_cb(cb);
@@ -1192,7 +1194,7 @@ impl Shell {
 
     pub fn set_nvim_command_cb<F>(&self, cb: Option<F>)
     where
-        F: FnMut(&mut State, nvim::NvimCommand) + Send + 'static,
+        F: FnMut(&mut State, nvim::NvimCommand) + 'static,
     {
         let mut state = self.state.borrow_mut();
         state.set_nvim_command_cb(cb);
@@ -1453,9 +1455,9 @@ fn start_nvim<'a>(
 }
 
 fn init_nvim(
-    state_ref: &Arc<UiMutex<State>>,
+    state_ref: &Rc<RefCell<State>>,
     resize_state: &Arc<ResizeState>,
-    components: &Arc<UiMutex<Components>>,
+    components: &Rc<RefCell<Components>>,
     tx: glib::Sender<NvimHandlerEvent>,
 ) {
     let state = state_ref.borrow_mut();

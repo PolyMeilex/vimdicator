@@ -4,14 +4,13 @@ use gtk::{graphene::Rect, prelude::*, subclass::prelude::*};
 
 use std::{
     cell::RefCell,
-    sync::{Arc, Weak},
+    rc::{Rc, Weak},
 };
 
 use crate::{
     popup_menu::PopupMenuPopover,
     render::*,
     shell::{RenderState, State},
-    ui::UiMutex,
 };
 
 glib::wrapper! {
@@ -25,7 +24,7 @@ impl NvimViewport {
         glib::Object::new::<Self>()
     }
 
-    pub fn set_shell_state(&self, state: &Arc<UiMutex<State>>) {
+    pub fn set_shell_state(&self, state: &Rc<RefCell<State>>) {
         self.set_property("shell-state", glib::BoxedAnyObject::new(state.clone()));
     }
 
@@ -50,7 +49,7 @@ impl NvimViewport {
  * need inferior mutability) */
 #[derive(Default)]
 struct NvimViewportInner {
-    state: Weak<UiMutex<State>>,
+    state: Weak<RefCell<State>>,
     snapshot_cache: Option<gsk::RenderNode>,
 }
 
@@ -123,8 +122,7 @@ impl ObjectImpl for NvimViewportObject {
                 let mut inner = self.inner.borrow_mut();
                 debug_assert!(inner.state.upgrade().is_none());
 
-                inner.state =
-                    Arc::downgrade(&value.get::<glib::BoxedAnyObject>().unwrap().borrow());
+                inner.state = Rc::downgrade(&value.get::<glib::BoxedAnyObject>().unwrap().borrow());
             }
             "snapshot-cached" => {
                 if !value.get::<bool>().unwrap() {

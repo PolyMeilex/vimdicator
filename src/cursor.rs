@@ -1,7 +1,8 @@
 use gtk::{graphene::Rect, prelude::*};
 
 use std::{
-    sync::{Arc, Weak},
+    cell::RefCell,
+    rc::{Rc, Weak},
     time::Duration,
 };
 
@@ -10,7 +11,6 @@ use crate::mode;
 use crate::nvim::RedrawMode;
 use crate::render;
 use crate::render::CellMetrics;
-use crate::ui::UiMutex;
 use crate::ui_model::Cell;
 
 struct Alpha(f64);
@@ -60,7 +60,7 @@ impl BlinkCount {
 struct State<CB: CursorRedrawCb> {
     alpha: Alpha,
     anim_phase: AnimPhase,
-    redraw_cb: Weak<UiMutex<CB>>,
+    redraw_cb: Weak<RefCell<CB>>,
 
     timer: Option<glib::SourceId>,
     counter: Option<BlinkCount>,
@@ -69,7 +69,7 @@ struct State<CB: CursorRedrawCb> {
 }
 
 impl<CB: CursorRedrawCb> State<CB> {
-    fn new(redraw_cb: Weak<UiMutex<CB>>) -> Self {
+    fn new(redraw_cb: Weak<RefCell<CB>>) -> Self {
         State {
             alpha: Alpha(1.0),
             anim_phase: AnimPhase::Shown,
@@ -95,14 +95,14 @@ impl<CB: CursorRedrawCb> State<CB> {
 }
 
 pub struct Cursor<CB: CursorRedrawCb> {
-    state: Arc<UiMutex<State<CB>>>,
+    state: Rc<RefCell<State<CB>>>,
     mode_info: Option<mode::ModeInfo>,
 }
 
 impl<CB: CursorRedrawCb + 'static> Cursor<CB> {
-    pub fn new(redraw_cb: Weak<UiMutex<CB>>) -> Self {
+    pub fn new(redraw_cb: Weak<RefCell<CB>>) -> Self {
         Cursor {
-            state: Arc::new(UiMutex::new(State::new(redraw_cb))),
+            state: Rc::new(RefCell::new(State::new(redraw_cb))),
             mode_info: None,
         }
     }
@@ -136,7 +136,7 @@ impl<CB: CursorRedrawCb + 'static> Cursor<CB> {
             counter.count = 0;
         }
 
-        mut_state.timer = Some(glib::timeout_add(
+        mut_state.timer = Some(glib::timeout_add_local(
             Duration::from_millis(if blinkwait > 0 { blinkwait as u64 } else { 500 }),
             move || anim_step(&state),
         ));
@@ -317,7 +317,7 @@ pub fn cursor_rect(
     }
 }
 
-fn anim_step<CB: CursorRedrawCb + 'static>(state: &Arc<UiMutex<State<CB>>>) -> glib::Continue {
+fn anim_step<CB: CursorRedrawCb + 'static>(state: &Rc<RefCell<State<CB>>>) -> glib::Continue {
     let mut mut_state = state.borrow_mut();
 
     let next_event = match mut_state.anim_phase {
@@ -368,7 +368,7 @@ fn anim_step<CB: CursorRedrawCb + 'static>(state: &Arc<UiMutex<State<CB>>>) -> g
 
     if let Some(timeout) = next_event {
         let moved_state = state.clone();
-        mut_state.timer = Some(glib::timeout_add(
+        mut_state.timer = Some(glib::timeout_add_local(
             Duration::from_millis(timeout),
             move || anim_step(&moved_state),
         ));

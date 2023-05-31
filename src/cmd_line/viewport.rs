@@ -8,10 +8,10 @@ use gtk::{
 
 use std::{
     cell::RefCell,
-    sync::{Arc, Weak},
+    rc::{Rc, Weak},
 };
 
-use crate::{render::*, shell::TransparencySettings, ui::UiMutex};
+use crate::{render::*, shell::TransparencySettings};
 
 use crate::cmd_line::State;
 
@@ -26,7 +26,7 @@ impl CmdlineViewport {
         glib::Object::new::<Self>()
     }
 
-    pub fn set_state(&self, state: &Arc<UiMutex<State>>) {
+    pub fn set_state(&self, state: &Rc<RefCell<State>>) {
         self.set_property("cmdline-state", glib::BoxedAnyObject::new(state.clone()));
     }
 
@@ -37,7 +37,7 @@ impl CmdlineViewport {
 
 #[derive(Default)]
 struct CmdlineViewportInner {
-    state: Weak<UiMutex<State>>,
+    state: Weak<RefCell<State>>,
     block_cache: Option<gsk::RenderNode>,
     level_cache: Option<gsk::RenderNode>,
 }
@@ -79,8 +79,7 @@ impl ObjectImpl for CmdlineViewportObject {
                 let mut inner = self.inner.borrow_mut();
                 debug_assert!(inner.state.upgrade().is_none());
 
-                inner.state =
-                    Arc::downgrade(&value.get::<glib::BoxedAnyObject>().unwrap().borrow());
+                inner.state = Rc::downgrade(&value.get::<glib::BoxedAnyObject>().unwrap().borrow());
             }
             "snapshot-cached" => {
                 if !value.get::<bool>().unwrap() {

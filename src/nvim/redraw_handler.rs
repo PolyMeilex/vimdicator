@@ -1,4 +1,6 @@
-use std::{convert::*, mem, num::ParseFloatError, result, sync::Arc};
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::{convert::*, mem, num::ParseFloatError, result};
 
 use nvim_rs::Value;
 
@@ -6,7 +8,6 @@ use log::{debug, error, warn};
 
 use crate::nvim::{NvimSession, Tabpage};
 use crate::shell;
-use crate::ui::UiMutex;
 
 use crate::value::ValueMapExt;
 
@@ -324,7 +325,7 @@ pub fn call_gui_event(
 }
 
 pub fn call_gui_request(
-    ui: &Arc<UiMutex<shell::State>>,
+    ui: &Rc<RefCell<shell::State>>,
     method: &str,
     args: &Vec<Value>,
 ) -> result::Result<Value, Value> {

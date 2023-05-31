@@ -4,7 +4,6 @@ use std::cell::RefCell;
 use std::cmp::{max, min};
 use std::iter;
 use std::rc::Rc;
-use std::sync::Arc;
 
 use glib::clone;
 use log::error;
@@ -21,7 +20,6 @@ use crate::nvim_viewport::NvimViewport;
 use crate::popup_menu;
 use crate::render::{self, CellMetrics};
 use crate::shell;
-use crate::ui::UiMutex;
 use crate::ui_model::{HighlightedLine, HighlightedRange, ModelLayout};
 
 use viewport::CmdlineViewport;
@@ -240,7 +238,7 @@ pub struct CmdLine {
     wild_renderer: gtk::CellRendererText,
     wild_column: gtk::TreeViewColumn,
     displayed: bool,
-    state: Arc<UiMutex<State>>,
+    state: Rc<RefCell<State>>,
 }
 
 impl CmdLine {
@@ -259,8 +257,8 @@ impl CmdLine {
         let viewport = CmdlineViewport::new();
         content.append(&viewport);
 
-        let state = Arc::new(UiMutex::new(State::new(viewport.clone(), render_state)));
-        let weak_cb = Arc::downgrade(&state);
+        let state = Rc::new(RefCell::new(State::new(viewport.clone(), render_state)));
+        let weak_cb = Rc::downgrade(&state);
         let cursor = cursor::Cursor::new(weak_cb);
         state.borrow_mut().cursor = Some(cursor);
 
@@ -284,7 +282,7 @@ impl CmdLine {
     }
 
     fn create_wildmenu(
-        state: &Arc<UiMutex<State>>,
+        state: &Rc<RefCell<State>>,
     ) -> (
         gtk::ScrolledWindow,
         gtk::TreeView,
