@@ -9,68 +9,39 @@ use nvim_rs::{compat::tokio::Compat, Handler, Value};
 
 use async_trait::async_trait;
 
-use crate::nvim::{Neovim, NvimWriter};
 use crate::shell;
-use crate::ui::UiMutex;
+use crate::{
+    nvim::{Neovim, NvimWriter},
+    ui::UiMutex,
+};
 
-use super::redraw_handler::{self, PendingPopupMenu, RedrawMode};
+use super::{
+    redraw_handler::{self, PendingPopupMenu, RedrawMode},
+    NvimEvent, NvimHandlerEvent, NvimRequest,
+};
 
 pub struct NvimHandler {
-    shell: Arc<UiMutex<shell::State>>,
-    resize_status: Arc<shell::ResizeState>,
+    tx: glib::Sender<NvimHandlerEvent>,
 }
 
 impl NvimHandler {
-    pub fn new(shell: Arc<UiMutex<shell::State>>, resize_status: Arc<shell::ResizeState>) -> Self {
-        NvimHandler {
-            shell,
-            resize_status,
-        }
+    pub fn new(tx: glib::Sender<NvimHandlerEvent>) -> Self {
+        NvimHandler { tx }
     }
 
     async fn nvim_cb(&self, method: String, params: Vec<Value>) {
-        match method.as_ref() {
-            "redraw" => self.safe_call(move |ui| call_redraw_handler(params, ui)),
-            "Gui" => {
-                if !params.is_empty() {
-                    let mut params_iter = params.into_iter();
-                    if let Some(ev_name) = params_iter.next() {
-                        if let Value::String(ev_name) = ev_name {
-                            let args = params_iter.collect();
-                            self.safe_call(move |ui| {
-                                let ui = &mut ui.borrow_mut();
-                                redraw_handler::call_gui_event(
-                                    ui,
-                                    ev_name.as_str().ok_or("Event name does not exists")?,
-                                    args,
-                                )?;
-                                ui.queue_draw(RedrawMode::All);
-                                Ok(())
-                            });
-                        } else {
-                            error!("Unsupported event");
-                        }
-                    } else {
-                        error!("Event name does not exists");
-                    }
-                } else {
-                    error!("Unsupported event {:?}", params);
-                }
-            }
-            "subscription" => {
-                self.safe_call(move |ui| {
-                    let ui = &ui.borrow();
-                    ui.notify(params)
-                });
-            }
-            "resized" => {
-                debug!("Received resized notification");
-                self.resize_status.notify_finished();
-            }
+        let event = match method.as_ref() {
+            "redraw" => NvimEvent::Redraw(params),
+            "Gui" => NvimEvent::Gui(params),
+            "subscription" => NvimEvent::Subscription(params),
+            "resized" => NvimEvent::Resized(params),
             _ => {
                 error!("Notification {}({:?})", method, params);
+                return;
             }
-        }
+        };
+
+        self.tx.send(NvimHandlerEvent::Event(event)).unwrap();
     }
 
     fn nvim_cb_req(&self, method: String, params: Vec<Value>) -> result::Result<Value, Value> {
@@ -81,21 +52,18 @@ impl NvimHandler {
                     if let Some(req_name) = params_iter.next() {
                         if let Value::String(req_name) = req_name {
                             let args = params_iter.collect();
-                            let (sender, receiver) = mpsc::channel();
-                            self.safe_call(move |ui| {
-                                sender
-                                    .send(redraw_handler::call_gui_request(
-                                        &ui.clone(),
-                                        req_name.as_str().ok_or("Event name does not exists")?,
-                                        &args,
-                                    ))
-                                    .unwrap();
-                                {
-                                    let ui = &mut ui.borrow_mut();
-                                    ui.queue_draw(RedrawMode::All);
-                                }
-                                Ok(())
-                            });
+                            let (sender, receiver) = mpsc::channel::<Result<Value, Value>>();
+
+                            self.tx
+                                .send(NvimHandlerEvent::Request(NvimRequest::Gui {
+                                    req_name: req_name
+                                        .into_str()
+                                        .ok_or("Event name does not exists")?,
+                                    args,
+                                    response: sender,
+                                }))
+                                .unwrap();
+
                             Ok(receiver.recv().unwrap()?)
                         } else {
                             error!("Unsupported request");
@@ -116,12 +84,72 @@ impl NvimHandler {
             }
         }
     }
+}
 
-    fn safe_call<F>(&self, cb: F)
-    where
-        F: FnOnce(&Arc<UiMutex<shell::State>>) -> result::Result<(), String> + 'static + Send,
-    {
-        safe_call(self.shell.clone(), cb);
+pub fn nvim_cb(
+    shell: Arc<UiMutex<shell::State>>,
+    resize_status: Arc<shell::ResizeState>,
+    event: NvimEvent,
+) {
+    match event {
+        NvimEvent::Redraw(params) => {
+            wrap(|| call_redraw_handler(params, &shell));
+        }
+        NvimEvent::Gui(params) => {
+            if !params.is_empty() {
+                let mut params_iter = params.into_iter();
+                if let Some(ev_name) = params_iter.next() {
+                    if let Value::String(ev_name) = ev_name {
+                        let args = params_iter.collect();
+
+                        wrap(|| {
+                            let ui = &mut shell.borrow_mut();
+                            redraw_handler::call_gui_event(
+                                ui,
+                                ev_name.as_str().ok_or("Event name does not exists")?,
+                                args,
+                            )?;
+                            ui.queue_draw(RedrawMode::All);
+                            Ok(())
+                        });
+                    } else {
+                        error!("Unsupported event");
+                    }
+                } else {
+                    error!("Event name does not exists");
+                }
+            } else {
+                error!("Unsupported event {:?}", params);
+            }
+        }
+        NvimEvent::Subscription(params) => {
+            wrap(|| shell.borrow().notify(params));
+        }
+        NvimEvent::Resized(_) => {
+            debug!("Received resized notification");
+            resize_status.notify_finished();
+        }
+    }
+}
+
+pub fn nvim_req(shell: Arc<UiMutex<shell::State>>, request: NvimRequest) {
+    match request {
+        NvimRequest::Gui {
+            args,
+            req_name,
+            response,
+        } => {
+            response
+                .send(redraw_handler::call_gui_request(
+                    &shell.clone(),
+                    &req_name,
+                    &args,
+                ))
+                .unwrap();
+
+            let ui = &mut shell.borrow_mut();
+            ui.queue_draw(RedrawMode::All);
+        }
     }
 }
 
@@ -186,23 +214,19 @@ fn call_redraw_handler(
     Ok(())
 }
 
-fn safe_call<F>(shell: Arc<UiMutex<shell::State>>, cb: F)
+fn wrap<F>(cb: F)
 where
-    F: FnOnce(&Arc<UiMutex<shell::State>>) -> result::Result<(), String> + 'static + Send,
+    F: FnOnce() -> result::Result<(), String>,
 {
-    let mut cb = Some(cb);
-    glib::idle_add_once(move || {
-        if let Err(msg) = cb.take().unwrap()(&shell) {
-            error!("Error call function: {}", msg);
-        }
-    });
+    if let Err(msg) = cb() {
+        error!("Error call function: {}", msg);
+    }
 }
 
 impl Clone for NvimHandler {
     fn clone(&self) -> Self {
         NvimHandler {
-            shell: self.shell.clone(),
-            resize_status: self.resize_status.clone(),
+            tx: self.tx.clone(),
         }
     }
 }

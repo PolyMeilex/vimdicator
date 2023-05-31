@@ -37,6 +37,7 @@ pub struct Ui {
     settings: Rc<RefCell<Settings>>,
     shell: Rc<RefCell<Shell>>,
     file_browser: VimdicatorFileBrowser,
+    tx: glib::Sender<NvimHandlerEvent>,
 }
 
 pub struct Components {
@@ -87,13 +88,34 @@ impl Ui {
         let file_browser = VimdicatorFileBrowser::new(&shell.borrow().state);
         settings.borrow_mut().set_shell(Rc::downgrade(&shell));
 
-        Ui {
+        let (tx, rx) = glib::MainContext::channel::<NvimHandlerEvent>(glib::Priority::default());
+
+        rx.attach(None, {
+            let shell = shell.borrow().state.clone();
+            let resize_status = shell.borrow().resize_status();
+
+            move |event| {
+                match event {
+                    NvimHandlerEvent::Event(event) => {
+                        crate::nvim::nvim_cb(shell.clone(), resize_status.clone(), event);
+                    }
+                    NvimHandlerEvent::Request(req) => {
+                        crate::nvim::nvim_req(shell.clone(), req);
+                    }
+                }
+
+                glib::Continue(true)
+            }
+        });
+
+        Self {
             initialized: false,
             comps,
             shell,
             settings,
             file_browser,
             open_paths,
+            tx,
         }
     }
 
@@ -123,7 +145,9 @@ impl Ui {
         let file_browser_ref = &self.file_browser;
 
         {
-            self.shell.borrow_mut().init(app_cmdline, comps_ref);
+            self.shell
+                .borrow_mut()
+                .init(app_cmdline, comps_ref, self.tx.clone());
 
             // initialize window from comps
             // borrowing of comps must be leaved

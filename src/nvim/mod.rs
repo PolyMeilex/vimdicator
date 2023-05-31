@@ -5,12 +5,13 @@ mod redraw_handler;
 
 pub use self::client::{NeovimApiInfo, NeovimClient};
 pub use self::ext::*;
-pub use self::handler::NvimHandler;
+pub use self::handler::{nvim_cb, nvim_req, NvimHandler};
 pub use self::redraw_handler::{NvimCommand, PendingPopupMenu, PopupMenuItem, RedrawMode};
 
 use super::shell::ResizeState;
 
 use std::net::SocketAddr;
+use std::sync::mpsc;
 use std::{
     convert::TryFrom,
     env, error, fmt,
@@ -42,6 +43,29 @@ use nvim_rs::{
 };
 
 use crate::nvim_config::NvimConfig;
+
+#[derive(Debug, Clone)]
+pub enum NvimHandlerEvent {
+    Event(NvimEvent),
+    Request(NvimRequest),
+}
+
+#[derive(Debug, Clone)]
+pub enum NvimEvent {
+    Redraw(Vec<Value>),
+    Gui(Vec<Value>),
+    Subscription(Vec<Value>),
+    Resized(Vec<Value>),
+}
+
+#[derive(Debug, Clone)]
+pub enum NvimRequest {
+    Gui {
+        req_name: String,
+        args: Vec<Value>,
+        response: mpsc::Sender<Result<Value, Value>>,
+    },
+}
 
 #[derive(Debug)]
 pub enum NvimInitError {

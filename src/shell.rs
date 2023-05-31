@@ -28,7 +28,7 @@ use crate::highlight::{BackgroundState, HighlightMap};
 use crate::misc::{decode_uri, escape_filename, split_at_comma};
 use crate::nvim::{
     self, CallErrorExt, ErrorReport, NeovimApiInfo, NeovimClient, NormalError, NvimHandler,
-    NvimInitError, NvimSession, PendingPopupMenu, RedrawMode, Tabpage,
+    NvimHandlerEvent, NvimInitError, NvimSession, PendingPopupMenu, RedrawMode, Tabpage,
 };
 use crate::settings::{FontSource, Settings};
 use crate::ui_model::ModelRect;
@@ -863,6 +863,7 @@ impl Shell {
         &mut self,
         app_cmdline: Arc<Mutex<Option<ApplicationCommandLine>>>,
         components: &Arc<UiMutex<Components>>,
+        tx: glib::Sender<NvimHandlerEvent>,
     ) {
         self.state.borrow_mut().app_cmdline = app_cmdline;
 
@@ -1088,7 +1089,7 @@ impl Shell {
             @strong state.resize_status as resize_state,
             @strong components => move |_|
         {
-            init_nvim(&state_ref, &resize_state, &components);
+            init_nvim(&state_ref, &resize_state, &components, tx.clone());
         }));
     }
 
@@ -1489,6 +1490,7 @@ fn init_nvim(
     state_ref: &Arc<UiMutex<State>>,
     resize_state: &Arc<ResizeState>,
     components: &Arc<UiMutex<Components>>,
+    tx: glib::Sender<NvimHandlerEvent>,
 ) {
     let state = state_ref.borrow_mut();
     if state.start_nvim_initialization() {
@@ -1496,7 +1498,7 @@ fn init_nvim(
 
         debug!("Init nvim {}/{}", cols, rows);
 
-        let nvim_handler = NvimHandler::new(state_ref.clone(), state.resize_status());
+        let nvim_handler = NvimHandler::new(tx);
         let options = state.options.borrow_mut().input_data();
 
         let (nvim, io_future) = match start_nvim(nvim_handler, options.clone()) {
