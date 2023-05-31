@@ -53,16 +53,6 @@ use crate::Args;
 const DEFAULT_FONT_NAME: &str = "DejaVu Sans Mono 12";
 pub const MINIMUM_SUPPORTED_NVIM_VERSION: &str = "0.3.2";
 
-macro_rules! idle_cb_call {
-    ($state:ident.$cb:ident($( $x:expr ),*)) => (
-        glib::idle_add_once(move || {
-            if let Some(ref cb) = $state.borrow().$cb {
-                (&mut *cb.borrow_mut())($($x),*);
-            }
-        });
-    )
-}
-
 pub struct RenderState {
     pub font_ctx: render::Context,
     pub hl: HighlightMap,
@@ -400,12 +390,17 @@ impl State {
 
             action_widgets.borrow().as_ref().unwrap().set_enabled(false);
 
+            let (tx, rx) = glib::MainContext::channel(glib::Priority::default());
+
+            rx.attach(None, move |_| {
+                action_widgets.borrow().as_ref().unwrap().set_enabled(true);
+                glib::Continue(false)
+            });
+
             nvim.clone().spawn(async move {
                 let res = nvim.command(&path).await;
 
-                glib::idle_add_once(move || {
-                    action_widgets.borrow().as_ref().unwrap().set_enabled(true);
-                });
+                tx.send(()).unwrap();
 
                 if let Err(e) = res {
                     if let Ok(e) = NormalError::try_from(&*e) {
@@ -1434,22 +1429,6 @@ fn show_nvim_start_error(err: &nvim::NvimInitError, state: &State, window: Vimdi
     }
 }
 
-fn show_nvim_init_error(
-    err: &nvim::NvimInitError,
-    state_arc: Arc<UiMutex<State>>,
-    comps: Arc<UiMutex<Components>>,
-) {
-    let error_msg = format!("{err}");
-
-    glib::idle_add_once(move || {
-        let state = state_arc.borrow();
-        state.nvim.set_error();
-        comps.borrow().window().remove_css_class("nvim-background");
-        state.error_area.show_nvim_init_error(&error_msg);
-        state.show_error_area();
-    });
-}
-
 type IoFuture<'a> = BoxFuture<'a, Result<(), Box<LoopError>>>;
 
 fn start_nvim<'a>(
@@ -1471,19 +1450,6 @@ fn start_nvim<'a>(
             nvim::start_unix_socket_client(nvim_handler, addr, *options.timeout)
         }
     }
-}
-
-fn set_nvim_initialized(state_arc: Arc<UiMutex<State>>, api_info: NeovimApiInfo) {
-    glib::idle_add_once(glib::clone!(@strong state_arc => move || {
-        let mut state = state_arc.borrow_mut();
-        state.nvim.set_initialized(api_info);
-        // in some case resize can happens while initialization in progress
-        // so force resize here
-        state.try_nvim_resize();
-        state.cursor.as_mut().unwrap().start();
-    }));
-
-    idle_cb_call!(state_arc.nvim_started_cb());
 }
 
 fn init_nvim(
@@ -1517,8 +1483,19 @@ fn init_nvim(
 
         drop(state);
 
-        // add callback on session end
+        let (tx, rx) = glib::MainContext::channel(glib::Priority::default());
+
         let cb_state_arc = state_ref.clone();
+        rx.attach(None, move |_| {
+            cb_state_arc.borrow().nvim.clear();
+            if let Some(ref cb) = cb_state_arc.borrow().detach_cb {
+                (*cb.borrow_mut())();
+            }
+
+            glib::Continue(false)
+        });
+
+        // add callback on session end
         nvim.spawn(async move {
             if let Err(e) = io_future.await {
                 if !e.is_reader_error() {
@@ -1526,39 +1503,68 @@ fn init_nvim(
                 }
             }
 
-            glib::idle_add_once(move || {
-                cb_state_arc.borrow().nvim.clear();
-                if let Some(ref cb) = cb_state_arc.borrow().detach_cb {
-                    (*cb.borrow_mut())();
-                }
-            });
+            tx.send(()).unwrap();
         });
 
         let state_ref = state_ref.clone();
         let components = components.clone();
-        let resize_state = resize_state.clone();
+
+        let (tx, rx) = glib::MainContext::channel(glib::Priority::default());
+
+        rx.attach(None, move |res: Result<NeovimApiInfo, String>| {
+            match res {
+                Ok(api_info) => {
+                    {
+                        let mut state = state_ref.borrow_mut();
+                        state.nvim.set_initialized(api_info);
+                        // in some case resize can happens while initialization in progress
+                        // so force resize here
+                        state.try_nvim_resize();
+                        state.cursor.as_mut().unwrap().start();
+                    }
+
+                    if let Some(ref cb) = state_ref.borrow().nvim_started_cb {
+                        (*cb.borrow_mut())();
+                    }
+                }
+                Err(error_msg) => {
+                    let state = state_ref.borrow();
+                    state.nvim.set_error();
+                    components
+                        .borrow()
+                        .window()
+                        .remove_css_class("nvim-background");
+                    state.error_area.show_nvim_init_error(&error_msg);
+                    state.show_error_area();
+                }
+            }
+
+            glib::Continue(false)
+        });
 
         // attach ui
         let input_data = options.input_data;
+        let resize_state = resize_state.clone();
         nvim.clone().spawn(async move {
-            let mut initialized = false;
-
-            match nvim::post_start_init(nvim.clone(), resize_state, input_data, rows, cols).await {
-                Ok(api_info) => {
-                    set_nvim_initialized(state_ref.clone(), api_info);
-                    initialized = true;
-                }
-                Err(ref e) => show_nvim_init_error(e, state_ref.clone(), components.clone()),
-            }
-
-            if initialized {
-                if let Err(ref e) = nvim
-                    .timeout(nvim.command("runtime! ginit.vim"))
+            let api_info =
+                match nvim::post_start_init(nvim.clone(), resize_state, input_data, rows, cols)
                     .await
-                    .map_err(NvimInitError::new_post_init)
                 {
-                    show_nvim_init_error(e, state_ref, components);
-                }
+                    Ok(api_info) => api_info,
+                    Err(err) => {
+                        tx.send(Err(format!("{err}"))).unwrap();
+                        return;
+                    }
+                };
+
+            if let Err(err) = nvim
+                .timeout(nvim.command("runtime! ginit.vim"))
+                .await
+                .map_err(NvimInitError::new_post_init)
+            {
+                tx.send(Err(format!("{err}"))).unwrap();
+            } else {
+                tx.send(Ok(api_info)).unwrap();
             }
         });
     }

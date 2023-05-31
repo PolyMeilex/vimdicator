@@ -140,11 +140,7 @@ pub fn nvim_req(shell: Arc<UiMutex<shell::State>>, request: NvimRequest) {
             response,
         } => {
             response
-                .send(redraw_handler::call_gui_request(
-                    &shell.clone(),
-                    &req_name,
-                    &args,
-                ))
+                .send(redraw_handler::call_gui_request(&shell, &req_name, &args))
                 .unwrap();
 
             let ui = &mut shell.borrow_mut();

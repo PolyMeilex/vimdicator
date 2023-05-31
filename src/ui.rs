@@ -407,12 +407,18 @@ impl Ui {
             .api_info()
             .expect("API info should be initialized by the time this is called")
             .channel;
+
+        let (tx, rx) = glib::MainContext::channel(glib::Priority::default());
+
+        rx.attach(None, move |_| {
+            action_widgets.borrow().as_ref().unwrap().set_enabled(true);
+            glib::Continue(false)
+        });
+
         nvim.clone().spawn(async move {
             let res = nvim.command(&commands).await;
 
-            glib::idle_add_once(move || {
-                action_widgets.borrow().as_ref().unwrap().set_enabled(true)
-            });
+            tx.send(()).unwrap();
 
             if let Err(e) = res {
                 if let Ok(e) = NormalError::try_from(&*e) {
