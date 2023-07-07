@@ -1,0 +1,14 @@
+#ext_popup_menu listview{
+    background-color: transparent;
+}
+
+#ext_popup_menu row {
+	padding: 5px;
+	border-radius: 6px;
+    
+}
+
+#ext_popup_menu row:selected {
+    background-color: @accent_bg_color;
+    color: @accent_fg_color;
+}

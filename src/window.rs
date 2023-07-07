@@ -1,25 +1,8 @@
-/* window.rs
- *
- * Copyright 2023 poly
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- *
- * SPDX-License-Identifier: GPL-3.0-or-later
- */
-
+use adw::prelude::*;
 use adw::subclass::prelude::*;
 use gtk::{gio, glib};
+
+use crate::widgets::{ExtLineGrid, ExtPopupMenu};
 
 mod imp {
     use super::*;
@@ -27,11 +10,16 @@ mod imp {
     #[derive(Debug, Default, gtk::CompositeTemplate)]
     #[template(resource = "/io/github/polymeilex/vimdicator/window.ui")]
     pub struct VimdicatorWindow {
-        // Template widgets
         #[template_child]
         pub header_bar: TemplateChild<gtk::HeaderBar>,
         #[template_child]
-        pub label: TemplateChild<gtk::Label>,
+        pub main_box: TemplateChild<gtk::Box>,
+        #[template_child]
+        pub ext_line_grid: TemplateChild<ExtLineGrid>,
+        #[template_child]
+        pub popover: TemplateChild<gtk::Popover>,
+        #[template_child]
+        pub ext_popup_menu: TemplateChild<ExtPopupMenu>,
     }
 
     #[glib::object_subclass]
@@ -41,6 +29,8 @@ mod imp {
         type ParentType = adw::ApplicationWindow;
 
         fn class_init(klass: &mut Self::Class) {
+            ExtPopupMenu::static_type();
+            ExtLineGrid::static_type();
             klass.bind_template();
         }
 
@@ -66,5 +56,21 @@ impl VimdicatorWindow {
         glib::Object::builder()
             .property("application", application)
             .build()
+    }
+
+    pub fn ext_line_grid(&self) -> ExtLineGrid {
+        self.imp().ext_line_grid.clone()
+    }
+
+    pub fn main_box(&self) -> gtk::Box {
+        self.imp().main_box.clone()
+    }
+
+    pub fn popover(&self) -> gtk::Popover {
+        self.imp().popover.clone()
+    }
+
+    pub fn ext_popup_menu(&self) -> ExtPopupMenu {
+        self.imp().ext_popup_menu.get()
     }
 }

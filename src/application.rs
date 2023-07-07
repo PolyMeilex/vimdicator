@@ -18,18 +18,22 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-use gtk::prelude::*;
 use adw::subclass::prelude::*;
+use gtk::prelude::*;
 use gtk::{gio, glib};
+use std::cell::OnceCell;
+use tokio::sync::mpsc::UnboundedSender;
 
 use crate::config::VERSION;
-use crate::VimdicatorWindow;
+use crate::{GtkToNvimEvent, VimdicatorWindow};
 
 mod imp {
     use super::*;
 
     #[derive(Debug, Default)]
-    pub struct VimdicatorApplication {}
+    pub struct VimdicatorApplication {
+        pub nvim_tx: OnceCell<UnboundedSender<GtkToNvimEvent>>,
+    }
 
     #[glib::object_subclass]
     impl ObjectSubclass for VimdicatorApplication {
@@ -48,21 +52,38 @@ mod imp {
     }
 
     impl ApplicationImpl for VimdicatorApplication {
-        // We connect to the activate callback to create a window when the application
-        // has been launched. Additionally, this callback notifies us when the user
-        // tries to launch a "second instance" of the application. When they try
-        // to do that, we'll just present any existing window.
         fn activate(&self) {
             let application = self.obj();
-            // Get the current window or create one if necessary
+
             let window = if let Some(window) = application.active_window() {
                 window
             } else {
                 let window = VimdicatorWindow::new(&*application);
+
+                window
+                    .ext_line_grid()
+                    .set_nvim_tx(self.nvim_tx.get().unwrap().clone());
+
+                let tx = self.nvim_tx.get().unwrap().clone();
+                let key_controller = gtk::EventControllerKey::new();
+                key_controller.set_name(Some("vim"));
+                key_controller.set_propagation_phase(gtk::PropagationPhase::Capture);
+                key_controller.connect_key_pressed(move |_, key, _, modifiers| {
+                    use crate::input;
+
+                    let (inhibit, input) = input::gtk_key_press_to_vim_input(key, modifiers);
+
+                    if let Some(input) = input {
+                        tx.send(GtkToNvimEvent::Input(input)).unwrap();
+                    }
+
+                    inhibit
+                });
+                window.add_controller(key_controller);
+
                 window.upcast()
             };
 
-            // Ask the window manager/compositor to present the window
             window.present();
         }
     }
@@ -78,11 +99,19 @@ glib::wrapper! {
 }
 
 impl VimdicatorApplication {
-    pub fn new(application_id: &str, flags: &gio::ApplicationFlags) -> Self {
-        glib::Object::builder()
+    pub fn new(
+        application_id: &str,
+        flags: &gio::ApplicationFlags,
+        input_tx: UnboundedSender<GtkToNvimEvent>,
+    ) -> Self {
+        let this: Self = glib::Object::builder()
             .property("application-id", application_id)
             .property("flags", flags)
-            .build()
+            .build();
+
+        this.imp().nvim_tx.set(input_tx).unwrap();
+
+        this
     }
 
     fn setup_gactions(&self) {
