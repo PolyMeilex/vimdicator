@@ -1,384 +1,55 @@
-#![windows_subsystem = "windows"]
-#![allow(clippy::new_without_default)]
-#![allow(clippy::too_many_arguments)]
-#![allow(clippy::comparison_chain)]
-#![allow(clippy::await_holding_refcell_ref)]
+/* main.rs
+ *
+ * Copyright 2023 poly
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
 
-mod color;
-mod dirs;
-mod mode;
-mod nvim_config;
-mod ui_model;
-mod value;
-#[macro_use]
-mod ui;
-mod cmd_line;
-mod cursor;
-mod error;
-mod file_browser;
-mod grid;
-mod highlight;
-mod input;
-mod misc;
-mod nvim;
-mod nvim_viewport;
-mod popup_menu;
-mod render;
-mod settings;
-mod shell;
-mod shell_dlg;
-mod subscriptions;
-mod tabline;
+mod application;
+mod config;
 mod window;
 
-use log::error;
+use self::application::VimdicatorApplication;
+use self::window::VimdicatorWindow;
 
-use gio::prelude::*;
-use gio::ApplicationCommandLine;
-use std::net::SocketAddr;
+use config::{GETTEXT_PACKAGE, LOCALEDIR, PKGDATADIR};
+use gettextrs::{bind_textdomain_codeset, bindtextdomain, textdomain};
+use gtk::{gio, glib};
+use gtk::prelude::*;
 
-use std::{
-    cell::RefCell,
-    convert::*,
-    io::{self, Read},
-    mem,
-    num::ParseIntError,
-    ops::Deref,
-    rc::Rc,
-    str::FromStr,
-    time::Duration,
-};
+fn main() -> glib::ExitCode {
+    // Set up gettext translations
+    bindtextdomain(GETTEXT_PACKAGE, LOCALEDIR).expect("Unable to bind the text domain");
+    bind_textdomain_codeset(GETTEXT_PACKAGE, "UTF-8")
+        .expect("Unable to set the text domain encoding");
+    textdomain(GETTEXT_PACKAGE).expect("Unable to switch to the text domain");
 
-#[cfg(unix)]
-use fork::{daemon, Fork};
+    // Load resources
+    let resources = gio::Resource::load(PKGDATADIR.to_owned() + "/vimdicator.gresource")
+        .expect("Could not load resources");
+    gio::resources_register(&resources);
 
-use crate::ui::Ui;
+    // Create a new GtkApplication. The application manages our main loop,
+    // application windows, integration with the window manager/compositor, and
+    // desktop features such as file opening and single-instance applications.
+    let app = VimdicatorApplication::new("io.github.polymeilex.vimdicator", &gio::ApplicationFlags::empty());
 
-use clap::*;
-
-use is_terminal::IsTerminal;
-
-include!(concat!(env!("OUT_DIR"), "/version.rs"));
-
-#[derive(Debug, Copy, Clone)]
-pub struct TimeoutDuration(Option<Duration>);
-
-impl TimeoutDuration {
-    fn new(secs: u64) -> Self {
-        Self(if secs == 0 {
-            None
-        } else {
-            Some(Duration::from_secs(secs))
-        })
-    }
-}
-
-impl Deref for TimeoutDuration {
-    type Target = Option<Duration>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl FromStr for TimeoutDuration {
-    type Err = ParseIntError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Self::new(s.parse()?))
-    }
-}
-
-impl std::fmt::Display for TimeoutDuration {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Some(duration) = self.0 {
-            duration.as_secs().fmt(f)
-        } else {
-            f.write_str("0")
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub enum NvimTransport {
-    SocketAddr(SocketAddr),
-    #[cfg(unix)]
-    UnixSocket(std::path::PathBuf),
-}
-
-impl FromStr for NvimTransport {
-    #[cfg(unix)]
-    type Err = std::io::Error;
-    #[cfg(not(unix))]
-    type Err = std::net::AddrParseError;
-
-    fn from_str(addr: &str) -> Result<Self, Self::Err> {
-        #[cfg(unix)]
-        if let Ok(addr) = addr.parse() {
-            Ok(NvimTransport::SocketAddr(addr))
-        } else {
-            // Quick smoke test with UnixStream from std lib before we connect with an async
-            // implementation
-            std::os::unix::net::UnixStream::connect(addr)?;
-            Ok(NvimTransport::UnixSocket(addr.into()))
-        }
-        #[cfg(not(unix))]
-        Ok(NvimTransport::SocketAddr(addr.parse()?))
-    }
-}
-
-#[derive(Parser, Debug, Clone)]
-#[command(
-    name = "neovim-gtk",
-    version = GIT_BUILD_VERSION.unwrap_or(env!("CARGO_PKG_VERSION")),
-    author = env!("CARGO_PKG_AUTHORS"),
-    about = misc::about_comments(),
-)]
-pub struct Args {
-    /// Execute <CMD> after config and first file (same as 'nvim -c <CMD>')
-    ///
-    /// May be specified more then once.
-    #[arg(short = 'c', value_name = "CMD")]
-    post_config_cmds: Vec<String>,
-
-    /// Open two or more files in diff mode (same as 'nvim -d ...')
-    #[arg(short, requires = "files")]
-    pub diff_mode: bool,
-
-    /// Don't detach from the console (!= Windows only)
-    #[arg(long)]
-    pub fork: bool,
-
-    /// Don't restore any previously saved window state
-    ///
-    /// This includes:
-    ///
-    /// * The size of the window
-    ///
-    /// * Whether or not the window was maximized
-    ///
-    /// * The visibility of the sidebar (will be shown by default, use --hide-sidebar to disable)
-    #[arg(long)]
-    pub disable_win_restore: bool,
-
-    /// Hide the sidebar by default on start
-    #[arg(long)]
-    pub hide_sidebar: bool,
-
-    /// RPC timeout (0 for none)
-    ///
-    /// If nvim doesn't respond to an RPC call unexpectedly within <SECONDS>, we give up.
-    #[arg(long, default_value_t = TimeoutDuration::new(10), value_name = "SECONDS")]
-    pub timeout: TimeoutDuration,
-
-    #[arg(long)]
-    /// Use ctermfg/ctermbg instead of guifg/guibg
-    pub cterm_colors: bool,
-
-    #[arg(long)]
-    /// Path to the nvim binary
-    pub nvim_bin_path: Option<String>,
-
-    #[arg(long)]
-    #[cfg_attr(unix, doc = "Nvim server to connect to (TCP address or Unix socket)")]
-    #[cfg_attr(not(unix), doc = "Nvim server to connect to (TCP only)")]
-    pub server: Option<NvimTransport>,
-
-    #[arg()]
-    /// Files to open
-    pub files: Vec<String>,
-
-    /// Arguments that will be passed to nvim (see more with '--help' before using!)
-    ///
-    /// Note that due to current limitations, the arguments that may be passed through this are
-    /// limited to arguments that:
-    ///
-    /// * Don't cause a user prompt, e.g. anything that makes nvim go "Hit ENTER...", either
-    ///   directly or indirectly
-    ///
-    /// * Don't interfere with stdio output (since we start nvim with --embed, we need stdio
-    ///   reserved for RPC)
-    ///
-    /// * Are not filenames
-    ///
-    /// Trying to pass arguments which match any of the above criteria may result in hangs. As such,
-    /// the equivalent neovim-gtk arguments should be used instead of being passed via this option
-    /// whenever possible.
-    #[arg(last = true)]
-    pub nvim_args: Vec<String>,
-
-    /// Input data from stdin
-    /// TODO: Get rid of this (#57)
-    #[arg(skip)]
-    input_data: Option<String>,
-}
-
-impl Args {
-    /// Steal the post config commands, since they're only needed once
-    pub fn post_config_cmds(&mut self) -> Vec<String> {
-        mem::take(&mut self.post_config_cmds)
-    }
-
-    /// Steal the input data, since it's only used once
-    pub fn input_data(&mut self) -> Self {
-        let ret = self.clone();
-        self.input_data = None;
-        ret
-    }
-}
-
-fn main() {
-    env_logger::init();
-
-    let mut command = Args::command();
-    let args = Args::from_arg_matches(&command.get_matches_mut()).unwrap_or_else(|e| e.exit());
-
-    let input_data = RefCell::new(read_piped_input());
-
-    // Additional argument parsing
-    if args.diff_mode && args.files.len() < 2 {
-        command
-            .error(
-                clap::error::ErrorKind::TooFewValues,
-                "Diff mode (-d) requires 2 or more files",
-            )
-            .exit();
-    }
-
-    command.build();
-
-    // fork to background by default
-    #[cfg(unix)]
-    if args.fork {
-        match daemon(true, true) {
-            Ok(Fork::Parent(_)) => return,
-            Ok(Fork::Child) => (),
-            Err(code) => panic!("Failed to fork, got {}", code),
-        };
-    }
-
-    // Debugging mode for CLI test runs
-    #[cfg(debug_assertions)]
-    if std::env::var("NVIM_GTK_CLI_TEST_MODE") == Ok("1".to_string()) {
-        println!("Testing the CLI");
-        if !args.post_config_cmds.is_empty() {
-            println!(
-                "Commands passed: [{}]",
-                args.post_config_cmds
-                    .iter()
-                    .map(|c| format!("'{c}'"))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            );
-        }
-        return;
-    }
-
-    gtk::init().expect("Failed to initialize GTK+");
-
-    let app_flags = gio::ApplicationFlags::HANDLES_OPEN
-        | gio::ApplicationFlags::HANDLES_COMMAND_LINE
-        | gio::ApplicationFlags::NON_UNIQUE;
-
-    glib::set_program_name(Some("NeovimGtk"));
-
-    let app = if cfg!(debug_assertions) {
-        adw::Application::new(Some("org.daa.NeovimGtkDebug"), app_flags)
-    } else {
-        adw::Application::new(Some("org.daa.NeovimGtk"), app_flags)
-    };
-
-    app.connect_startup(|_| {
-        libpanel::init();
-    });
-
-    let app_cmdline = Rc::new(RefCell::new(None));
-    app.connect_command_line(
-        glib::clone!(@strong app_cmdline, @strong args => move |app, cmdline| {
-            app_cmdline.borrow_mut().replace(cmdline.clone());
-            let input_data = input_data
-                .replace(None)
-                .filter(|_input| !args.files.is_empty());
-
-            match input_data {
-                Some(_) => {
-                    let mut args = args.clone();
-                    args.input_data = input_data;
-                    activate(
-                        app,
-                        &args,
-                        app_cmdline.clone(),
-                    );
-                }
-                None => {
-                    let files = args.files.iter().cloned().collect::<Box<[String]>>();
-                    open(app, files, &args, app_cmdline.clone());
-                }
-            }
-            0
-        }),
-    );
-
-    // Setup our global style provider
-    let css_provider = gtk::CssProvider::new();
-    css_provider.load_from_data(include_str!("style.css"));
-    gtk::StyleContext::add_provider_for_display(
-        gdk::Display::default()
-            .as_ref()
-            .expect("Cannot find default GDK Display"),
-        &css_provider,
-        gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
-    );
-
-    let new_window_action = gio::SimpleAction::new("new-window", None);
-    new_window_action.connect_activate(glib::clone!(
-        @strong app, @strong args, @strong app_cmdline => move |_, _| {
-            activate(&app, &args, app_cmdline.clone())
-        }
-    ));
-    app.add_action(&new_window_action);
-
-    gtk::Window::set_default_icon_name("org.daa.NeovimGtk");
-
-    app.run();
-    let lock = app_cmdline.borrow_mut();
-    std::process::exit(lock.as_ref().unwrap().exit_status());
-}
-
-fn open(
-    app: &adw::Application,
-    files: Box<[String]>,
-    args: &Args,
-    app_cmdline: Rc<RefCell<Option<ApplicationCommandLine>>>,
-) {
-    let mut ui = Ui::new(args.clone(), files);
-
-    ui.init(app, args, app_cmdline);
-}
-
-fn activate(
-    app: &adw::Application,
-    args: &Args,
-    app_cmdline: Rc<RefCell<Option<ApplicationCommandLine>>>,
-) {
-    let mut ui = Ui::new(args.clone(), Box::new([]));
-
-    ui.init(app, args, app_cmdline);
-}
-
-fn read_piped_input() -> Option<String> {
-    let mut stdin = io::stdin();
-    if !stdin.is_terminal() {
-        let mut buf = String::new();
-        match stdin.read_to_string(&mut buf) {
-            Ok(size) if size > 0 => Some(buf),
-            Ok(_) => None,
-            Err(err) => {
-                error!("Error read stdin {}", err);
-                None
-            }
-        }
-    } else {
-        None
-    }
+    // Run the application. This function will block until the application
+    // exits. Upon return, we have our exit code to return to the shell. (This
+    // is the code you see when you do `echo $?` after running a command in a
+    // terminal.
+    app.run()
 }

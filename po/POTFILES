@@ -1,0 +1,4 @@
+data/io.github.polymeilex.vimdicator.desktop.in
+data/io.github.polymeilex.vimdicator.appdata.xml.in
+data/io.github.polymeilex.vimdicator.gschema.xml
+src/window.ui
