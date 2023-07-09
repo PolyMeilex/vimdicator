@@ -27,6 +27,8 @@ mod nvim;
 mod widgets;
 mod window;
 
+use std::collections::HashMap;
+
 use application::VimdicatorApplication;
 use nvim::{ExtLineGridMap, ExtPopupMenu, NeovimApiInfo, NvimEvent, RedrawEvent};
 use window::VimdicatorWindow;
@@ -94,18 +96,17 @@ async fn run(mut rx: UnboundedReceiver<GtkToNvimEvent>, gtk_tx: glib::Sender<Nvi
             200,
             30,
             UiAttachOptions::new()
+                .set_rgb(true)
                 .set_popupmenu_external(true)
                 // .set_cmdline_external(true)
                 .set_linegrid_external(true)
                 .set_tabline_external(false)
-                .set_hlstate_external(false)
+                .set_hlstate_external(true)
+                .set_termcolors_external(false)
                 .set_wildmenu_external(false),
         )
         .await
         .unwrap();
-
-        // nvim.input(":").await.unwrap();
-        // nvim.input("<tab>").await.unwrap();
     }
 
     tokio::spawn(async move {
@@ -157,6 +158,7 @@ fn main() -> glib::ExitCode {
         let mut grid_map = ExtLineGridMap::new();
         let mut popup_menu = ExtPopupMenu::new();
         let mut flush_state = FlushState::default();
+        let mut style = HashMap::new();
 
         move |event| {
             if let Some(window) = app.active_window() {
@@ -165,6 +167,7 @@ fn main() -> glib::ExitCode {
                 match event {
                     NvimEvent::Redraw(events) => {
                         let flushed = handle_redraw_event(
+                            &mut style,
                             &mut flush_state,
                             &mut grid_map,
                             &mut popup_menu,
@@ -226,6 +229,7 @@ struct FlushState {
 }
 
 fn handle_redraw_event(
+    style_map: &mut HashMap<u64, nvim::Style>,
     flush_state: &mut FlushState,
     grids: &mut ExtLineGridMap,
     popup_menu: &mut ExtPopupMenu,
@@ -241,6 +245,7 @@ fn handle_redraw_event(
                 height,
             } => {
                 grids.grid_resize(grid, *width as usize, *height as usize);
+                grids.get_default_mut().unwrap().style = style_map.clone();
             }
 
             RedrawEvent::GridClear { grid } => {
@@ -303,6 +308,10 @@ fn handle_redraw_event(
 
             RedrawEvent::PopupmenuHide => {
                 popup_menu.hide();
+            }
+
+            RedrawEvent::HighlightAttributesDefine { id, style } => {
+                *style_map.entry(*id).or_default() = style.clone();
             }
 
             event => {

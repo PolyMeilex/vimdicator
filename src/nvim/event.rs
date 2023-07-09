@@ -1,4 +1,4 @@
-use log::error;
+use log::{debug, error};
 use nvim_rs::Value;
 
 #[derive(Debug, Clone)]
@@ -82,6 +82,14 @@ pub struct GridLineCell {
 }
 
 impl GridLineCell {
+    pub fn empty() -> Self {
+        Self {
+            text: " ".to_string(),
+            highlight_id: None,
+            repeat: None,
+        }
+    }
+
     fn parse(fields: Vec<Value>) -> Option<Self> {
         let mut fields = fields.into_iter();
         Some(Self {
@@ -116,7 +124,10 @@ impl PopupMenuItem {
 pub enum RedrawEvent {
     OptionSet(GuiOption),
     ModeInfoSet,
-    HighlightAttributesDefine,
+    HighlightAttributesDefine {
+        id: u64,
+        style: Style,
+    },
     HighlightGroupSet,
 
     GridLine {
@@ -172,6 +183,10 @@ pub enum RedrawEvent {
     Unknown(String, Vec<Value>),
 }
 
+fn into_map(map_value: Value) -> Option<Vec<(Value, Value)>> {
+    map_value.try_into().ok()
+}
+
 fn into_array(value: Value) -> Option<Vec<Value>> {
     match value {
         Value::Array(arr) => Some(arr),
@@ -213,7 +228,18 @@ impl RedrawEvent {
                 let event = match name {
                     "option_set" => RedrawEvent::OptionSet(GuiOption::parse(event)?),
                     "mode_info_set" => RedrawEvent::ModeInfoSet,
-                    "hl_attr_define" => RedrawEvent::HighlightAttributesDefine,
+                    "hl_attr_define" => {
+                        let mut event = event.into_iter();
+
+                        let id = event.next()?.as_u64()?;
+                        let attributes = event.next()?;
+                        let _terminal_attributes = event.next()?;
+                        let _info = event.next()?;
+
+                        let style = into_style(attributes)?;
+
+                        RedrawEvent::HighlightAttributesDefine { id, style }
+                    }
                     "hl_group_set" => RedrawEvent::HighlightGroupSet,
 
                     "grid_line" => {
@@ -340,5 +366,138 @@ impl NvimEvent {
         };
 
         Some(event)
+    }
+}
+
+fn into_style(style_map: Value) -> Option<Style> {
+    let attributes = into_map(style_map)?;
+
+    let mut style = Style::default();
+
+    for attribute in attributes {
+        if let (Value::String(name), value) = attribute {
+            match (name.as_str().unwrap(), value) {
+                ("foreground", Value::Integer(packed_color)) => {
+                    style.colors.foreground =
+                        Some(Color::unpack_color(packed_color.as_u64().unwrap()))
+                }
+                ("background", Value::Integer(packed_color)) => {
+                    style.colors.background =
+                        Some(Color::unpack_color(packed_color.as_u64().unwrap()))
+                }
+                ("special", Value::Integer(packed_color)) => {
+                    style.colors.special = Some(Color::unpack_color(packed_color.as_u64().unwrap()))
+                }
+                ("reverse", Value::Boolean(reverse)) => style.reverse = reverse,
+                ("italic", Value::Boolean(italic)) => style.italic = italic,
+                ("bold", Value::Boolean(bold)) => style.bold = bold,
+                ("strikethrough", Value::Boolean(strikethrough)) => {
+                    style.strikethrough = strikethrough
+                }
+                ("blend", Value::Integer(blend)) => style.blend = blend.as_u64().unwrap() as u8,
+
+                ("underline", Value::Boolean(true)) => {
+                    style.underline = Some(UnderlineStyle::Underline)
+                }
+                ("undercurl", Value::Boolean(true)) => {
+                    style.underline = Some(UnderlineStyle::UnderCurl)
+                }
+                ("underdotted" | "underdot", Value::Boolean(true)) => {
+                    style.underline = Some(UnderlineStyle::UnderDot)
+                }
+                ("underdashed" | "underdash", Value::Boolean(true)) => {
+                    style.underline = Some(UnderlineStyle::UnderDash)
+                }
+                ("underdouble" | "underlineline", Value::Boolean(true)) => {
+                    style.underline = Some(UnderlineStyle::UnderDouble)
+                }
+
+                _ => debug!("Ignored style attribute: {}", name),
+            }
+        } else {
+            debug!("Invalid attribute format");
+        }
+    }
+
+    Some(style)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Color {
+    pub r: f32,
+    pub g: f32,
+    pub b: f32,
+}
+
+impl Color {
+    fn unpack_color(packed_color: u64) -> Color {
+        let r = ((packed_color >> 16) & 0xff) as f32;
+        let g = ((packed_color >> 8) & 0xff) as f32;
+        let b = (packed_color & 0xff) as f32;
+
+        Color {
+            r: r / 255.0,
+            g: g / 255.0,
+            b: b / 255.0,
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct Colors {
+    pub foreground: Option<Color>,
+    pub background: Option<Color>,
+    pub special: Option<Color>,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum UnderlineStyle {
+    Underline,
+    UnderDouble,
+    UnderDash,
+    UnderDot,
+    UnderCurl,
+}
+
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct Style {
+    pub colors: Colors,
+    pub reverse: bool,
+    pub italic: bool,
+    pub bold: bool,
+    pub strikethrough: bool,
+    pub blend: u8,
+    pub underline: Option<UnderlineStyle>,
+}
+
+impl Style {
+    pub fn foreground(&self, default_colors: &Colors) -> Color {
+        if self.reverse {
+            self.colors
+                .background
+                .unwrap_or_else(|| default_colors.background.unwrap())
+        } else {
+            self.colors
+                .foreground
+                .unwrap_or_else(|| default_colors.foreground.unwrap())
+        }
+    }
+
+    pub fn background(&self, default_colors: &Colors) -> Color {
+        if self.reverse {
+            self.colors
+                .foreground
+                .unwrap_or_else(|| default_colors.foreground.unwrap())
+        } else {
+            self.colors
+                .background
+                .unwrap_or_else(|| default_colors.background.unwrap())
+        }
+    }
+
+    pub fn special(&self, default_colors: &Colors) -> Color {
+        self.colors
+            .special
+            .unwrap_or_else(|| self.foreground(default_colors))
     }
 }

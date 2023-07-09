@@ -135,40 +135,66 @@ mod imp {
             let Some(grid) = grid.as_ref() else { return; };
 
             let mut y = 0.0;
+            let mut last_hl = None;
             for line in grid.buffer().iter() {
-                let line: String = line.columns().iter().collect();
+                let mut x = 0.0;
+                for cell in line.columns() {
+                    let line = &cell.text;
 
-                let s = &line;
-                let items =
-                    pango::itemize(context, s, 0, s.len() as i32, &pango::AttrList::new(), None);
-                let mut glyphs = pango::GlyphString::new();
-
-                for item in items {
-                    let analysis = item.analysis();
-                    let font = analysis.font();
-                    let offset = item.offset() as usize;
-                    let length = item.length() as usize;
-
-                    if let Some(line_str) = s.get(offset..offset + length) {
-                        pango::shape(line_str, analysis, &mut glyphs);
-                    }
-
-                    let line_height = cell_metrics.line_height;
-                    let ascent = cell_metrics.ascent;
-
-                    let render_node = gsk::TextNode::new(
-                        &font,
-                        &glyphs,
-                        &gdk::RGBA::new(53.0 / 255.0, 132.0 / 255.0, 228.0 / 255.0, 1.0),
-                        &graphene::Point::new(0.0, y + ascent as f32),
+                    let s = &line;
+                    let items = pango::itemize(
+                        context,
+                        s,
+                        0,
+                        s.len() as i32,
+                        &pango::AttrList::new(),
+                        None,
                     );
+                    let mut glyphs = pango::GlyphString::new();
 
-                    y += line_height as f32;
+                    for item in items {
+                        let analysis = item.analysis();
+                        let font = analysis.font();
+                        let offset = item.offset() as usize;
+                        let length = item.length() as usize;
 
-                    if let Some(render_node) = render_node {
-                        snapshot_in.append_node(&render_node);
+                        if let Some(line_str) = s.get(offset..offset + length) {
+                            pango::shape(line_str, analysis, &mut glyphs);
+                        }
+
+                        let ascent = cell_metrics.ascent;
+
+                        let color = if let Some(color) = cell
+                            .highlight_id
+                            .or(last_hl)
+                            .and_then(|id| grid.style.get(&id))
+                            .and_then(|style| style.colors.foreground)
+                        {
+                            gdk::RGBA::new(color.r, color.g, color.b, 1.0)
+                        } else {
+                            gdk::RGBA::new(232.0 / 255.0, 216.0 / 255.0, 176.0 / 255.0, 1.0)
+                        };
+
+                        if cell.highlight_id.is_some() {
+                            last_hl = cell.highlight_id;
+                        }
+
+                        let render_node = gsk::TextNode::new(
+                            &font,
+                            &glyphs,
+                            &color,
+                            &graphene::Point::new(x, y + ascent as f32),
+                        );
+
+                        if let Some(render_node) = render_node {
+                            snapshot_in.append_node(&render_node);
+                        }
                     }
+
+                    x += cell_metrics.char_width as f32;
                 }
+
+                y += cell_metrics.line_height as f32;
             }
 
             let pos = grid.cursor_position();

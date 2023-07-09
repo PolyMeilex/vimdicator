@@ -18,6 +18,10 @@ impl ExtLineGridMap {
         self.get(&1)
     }
 
+    pub fn get_default_mut(&mut self) -> Option<&mut ExtLineGrid> {
+        self.map.get_mut(&1)
+    }
+
     pub fn get(&self, grid: &u64) -> Option<&ExtLineGrid> {
         self.map.get(grid)
     }
@@ -97,21 +101,30 @@ pub struct ExtLineGrid {
 
     cursor_position: CursorPosition,
     buffer: Vec<Line>,
+    pub style: HashMap<u64, super::Style>,
 }
 
 #[derive(Debug, Clone)]
 pub struct Line {
-    columns: Vec<char>,
+    columns: Vec<GridLineCell>,
 }
 
 impl Line {
     fn new(len: usize) -> Self {
         Self {
-            columns: vec![' '; len],
+            columns: vec![GridLineCell::empty(); len],
         }
     }
 
-    pub fn columns(&self) -> &[char] {
+    fn new_with(len: usize, ch: &str) -> Self {
+        let mut cell = GridLineCell::empty();
+        cell.text = ch.to_string();
+        Self {
+            columns: vec![cell; len],
+        }
+    }
+
+    pub fn columns(&self) -> &[GridLineCell] {
         &self.columns
     }
 }
@@ -129,6 +142,7 @@ impl ExtLineGrid {
             rows,
             cursor_position: CursorPosition { column: 0, row: 0 },
             buffer: vec![Line::new(columns); rows],
+            style: Default::default(),
         }
     }
 
@@ -151,37 +165,35 @@ impl ExtLineGrid {
     fn clear(&mut self) {
         self.buffer
             .iter_mut()
-            .for_each(|line| line.columns.fill(' '));
+            .for_each(|line| line.columns.fill(GridLineCell::empty()));
     }
 
-    fn scroll(
-        &mut self,
-        _top: u64,
-        _bottom: u64,
-        _left: u64,
-        _right: u64,
-        rows: i64,
-        _columns: i64,
-    ) {
+    fn scroll(&mut self, top: u64, bottom: u64, _left: u64, _right: u64, rows: i64, _columns: i64) {
+        let top = top as usize;
+        let bottom = bottom as usize;
+
+        let old_len = self.buffer.len();
         match rows.cmp(&0) {
             std::cmp::Ordering::Greater => {
                 let rows = rows as usize;
 
-                self.buffer.drain(..rows);
+                self.buffer.drain(top..rows);
                 for _ in 0..rows {
-                    self.buffer.push(Line::new(self.columns));
+                    self.buffer
+                        .insert(bottom - rows, Line::new_with(self.columns, "*"));
                 }
             }
             std::cmp::Ordering::Less => {
                 let rows = -rows as usize;
 
-                self.buffer.drain(self.buffer.len() - rows..);
+                self.buffer.drain(bottom - rows..bottom);
                 for _ in 0..rows {
-                    self.buffer.insert(0, Line::new(self.columns));
+                    self.buffer.insert(top, Line::new_with(self.columns, "&"));
                 }
             }
             std::cmp::Ordering::Equal => {}
         }
+        debug_assert_eq!(old_len, self.buffer.len());
     }
 
     fn resize(&mut self, columns: usize, rows: usize) {
@@ -190,7 +202,7 @@ impl ExtLineGrid {
             (true, false) => {
                 self.columns = columns;
                 self.buffer.iter_mut().for_each(|line| {
-                    line.columns.resize(self.columns, ' ');
+                    line.columns.resize(self.columns, GridLineCell::empty());
                 });
             }
             // Rows changed
@@ -205,7 +217,7 @@ impl ExtLineGrid {
 
                 self.buffer.resize(rows, Line::new(columns));
                 self.buffer.iter_mut().for_each(|line| {
-                    line.columns.resize(columns, ' ');
+                    line.columns.resize(columns, GridLineCell::empty());
                 });
 
                 self.columns = columns;
@@ -228,11 +240,13 @@ impl ExtLineGrid {
         let mut column = column_start;
 
         for cell in cells {
-            let text = &cell.text;
             let repeat = cell.repeat.unwrap_or(1);
 
             for _ in 0..repeat {
-                line.columns[column] = text.chars().next().unwrap_or(' ');
+                let mut cell = cell.clone();
+                cell.repeat = None;
+
+                line.columns[column] = cell;
                 column += 1;
             }
         }
