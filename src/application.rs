@@ -51,7 +51,6 @@ fn init_motion_controller(
 
     motion_controller.connect_motion({
         let ext_line_grid = ext_line_grid.downgrade();
-        let grid = None;
 
         move |controller, x, y| {
             let Some(ext_line_grid) = ext_line_grid.upgrade() else { return; };
@@ -73,7 +72,7 @@ fn init_motion_controller(
                     button: NvimMouseButton::Left,
                     action: NvimMouseAction::Drag,
                     modifier,
-                    grid,
+                    grid: ext_line_grid.grid_id(),
                     pos,
                 })
                 .unwrap();
@@ -93,6 +92,7 @@ fn init_scroll_controller(
         gtk::EventControllerScrollFlags::VERTICAL | gtk::EventControllerScrollFlags::DISCRETE,
     );
 
+    let grid = ext_line_grid.grid_id();
     scroll_controller.connect_scroll(move |controller, _dx, dy| {
         let dy = dy.round();
 
@@ -114,7 +114,7 @@ fn init_scroll_controller(
                 button: NvimMouseButton::Wheel,
                 action,
                 modifier: modifier.clone(),
-                grid: None,
+                grid,
                 pos,
             })
             .unwrap();
@@ -139,14 +139,14 @@ fn init_gesture_controller(
         let mouse_state = mouse_state.clone();
 
         move |controller, _, x, y| {
-            let Some(window) = ext_line_grid.upgrade() else { return; };
+            let Some(ext_line_grid) = ext_line_grid.upgrade() else { return; };
 
             let btn = controller.current_button();
             let state = controller.current_event_state();
 
             let modifier = crate::input::keyval_to_input_string("", state);
 
-            let pos = window.cell_metrics().cell_cords(x, y);
+            let pos = ext_line_grid.cell_metrics().cell_cords(x, y);
             mouse_state.pos.set(Some(pos));
 
             match btn {
@@ -157,7 +157,7 @@ fn init_gesture_controller(
                         button: NvimMouseButton::Left,
                         action: NvimMouseAction::Press,
                         modifier,
-                        grid: None,
+                        grid: ext_line_grid.grid_id(),
                         pos: Some(pos),
                     })
                     .unwrap();
