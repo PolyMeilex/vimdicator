@@ -60,15 +60,21 @@ fn init_motion_controller(
             let modifier = crate::input::keyval_to_input_string("", state);
 
             let pos = ext_line_grid.cell_metrics().cell_cords(x, y);
-            mouse_state.pos.set(Some(pos));
 
-            if mouse_state.is_pressed.get() {
+            let pos = if Some(pos) != mouse_state.pos.get() {
+                mouse_state.pos.set(Some(pos));
+                Some(pos)
+            } else {
+                None
+            };
+
+            if pos.is_some() && mouse_state.is_pressed.get() {
                 tx.send(GtkToNvimEvent::InputMouse {
                     button: NvimMouseButton::Left,
                     action: NvimMouseAction::Drag,
                     modifier,
                     grid,
-                    pos: Some(pos),
+                    pos,
                 })
                 .unwrap();
             }

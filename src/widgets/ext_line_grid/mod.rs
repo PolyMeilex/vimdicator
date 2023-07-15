@@ -146,6 +146,24 @@ mod imp {
 
             let Some(grid) = grid.as_ref() else { return; };
 
+            let default_colors = crate::nvim::event::Colors {
+                foreground: Some(crate::nvim::event::Color {
+                    r: 232.0 / 255.0,
+                    g: 216.0 / 255.0,
+                    b: 176.0 / 255.0,
+                }),
+                background: Some(crate::nvim::event::Color {
+                    r: 0.0,
+                    g: 0.0,
+                    b: 0.0,
+                }),
+                special: Some(crate::nvim::event::Color {
+                    r: 1.0,
+                    g: 0.0,
+                    b: 0.0,
+                }),
+            };
+
             let mut y = 0.0;
             let mut last_hl = None;
             for line in grid.buffer().iter() {
@@ -176,12 +194,26 @@ mod imp {
 
                         let ascent = cell_metrics.ascent;
 
-                        let color = if let Some(color) = cell
+                        let color = if let Some(style) = cell
                             .highlight_id
                             .or(last_hl)
                             .and_then(|id| grid.style.get(&id))
-                            .and_then(|style| style.colors.foreground)
                         {
+                            if style.reverse {
+                                let color = style.background(&default_colors);
+                                snapshot_in.append_color(
+                                    &gdk::RGBA::new(color.r, color.g, color.b, 1.0),
+                                    &graphene::Rect::new(
+                                        x,
+                                        y,
+                                        cell_metrics.char_width as f32,
+                                        cell_metrics.line_height as f32,
+                                    ),
+                                );
+                            }
+
+                            let color = style.foreground(&default_colors);
+
                             gdk::RGBA::new(color.r, color.g, color.b, 1.0)
                         } else {
                             gdk::RGBA::new(232.0 / 255.0, 216.0 / 255.0, 176.0 / 255.0, 1.0)
