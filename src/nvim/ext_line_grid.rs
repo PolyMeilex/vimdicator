@@ -168,32 +168,45 @@ impl ExtLineGrid {
             .for_each(|line| line.columns.fill(GridLineCell::empty()));
     }
 
-    fn scroll(&mut self, top: u64, bottom: u64, _left: u64, _right: u64, rows: i64, _columns: i64) {
+    fn scroll(&mut self, top: u64, bottom: u64, left: u64, right: u64, rows: i64, _columns: i64) {
         let top = top as usize;
         let bottom = bottom as usize;
+        let left = left as usize;
+        let right = right as usize;
 
-        let old_len = self.buffer.len();
         match rows.cmp(&0) {
             std::cmp::Ordering::Greater => {
                 let rows = rows as usize;
 
-                self.buffer.drain(top..rows);
-                for _ in 0..rows {
-                    self.buffer
-                        .insert(bottom - rows, Line::new_with(self.columns, "*"));
+                for n in top..bottom - rows {
+                    let (to, from) = self.buffer.split_at_mut(n + rows);
+
+                    let from = &mut from[0];
+                    let to = &mut to[n];
+
+                    let from = &mut from.columns[left..right];
+                    let to = &mut to.columns[left..right];
+
+                    to.swap_with_slice(from);
                 }
             }
             std::cmp::Ordering::Less => {
                 let rows = -rows as usize;
 
-                self.buffer.drain(bottom - rows..bottom);
-                for _ in 0..rows {
-                    self.buffer.insert(top, Line::new_with(self.columns, "&"));
+                for n in ((top + rows)..bottom).rev() {
+                    let (from, to) = self.buffer.split_at_mut(n);
+
+                    let from = &mut from[n - rows];
+                    let to = &mut to[0];
+
+                    let from = &mut from.columns[left..right];
+                    let to = &mut to.columns[left..right];
+
+                    from.swap_with_slice(to);
                 }
             }
             std::cmp::Ordering::Equal => {}
         }
-        debug_assert_eq!(old_len, self.buffer.len());
     }
 
     fn resize(&mut self, columns: usize, rows: usize) {
