@@ -299,13 +299,25 @@ impl VimdicatorApplication {
     }
 
     fn setup_gactions(&self) {
+        let sidebar_action = gio::ActionEntry::builder("toggle_sidebar")
+            .activate(move |app: &Self, _, _| {
+                app.imp()
+                    .nvim_tx
+                    .get()
+                    .unwrap()
+                    .send(GtkToNvimEvent::ExecLua(
+                        r#"require("nvim-tree.api").tree.toggle()"#.to_string(),
+                    ))
+                    .unwrap();
+            })
+            .build();
         let quit_action = gio::ActionEntry::builder("quit")
             .activate(move |app: &Self, _, _| app.quit())
             .build();
         let about_action = gio::ActionEntry::builder("about")
             .activate(move |app: &Self, _, _| app.show_about())
             .build();
-        self.add_action_entries([quit_action, about_action]);
+        self.add_action_entries([quit_action, about_action, sidebar_action]);
     }
 
     fn show_about(&self) {

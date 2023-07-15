@@ -96,6 +96,7 @@ pub enum GtkToNvimEvent {
         width: u64,
         height: u64,
     },
+    ExecLua(String),
 }
 
 async fn run(mut rx: UnboundedReceiver<GtkToNvimEvent>, gtk_tx: glib::Sender<NvimEvent>) {
@@ -182,6 +183,9 @@ async fn run(mut rx: UnboundedReceiver<GtkToNvimEvent>, gtk_tx: glib::Sender<Nvi
                     nvim.ui_try_resize(width as i64, height as i64)
                         .await
                         .unwrap();
+                }
+                GtkToNvimEvent::ExecLua(code) => {
+                    nvim.exec_lua(&code, vec![]).await.unwrap();
                 }
             }
         }
