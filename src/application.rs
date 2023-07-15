@@ -43,22 +43,29 @@ impl MouseState {
 }
 
 fn init_motion_controller(
-    ext_line_grid: widgets::ExtLineGrid,
+    window: VimdicatorWindow,
     tx: UnboundedSender<GtkToNvimEvent>,
     mouse_state: Rc<MouseState>,
 ) {
     let motion_controller = gtk::EventControllerMotion::new();
 
     motion_controller.connect_motion({
-        let ext_line_grid = ext_line_grid.downgrade();
+        let window = window.downgrade();
 
         move |controller, x, y| {
-            let Some(ext_line_grid) = ext_line_grid.upgrade() else { return; };
+            let Some(window) = window.upgrade() else { return; };
+            let ext_line_grid = window.ext_line_grid();
 
             let state = controller.current_event_state();
             let modifier = crate::input::keyval_to_input_string("", state);
 
             let pos = ext_line_grid.cell_metrics().cell_cords(x, y);
+
+            if y < 0.0 {
+                window.header_bar_revealer().set_reveal_child(true);
+            } else {
+                window.header_bar_revealer().set_reveal_child(false);
+            }
 
             let pos = if Some(pos) != mouse_state.pos.get() {
                 mouse_state.pos.set(Some(pos));
@@ -80,7 +87,7 @@ fn init_motion_controller(
         }
     });
 
-    ext_line_grid.add_controller(motion_controller);
+    window.ext_line_grid().add_controller(motion_controller);
 }
 
 fn init_scroll_controller(
@@ -261,7 +268,7 @@ mod imp {
                 let state = Rc::new(MouseState::new());
                 let nvim_tx = self.nvim_tx.get().unwrap();
 
-                init_motion_controller(window.ext_line_grid(), nvim_tx.clone(), state.clone());
+                init_motion_controller(window.clone(), nvim_tx.clone(), state.clone());
                 init_scroll_controller(window.ext_line_grid(), nvim_tx.clone(), state.clone());
                 init_gesture_controller(window.ext_line_grid(), nvim_tx.clone(), state);
 

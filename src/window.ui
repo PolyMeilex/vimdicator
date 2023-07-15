@@ -9,19 +9,25 @@
       <object class="GtkBox" id="main_box">
         <property name="orientation">vertical</property>
         <child>
-          <object class="GtkHeaderBar" id="header_bar">
-            <child type="start">
-              <object class="GtkButton">
-                <property name="icon-name">sidebar-show-symbolic</property>
-                <property name="action-name">app.toggle_sidebar</property>
-              </object>
-            </child>
+          <object class="GtkRevealer" id="header_bar_revealer">
+            <child>
 
-            <child type="end">
-              <object class="GtkMenuButton">
-                <property name="icon-name">open-menu-symbolic</property>
-                <property name="menu-model">primary_menu</property>
+              <object class="GtkHeaderBar" id="header_bar">
+                <child type="start">
+                  <object class="GtkButton">
+                    <property name="icon-name">sidebar-show-symbolic</property>
+                    <property name="action-name">app.toggle_sidebar</property>
+                  </object>
+                </child>
+
+                <child type="end">
+                  <object class="GtkMenuButton">
+                    <property name="icon-name">open-menu-symbolic</property>
+                    <property name="menu-model">primary_menu</property>
+                  </object>
+                </child>
               </object>
+
             </child>
           </object>
         </child>

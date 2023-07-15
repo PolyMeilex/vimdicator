@@ -11,6 +11,8 @@ mod imp {
     #[template(resource = "/io/github/polymeilex/vimdicator/window.ui")]
     pub struct VimdicatorWindow {
         #[template_child]
+        pub header_bar_revealer: TemplateChild<gtk::Revealer>,
+        #[template_child]
         pub header_bar: TemplateChild<gtk::HeaderBar>,
         #[template_child]
         pub main_box: TemplateChild<gtk::Box>,
@@ -56,6 +58,10 @@ impl VimdicatorWindow {
         glib::Object::builder()
             .property("application", application)
             .build()
+    }
+
+    pub fn header_bar_revealer(&self) -> gtk::Revealer {
+        self.imp().header_bar_revealer.clone()
     }
 
     pub fn ext_line_grid(&self) -> ExtLineGrid {
