@@ -44,9 +44,58 @@ use tokio_util::compat::{Compat, TokioAsyncReadCompatExt, TokioAsyncWriteCompatE
 
 type Neovim = nvim_rs::Neovim<Compat<OwnedWriteHalf>>;
 
+#[derive(Debug, Clone, Copy)]
+pub enum NvimMouseButton {
+    Left,
+    Right,
+    Wheel,
+}
+
+impl NvimMouseButton {
+    fn as_str(&self) -> &str {
+        match self {
+            Self::Left => "left",
+            Self::Right => "right",
+            Self::Wheel => "wheel",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum NvimMouseAction {
+    Press,
+    Release,
+    Up,
+    Down,
+    Drag,
+}
+
+impl NvimMouseAction {
+    fn as_str(&self) -> &str {
+        match self {
+            Self::Press => "press",
+            Self::Release => "release",
+            Self::Up => "up",
+            Self::Down => "down",
+            Self::Drag => "drag",
+        }
+    }
+}
+
 pub enum GtkToNvimEvent {
     Input(String),
-    Resized { width: u64, height: u64 },
+    InputMouse {
+        button: NvimMouseButton,
+        action: NvimMouseAction,
+        modifier: String,
+        grid: Option<u64>,
+        /// (col, row)
+        pos: Option<(u64, u64)>,
+    },
+    Resized {
+        width: u64,
+        height: u64,
+    },
 }
 
 async fn run(mut rx: UnboundedReceiver<GtkToNvimEvent>, gtk_tx: glib::Sender<NvimEvent>) {
@@ -114,6 +163,20 @@ async fn run(mut rx: UnboundedReceiver<GtkToNvimEvent>, gtk_tx: glib::Sender<Nvi
             match event {
                 GtkToNvimEvent::Input(input) => {
                     nvim.input(&input).await.unwrap();
+                }
+                GtkToNvimEvent::InputMouse {
+                    button,
+                    action,
+                    modifier,
+                    grid,
+                    pos,
+                } => {
+                    let grid = grid.map(|g| g as i64).unwrap_or(-1);
+                    let (col, row) = pos.map(|(c, r)| (c as i64, r as i64)).unwrap_or((-1, -1));
+
+                    nvim.input_mouse(button.as_str(), action.as_str(), &modifier, grid, row, col)
+                        .await
+                        .unwrap();
                 }
                 GtkToNvimEvent::Resized { width, height } => {
                     nvim.ui_try_resize(width as i64, height as i64)
@@ -187,7 +250,7 @@ fn main() -> glib::ExitCode {
                                 list.select(popup.selected);
 
                                 let cell_metrics = grid_widget.cell_metrics();
-                                let (x, y) = cell_metrics.pixel_coords((popup.col, popup.row));
+                                let (x, y) = cell_metrics.pixel_coords(popup.col, popup.row);
                                 let (w, h) = (cell_metrics.char_width, cell_metrics.line_height);
 
                                 let (x, y) =

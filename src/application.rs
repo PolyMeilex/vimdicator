@@ -21,11 +21,182 @@
 use adw::subclass::prelude::*;
 use gtk::prelude::*;
 use gtk::{gio, glib};
-use std::cell::OnceCell;
+use std::cell::{Cell, OnceCell};
+use std::rc::Rc;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::config::VERSION;
-use crate::{GtkToNvimEvent, VimdicatorWindow};
+use crate::{widgets, GtkToNvimEvent, NvimMouseAction, NvimMouseButton, VimdicatorWindow};
+
+struct MouseState {
+    pos: Cell<Option<(u64, u64)>>,
+    is_pressed: Cell<bool>,
+}
+
+impl MouseState {
+    fn new() -> Self {
+        Self {
+            pos: Cell::new(None),
+            is_pressed: Cell::new(false),
+        }
+    }
+}
+
+fn init_motion_controller(
+    ext_line_grid: widgets::ExtLineGrid,
+    tx: UnboundedSender<GtkToNvimEvent>,
+    mouse_state: Rc<MouseState>,
+) {
+    let motion_controller = gtk::EventControllerMotion::new();
+
+    motion_controller.connect_motion({
+        let ext_line_grid = ext_line_grid.downgrade();
+        let grid = None;
+
+        move |controller, x, y| {
+            let Some(ext_line_grid) = ext_line_grid.upgrade() else { return; };
+
+            let state = controller.current_event_state();
+            let modifier = crate::input::keyval_to_input_string("", state);
+
+            let pos = ext_line_grid.cell_metrics().cell_cords(x, y);
+            mouse_state.pos.set(Some(pos));
+
+            if mouse_state.is_pressed.get() {
+                tx.send(GtkToNvimEvent::InputMouse {
+                    button: NvimMouseButton::Left,
+                    action: NvimMouseAction::Drag,
+                    modifier,
+                    grid,
+                    pos: Some(pos),
+                })
+                .unwrap();
+            }
+        }
+    });
+
+    ext_line_grid.add_controller(motion_controller);
+}
+
+fn init_scroll_controller(
+    ext_line_grid: widgets::ExtLineGrid,
+    tx: UnboundedSender<GtkToNvimEvent>,
+    mouse_state: Rc<MouseState>,
+) {
+    let scroll_controller = gtk::EventControllerScroll::new(
+        gtk::EventControllerScrollFlags::VERTICAL | gtk::EventControllerScrollFlags::DISCRETE,
+    );
+
+    scroll_controller.connect_scroll(move |controller, _dx, dy| {
+        let dy = dy.round();
+
+        let action = match dy.total_cmp(&0.0) {
+            std::cmp::Ordering::Less => NvimMouseAction::Up,
+            std::cmp::Ordering::Greater => NvimMouseAction::Down,
+            std::cmp::Ordering::Equal => return gtk::Inhibit(false),
+        };
+
+        let state = controller.current_event_state();
+        let modifier = crate::input::keyval_to_input_string("", state);
+
+        let dy = dy.abs() as usize;
+
+        let pos = mouse_state.pos.get();
+
+        for _ in 0..dy {
+            tx.send(GtkToNvimEvent::InputMouse {
+                button: NvimMouseButton::Wheel,
+                action,
+                modifier: modifier.clone(),
+                grid: None,
+                pos,
+            })
+            .unwrap();
+        }
+
+        gtk::Inhibit(false)
+    });
+
+    ext_line_grid.add_controller(scroll_controller);
+}
+
+fn init_gesture_controller(
+    ext_line_grid: widgets::ExtLineGrid,
+    tx: UnboundedSender<GtkToNvimEvent>,
+    mouse_state: Rc<MouseState>,
+) {
+    let click_controller = gtk::GestureClick::builder().n_points(1).button(0).build();
+
+    click_controller.connect_pressed({
+        let ext_line_grid = ext_line_grid.downgrade();
+        let tx = tx.clone();
+        let mouse_state = mouse_state.clone();
+
+        move |controller, _, x, y| {
+            let Some(window) = ext_line_grid.upgrade() else { return; };
+
+            let btn = controller.current_button();
+            let state = controller.current_event_state();
+
+            let modifier = crate::input::keyval_to_input_string("", state);
+
+            let pos = window.cell_metrics().cell_cords(x, y);
+            mouse_state.pos.set(Some(pos));
+
+            match btn {
+                1 => {
+                    mouse_state.is_pressed.set(true);
+
+                    tx.send(GtkToNvimEvent::InputMouse {
+                        button: NvimMouseButton::Left,
+                        action: NvimMouseAction::Press,
+                        modifier,
+                        grid: None,
+                        pos: Some(pos),
+                    })
+                    .unwrap();
+                }
+                _ => {}
+            }
+        }
+    });
+
+    click_controller.connect_released({
+        let ext_line_grid = ext_line_grid.downgrade();
+        let tx = tx;
+        let mouse_state = mouse_state;
+
+        move |controller, _, x, y| {
+            let Some(ext_line_grid) = ext_line_grid.upgrade() else { return; };
+
+            let btn = controller.current_button();
+            let state = controller.current_event_state();
+
+            let modifier = crate::input::keyval_to_input_string("", state);
+
+            let pos = ext_line_grid.cell_metrics().cell_cords(x, y);
+            mouse_state.pos.set(Some(pos));
+
+            match btn {
+                1 => {
+                    mouse_state.is_pressed.set(false);
+
+                    tx.send(GtkToNvimEvent::InputMouse {
+                        button: NvimMouseButton::Left,
+                        action: NvimMouseAction::Release,
+                        modifier,
+                        grid: ext_line_grid.grid_id(),
+                        pos: Some(pos),
+                    })
+                    .unwrap();
+                }
+                _ => {}
+            }
+        }
+    });
+
+    ext_line_grid.add_controller(click_controller);
+}
 
 mod imp {
     use super::*;
@@ -80,6 +251,13 @@ mod imp {
                     inhibit
                 });
                 window.add_controller(key_controller);
+
+                let state = Rc::new(MouseState::new());
+                let nvim_tx = self.nvim_tx.get().unwrap();
+
+                init_motion_controller(window.ext_line_grid(), nvim_tx.clone(), state.clone());
+                init_scroll_controller(window.ext_line_grid(), nvim_tx.clone(), state.clone());
+                init_gesture_controller(window.ext_line_grid(), nvim_tx.clone(), state);
 
                 window.upcast()
             };

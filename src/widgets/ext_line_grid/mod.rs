@@ -61,8 +61,21 @@ impl CellMetrics {
     }
 
     // Translate the given grid coordinates into their actual pixel coordinates
-    pub fn pixel_coords(&self, (col, row): (usize, usize)) -> (f64, f64) {
+    pub fn pixel_coords(&self, col: usize, row: usize) -> (f64, f64) {
         (self.char_width * col as f64, self.line_height * row as f64)
+    }
+
+    pub fn cell_cords(&self, x: f64, y: f64) -> (u64, u64) {
+        let &CellMetrics {
+            line_height,
+            char_width,
+            ..
+        } = self;
+
+        let col = (x / char_width).trunc() as u64;
+        let row = (y / line_height).trunc() as u64;
+
+        (col, row)
     }
 }
 
@@ -88,7 +101,6 @@ mod imp {
         fn constructed(&self) {
             self.obj().set_widget_name("ext_line_grid");
 
-            // let desc = pango::FontDescription::from_string("Sans Mono 12");
             let desc = pango::FontDescription::from_string("Source Code Pro 11");
 
             let context = self.obj().create_pango_context();
@@ -203,7 +215,7 @@ mod imp {
                 .cell_metrics
                 .get()
                 .unwrap()
-                .pixel_coords((pos.column, pos.row));
+                .pixel_coords(pos.column, pos.row);
 
             snapshot_in.append_color(
                 &gdk::RGBA::new(1.0, 1.0, 1.0, 0.1),
@@ -224,12 +236,6 @@ glib::wrapper! {
         @extends gtk::Widget;
 }
 
-// impl Default for ExtLineGrid {
-//     fn default() -> Self {
-//         Self::new()
-//     }
-// }
-
 impl ExtLineGrid {
     // pub fn new() -> Self {
     //     let this: Self = glib::Object::builder().build();
@@ -243,6 +249,10 @@ impl ExtLineGrid {
     pub fn set_grid(&self, grid: crate::nvim::ExtLineGrid) {
         *self.imp().grid.borrow_mut() = Some(grid);
         self.queue_draw();
+    }
+
+    pub fn grid_id(&self) -> Option<u64> {
+        self.imp().grid.borrow().as_ref().map(|g| g.id())
     }
 
     pub fn cell_metrics(&self) -> &CellMetrics {

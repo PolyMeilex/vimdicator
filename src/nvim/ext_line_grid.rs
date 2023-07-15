@@ -32,7 +32,7 @@ impl ExtLineGridMap {
                 grid.get_mut().resize(columns, rows);
             }
             hash_map::Entry::Vacant(entry) => {
-                entry.insert(ExtLineGrid::new(columns, rows));
+                entry.insert(ExtLineGrid::new(*grid, columns, rows));
             }
         }
     }
@@ -96,6 +96,7 @@ impl ExtLineGridMap {
 
 #[derive(Debug, Clone)]
 pub struct ExtLineGrid {
+    id: u64,
     columns: usize,
     rows: usize,
 
@@ -128,14 +129,19 @@ pub struct CursorPosition {
 }
 
 impl ExtLineGrid {
-    pub fn new(columns: usize, rows: usize) -> Self {
+    pub fn new(id: u64, columns: usize, rows: usize) -> Self {
         Self {
+            id,
             columns,
             rows,
             cursor_position: CursorPosition { column: 0, row: 0 },
             buffer: vec![Line::new(columns); rows],
             style: Default::default(),
         }
+    }
+
+    pub fn id(&self) -> u64 {
+        self.id
     }
 
     pub fn columns(&self) -> usize {
