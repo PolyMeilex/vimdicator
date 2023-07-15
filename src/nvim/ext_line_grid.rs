@@ -18,10 +18,6 @@ impl ExtLineGridMap {
         self.get(&1)
     }
 
-    pub fn get_default_mut(&mut self) -> Option<&mut ExtLineGrid> {
-        self.map.get_mut(&1)
-    }
-
     pub fn get(&self, grid: &u64) -> Option<&ExtLineGrid> {
         self.map.get(grid)
     }

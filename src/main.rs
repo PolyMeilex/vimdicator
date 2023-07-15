@@ -245,7 +245,9 @@ fn main() -> glib::ExitCode {
                             let grid_widget = window.ext_line_grid();
 
                             if let Some(grid) = grid_map.get_default() {
-                                grid_widget.set_grid(grid.clone());
+                                let mut grid = grid.clone();
+                                grid.style = style.clone();
+                                grid_widget.set_grid(grid);
                             }
 
                             if let Some(popup) = popup_menu.get() {
@@ -312,7 +314,6 @@ fn handle_redraw_event(
                 height,
             } => {
                 grids.grid_resize(grid, *width as usize, *height as usize);
-                grids.get_default_mut().unwrap().style = style_map.clone();
             }
 
             RedrawEvent::GridClear { grid } => {
