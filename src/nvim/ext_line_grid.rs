@@ -116,14 +116,6 @@ impl Line {
         }
     }
 
-    fn new_with(len: usize, ch: &str) -> Self {
-        let mut cell = GridLineCell::empty();
-        cell.text = ch.to_string();
-        Self {
-            columns: vec![cell; len],
-        }
-    }
-
     pub fn columns(&self) -> &[GridLineCell] {
         &self.columns
     }
@@ -237,13 +229,6 @@ impl ExtLineGrid {
                 self.rows = rows;
             }
             (false, false) => {}
-        }
-
-        if self.columns == columns && self.rows != rows {
-            self.rows = rows;
-            self.buffer.resize(self.rows, Line::new(self.columns));
-        } else {
-            self.buffer = vec![Line::new(self.columns); self.rows];
         }
     }
 
