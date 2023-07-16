@@ -169,6 +169,11 @@ pub enum RedrawEvent {
     MouseOff,
     Flush,
 
+    TablineUpdate {
+        current_tab: crate::Tabpage,
+        tabs: Vec<(String, crate::Tabpage)>,
+    },
+
     PopupmenuShow {
         items: Vec<PopupMenuItem>,
         selected: Option<u64>,
@@ -202,7 +207,7 @@ fn into_string(value: Value) -> Option<String> {
 }
 
 impl RedrawEvent {
-    fn parse(args: Vec<nvim_rs::Value>) -> Option<Vec<Self>> {
+    fn parse(args: Vec<nvim_rs::Value>, nvim: crate::Neovim) -> Option<Vec<Self>> {
         let mut args_iter = args.into_iter();
 
         let Some(name) = args_iter.next() else {
@@ -304,6 +309,38 @@ impl RedrawEvent {
                     "mouse_off" => RedrawEvent::MouseOff,
                     "flush" => RedrawEvent::Flush,
 
+                    "tabline_update" => {
+                        let mut event = event.into_iter();
+
+                        let current_tab = event.next()?;
+                        let current_tab = crate::Tabpage::new(current_tab, nvim.clone());
+
+                        let tabs = event.next()?;
+                        let tabs = tabs.as_array()?;
+                        let tabs: Vec<_> = tabs
+                            .iter()
+                            .filter_map(|data| data.as_map())
+                            .filter_map(|data| {
+                                let tab = data
+                                    .iter()
+                                    .find(|(name, _)| name.as_str() == Some("tab"))
+                                    .map(|(_, v)| crate::Tabpage::new(v.clone(), nvim.clone()))?;
+
+                                let name = data
+                                    .iter()
+                                    .find(|(name, _)| name.as_str() == Some("name"))
+                                    .and_then(|(_, v)| v.as_str())?;
+
+                                Some((name.to_string(), tab))
+                            })
+                            .collect();
+
+                        // let curbuf = event.next()?;
+                        // let buffers = event.next()?;
+
+                        RedrawEvent::TablineUpdate { current_tab, tabs }
+                    }
+
                     "popupmenu_show" => {
                         let mut event = event.into_iter();
 
@@ -345,13 +382,13 @@ impl RedrawEvent {
 }
 
 impl NvimEvent {
-    pub fn parse(name: String, args: Vec<nvim_rs::Value>) -> Option<Self> {
+    pub fn parse(name: String, args: Vec<nvim_rs::Value>, nvim: crate::Neovim) -> Option<Self> {
         let event = match name.as_ref() {
             "redraw" => {
                 let args = args
                     .into_iter()
                     .filter_map(into_array)
-                    .filter_map(RedrawEvent::parse)
+                    .filter_map(|v| RedrawEvent::parse(v, nvim.clone()))
                     .flatten();
 
                 NvimEvent::Redraw(args.collect())

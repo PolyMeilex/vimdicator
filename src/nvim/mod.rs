@@ -12,3 +12,6 @@ pub use ext_line_grid::{ExtLineGrid, ExtLineGridMap};
 
 pub mod ext_popup_menu;
 pub use ext_popup_menu::{ExtPopupMenu, ExtPopupMenuState};
+
+pub mod ext_tabline;
+pub use ext_tabline::ExtTabline;

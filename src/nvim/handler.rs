@@ -31,8 +31,8 @@ impl NvimHadler {
 impl nvim_rs::Handler for NvimHadler {
     type Writer = Compat<OwnedWriteHalf>;
 
-    async fn handle_notify(&self, name: String, args: Vec<Value>, _: Neovim<Self::Writer>) {
-        let event = NvimEvent::parse(name, args).unwrap();
+    async fn handle_notify(&self, name: String, args: Vec<Value>, nvim: Neovim<Self::Writer>) {
+        let event = NvimEvent::parse(name, args, nvim).unwrap();
         self.data.lock().unwrap().gtk_tx.send(event).unwrap();
     }
 

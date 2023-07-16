@@ -3,6 +3,7 @@ use adw::subclass::prelude::*;
 use gtk::{gio, glib};
 
 use crate::widgets::{ExtLineGrid, ExtPopupMenu};
+use std::cell::RefCell;
 
 mod imp {
     use super::*;
@@ -15,6 +16,8 @@ mod imp {
         #[template_child]
         pub header_bar: TemplateChild<gtk::HeaderBar>,
         #[template_child]
+        pub tab_view: TemplateChild<adw::TabView>,
+        #[template_child]
         pub main_box: TemplateChild<gtk::Box>,
         #[template_child]
         pub ext_line_grid: TemplateChild<ExtLineGrid>,
@@ -22,6 +25,8 @@ mod imp {
         pub popover: TemplateChild<gtk::Popover>,
         #[template_child]
         pub ext_popup_menu: TemplateChild<ExtPopupMenu>,
+
+        pub ext_tabline: RefCell<Option<crate::nvim::ExtTabline>>,
     }
 
     #[glib::object_subclass]
@@ -78,5 +83,85 @@ impl VimdicatorWindow {
 
     pub fn ext_popup_menu(&self) -> ExtPopupMenu {
         self.imp().ext_popup_menu.get()
+    }
+
+    pub fn update_tabs(&self, tabline: &crate::nvim::ExtTabline) {
+        let tab_view = self.imp().tab_view.get();
+
+        struct HashItem {
+            tabpage: crate::Tabpage,
+            page: Option<adw::TabPage>,
+            id: usize,
+        }
+
+        impl std::cmp::Eq for HashItem {}
+        impl std::cmp::PartialEq for HashItem {
+            fn eq(&self, other: &Self) -> bool {
+                self.tabpage == other.tabpage
+            }
+        }
+        impl std::hash::Hash for HashItem {
+            fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+                self.tabpage.hash(state);
+            }
+        }
+
+        let mut old_set = std::collections::HashSet::new();
+        let mut new_set = std::collections::HashSet::new();
+
+        for (id, (_, tabpage)) in self
+            .imp()
+            .ext_tabline
+            .borrow()
+            .as_ref()
+            .map(|last| last.tabs())
+            .into_iter()
+            .flatten()
+            .enumerate()
+        {
+            let page = tab_view.nth_page(id as i32);
+
+            old_set.insert(HashItem {
+                tabpage: tabpage.clone(),
+                page: Some(page),
+                id,
+            });
+        }
+
+        for (id, (_, tabpage)) in tabline.tabs().iter().enumerate() {
+            new_set.insert(HashItem {
+                tabpage: tabpage.clone(),
+                page: None,
+                id,
+            });
+        }
+
+        for item in old_set.difference(&new_set) {
+            if let Some(page) = item.page.as_ref() {
+                tab_view.close_page(page);
+            }
+        }
+
+        let pages: Vec<_> = (0..tab_view.n_pages())
+            .map(|id| tab_view.nth_page(id))
+            .collect();
+
+        for item in new_set.difference(&old_set) {
+            let page = item.id.checked_sub(1).and_then(|id| pages.get(id));
+            tab_view.add_page(&gtk::Label::new(None), page);
+        }
+
+        for (id, (name, tab)) in tabline.tabs().iter().enumerate() {
+            let page = tab_view.nth_page(id as i32);
+
+            page.set_title(name);
+            page.is_pinned();
+
+            if Some(tab) == tabline.current_tab() {
+                tab_view.set_selected_page(&page);
+            }
+        }
+
+        *self.imp().ext_tabline.borrow_mut() = Some(tabline.clone());
     }
 }

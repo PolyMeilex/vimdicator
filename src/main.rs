@@ -30,7 +30,7 @@ mod window;
 use std::collections::HashMap;
 
 use application::VimdicatorApplication;
-use nvim::{ExtLineGridMap, ExtPopupMenu, NeovimApiInfo, NvimEvent, RedrawEvent};
+use nvim::{ExtLineGridMap, ExtPopupMenu, ExtTabline, NeovimApiInfo, NvimEvent, RedrawEvent};
 use window::VimdicatorWindow;
 
 use config::{GETTEXT_PACKAGE, LOCALEDIR, PKGDATADIR};
@@ -43,6 +43,43 @@ use tokio::sync::mpsc::UnboundedReceiver;
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
 type Neovim = nvim_rs::Neovim<Compat<OwnedWriteHalf>>;
+
+#[derive(Clone, PartialEq)]
+pub struct Tabpage {
+    ext: (i8, Vec<u8>),
+    inner: nvim_rs::Tabpage<Compat<OwnedWriteHalf>>,
+}
+
+impl std::cmp::Eq for Tabpage {}
+
+impl Tabpage {
+    pub fn new(code_data: nvim_rs::Value, nvim: Neovim) -> Self {
+        let inner = nvim_rs::Tabpage::new(code_data.clone(), nvim);
+
+        Self {
+            ext: if let nvim_rs::Value::Ext(a, b) = code_data {
+                (a, b)
+            } else {
+                panic!("Expected Value::Ext in Tabpage")
+            },
+            inner,
+        }
+    }
+}
+
+impl std::hash::Hash for Tabpage {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.ext.hash(state);
+    }
+}
+
+impl std::fmt::Debug for Tabpage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Tabpage")
+            .field("id", &self.ext)
+            .finish_non_exhaustive()
+    }
+}
 
 #[derive(Debug, Clone, Copy)]
 pub enum NvimMouseButton {
@@ -150,7 +187,7 @@ async fn run(mut rx: UnboundedReceiver<GtkToNvimEvent>, gtk_tx: glib::Sender<Nvi
                 .set_popupmenu_external(true)
                 // .set_cmdline_external(true)
                 .set_linegrid_external(true)
-                .set_tabline_external(false)
+                .set_tabline_external(true)
                 .set_hlstate_external(true)
                 .set_termcolors_external(false)
                 .set_wildmenu_external(false),
@@ -224,6 +261,7 @@ fn main() -> glib::ExitCode {
         let app = app.clone();
         let mut grid_map = ExtLineGridMap::new();
         let mut popup_menu = ExtPopupMenu::new();
+        let mut tabline = ExtTabline::new();
         let mut flush_state = FlushState::default();
         let mut style = HashMap::new();
 
@@ -238,6 +276,7 @@ fn main() -> glib::ExitCode {
                             &mut flush_state,
                             &mut grid_map,
                             &mut popup_menu,
+                            &mut tabline,
                             &events,
                         );
 
@@ -248,6 +287,10 @@ fn main() -> glib::ExitCode {
                                 let mut grid = grid.clone();
                                 grid.style = style.clone();
                                 grid_widget.set_grid(grid);
+                            }
+
+                            if flush_state.tabline_changed {
+                                window.update_tabs(&tabline);
                             }
 
                             if let Some(popup) = popup_menu.get() {
@@ -295,6 +338,7 @@ fn main() -> glib::ExitCode {
 #[derive(Debug, Default)]
 struct FlushState {
     popup_changed: bool,
+    tabline_changed: bool,
 }
 
 fn handle_redraw_event(
@@ -302,6 +346,7 @@ fn handle_redraw_event(
     flush_state: &mut FlushState,
     grids: &mut ExtLineGridMap,
     popup_menu: &mut ExtPopupMenu,
+    tabline: &mut ExtTabline,
     events: &[RedrawEvent],
 ) -> bool {
     let mut flushed = false;
@@ -368,6 +413,11 @@ fn handle_redraw_event(
                     *grid,
                 );
                 flush_state.popup_changed = true;
+            }
+
+            RedrawEvent::TablineUpdate { current_tab, tabs } => {
+                tabline.update(current_tab.clone(), tabs.clone());
+                flush_state.tabline_changed = true;
             }
 
             RedrawEvent::PopupmenuSelect { selected } => {
