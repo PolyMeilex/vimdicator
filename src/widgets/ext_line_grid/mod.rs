@@ -8,7 +8,7 @@ use gtk::{
 use std::cell::{OnceCell, RefCell};
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::GtkToNvimEvent;
+use crate::nvim::GtkToNvimEvent;
 
 #[derive(Debug)]
 pub struct CellMetrics {

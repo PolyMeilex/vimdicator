@@ -26,7 +26,10 @@ use std::rc::Rc;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::config::VERSION;
-use crate::{widgets, GtkToNvimEvent, NvimMouseAction, NvimMouseButton};
+use crate::{
+    nvim::{GtkToNvimEvent, NvimMouseAction, NvimMouseButton},
+    widgets,
+};
 
 struct MouseState {
     pos: Cell<Option<(u64, u64)>>,

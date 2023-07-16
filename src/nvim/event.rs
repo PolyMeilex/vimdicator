@@ -170,8 +170,8 @@ pub enum RedrawEvent {
     Flush,
 
     TablineUpdate {
-        current_tab: crate::Tabpage,
-        tabs: Vec<(String, crate::Tabpage)>,
+        current_tab: super::Tabpage,
+        tabs: Vec<(String, super::Tabpage)>,
     },
 
     PopupmenuShow {
@@ -207,7 +207,7 @@ fn into_string(value: Value) -> Option<String> {
 }
 
 impl RedrawEvent {
-    fn parse(args: Vec<nvim_rs::Value>, nvim: crate::Neovim) -> Option<Vec<Self>> {
+    fn parse(args: Vec<nvim_rs::Value>, nvim: super::Neovim) -> Option<Vec<Self>> {
         let mut args_iter = args.into_iter();
 
         let Some(name) = args_iter.next() else {
@@ -313,7 +313,7 @@ impl RedrawEvent {
                         let mut event = event.into_iter();
 
                         let current_tab = event.next()?;
-                        let current_tab = crate::Tabpage::new(current_tab, nvim.clone());
+                        let current_tab = super::Tabpage::new(current_tab, nvim.clone());
 
                         let tabs = event.next()?;
                         let tabs = tabs.as_array()?;
@@ -324,7 +324,7 @@ impl RedrawEvent {
                                 let tab = data
                                     .iter()
                                     .find(|(name, _)| name.as_str() == Some("tab"))
-                                    .map(|(_, v)| crate::Tabpage::new(v.clone(), nvim.clone()))?;
+                                    .map(|(_, v)| super::Tabpage::new(v.clone(), nvim.clone()))?;
 
                                 let name = data
                                     .iter()
@@ -382,7 +382,7 @@ impl RedrawEvent {
 }
 
 impl NvimEvent {
-    pub fn parse(name: String, args: Vec<nvim_rs::Value>, nvim: crate::Neovim) -> Option<Self> {
+    pub fn parse(name: String, args: Vec<nvim_rs::Value>, nvim: super::Neovim) -> Option<Self> {
         let event = match name.as_ref() {
             "redraw" => {
                 let args = args

@@ -1,6 +1,7 @@
 use adw::subclass::prelude::*;
 use gtk::glib;
 
+use crate::nvim;
 use std::cell::RefCell;
 
 mod imp {
@@ -11,7 +12,7 @@ mod imp {
     pub struct ExtTabLine {
         #[template_child]
         pub tab_view: TemplateChild<adw::TabView>,
-        pub ext_tabline: RefCell<Option<crate::nvim::ExtTabline>>,
+        pub ext_tabline: RefCell<Option<nvim::ExtTabline>>,
     }
 
     #[glib::object_subclass]
@@ -40,7 +41,7 @@ glib::wrapper! {
 }
 
 struct HashItem {
-    tabpage: crate::Tabpage,
+    tabpage: nvim::Tabpage,
     page: Option<adw::TabPage>,
     id: usize,
 }
