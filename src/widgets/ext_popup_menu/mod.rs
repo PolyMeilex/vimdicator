@@ -24,16 +24,6 @@ mod imp {
     }
 
     impl ExtPopupMenu {
-        pub fn init(&self) {
-            let list_model = self.selection_model.get().unwrap();
-
-            if let Some(selected) = self.selected.get() {
-                list_model.select_item(selected as u32, true);
-            } else {
-                list_model.unselect_all();
-            }
-        }
-
         pub fn set_items(&self, items: Vec<PopupMenuItem>) {
             self.items_model.get().unwrap().set_items(items);
         }
@@ -140,14 +130,6 @@ glib::wrapper! {
 }
 
 impl ExtPopupMenu {
-    pub fn new(items: Vec<PopupMenuItem>, selected: Option<usize>) -> Self {
-        let this: Self = glib::Object::builder().build();
-        this.imp().set_items(items);
-        this.imp().select(selected);
-        this.imp().init();
-        this
-    }
-
     pub fn set_items(&self, items: Vec<PopupMenuItem>) {
         self.imp().set_items(items);
     }

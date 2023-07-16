@@ -132,10 +132,6 @@ fn main() -> glib::ExitCode {
         }
     });
 
-    // Run the application. This function will block until the application
-    // exits. Upon return, we have our exit code to return to the shell. (This
-    // is the code you see when you do `echo $?` after running a command in a
-    // terminal.
     app.run()
 }
 
