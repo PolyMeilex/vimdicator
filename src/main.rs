@@ -36,6 +36,7 @@ use std::collections::HashMap;
 
 fn main() -> glib::ExitCode {
     glib_logger::init(&glib_logger::SIMPLE);
+    log::set_max_level(log::LevelFilter::Debug);
 
     let (gtk_tx, gtk_rx) = glib::MainContext::channel::<NvimEvent>(glib::Priority::default());
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<nvim::GtkToNvimEvent>();
