@@ -26,7 +26,7 @@ use std::rc::Rc;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::config::VERSION;
-use crate::{widgets, GtkToNvimEvent, NvimMouseAction, NvimMouseButton, VimdicatorWindow};
+use crate::{widgets, GtkToNvimEvent, NvimMouseAction, NvimMouseButton};
 
 struct MouseState {
     pos: Cell<Option<(u64, u64)>>,
@@ -43,7 +43,7 @@ impl MouseState {
 }
 
 fn init_motion_controller(
-    window: VimdicatorWindow,
+    window: widgets::VimdicatorWindow,
     tx: UnboundedSender<GtkToNvimEvent>,
     mouse_state: Rc<MouseState>,
 ) {
@@ -242,7 +242,7 @@ mod imp {
             let window = if let Some(window) = application.active_window() {
                 window
             } else {
-                let window = VimdicatorWindow::new(&*application);
+                let window = widgets::VimdicatorWindow::new(&*application);
 
                 window
                     .ext_line_grid()

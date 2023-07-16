@@ -9,7 +9,7 @@ mod imp {
     use super::*;
 
     #[derive(Debug, Default, gtk::CompositeTemplate)]
-    #[template(resource = "/io/github/polymeilex/vimdicator/window.ui")]
+    #[template(resource = "/io/github/polymeilex/vimdicator/widgets/window.ui")]
     pub struct VimdicatorWindow {
         #[template_child]
         pub header_bar_revealer: TemplateChild<gtk::Revealer>,

@@ -25,21 +25,17 @@ mod config;
 mod input;
 mod nvim;
 mod widgets;
-mod window;
 
-use std::collections::HashMap;
+use nvim::{ExtLineGridMap, ExtPopupMenu, ExtTabline, NeovimApiInfo, NvimEvent, RedrawEvent};
+use nvim_rs::UiAttachOptions;
 
 use application::VimdicatorApplication;
-use nvim::{ExtLineGridMap, ExtPopupMenu, ExtTabline, NeovimApiInfo, NvimEvent, RedrawEvent};
-use window::VimdicatorWindow;
-
 use config::{GETTEXT_PACKAGE, LOCALEDIR, PKGDATADIR};
 use gettextrs::{bind_textdomain_codeset, bindtextdomain, textdomain};
-use gtk::{gdk, prelude::*};
-use gtk::{gio, glib};
-use nvim_rs::UiAttachOptions;
-use tokio::net::tcp::OwnedWriteHalf;
-use tokio::sync::mpsc::UnboundedReceiver;
+use gtk::{gdk, gio, glib, prelude::*};
+use std::collections::HashMap;
+
+use tokio::{net::tcp::OwnedWriteHalf, sync::mpsc::UnboundedReceiver};
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
 type Neovim = nvim_rs::Neovim<Compat<OwnedWriteHalf>>;
@@ -267,7 +263,7 @@ fn main() -> glib::ExitCode {
 
         move |event| {
             if let Some(window) = app.active_window() {
-                let window: VimdicatorWindow = window.downcast().unwrap();
+                let window: widgets::VimdicatorWindow = window.downcast().unwrap();
 
                 match event {
                     NvimEvent::Redraw(events) => {
