@@ -1,11 +1,7 @@
-use std::env;
-
 use gtk::gdk;
 use gtk::Inhibit;
 
 use log::debug;
-
-include!(concat!(env!("OUT_DIR"), "/key_map_table.rs"));
 
 pub fn keyval_to_input_string(in_str: &str, in_state: gdk::ModifierType) -> String {
     let mut val = in_str;
@@ -65,9 +61,50 @@ pub fn keyval_to_input_string(in_str: &str, in_state: gdk::ModifierType) -> Stri
     }
 }
 
+fn map_keyval(v: &str) -> Option<&'static str> {
+    let v = match v {
+        "F1" => "F1",
+        "F2" => "F2",
+        "F3" => "F3",
+        "F4" => "F4",
+        "F5" => "F5",
+        "F6" => "F6",
+        "F7" => "F7",
+        "F8" => "F8",
+        "F9" => "F9",
+        "F10" => "F10",
+        "F11" => "F11",
+        "F12" => "F12",
+
+        "Left" => "Left",
+        "Right" => "Right",
+        "Up" => "Up",
+        "Down" => "Down",
+
+        "Home" => "Home",
+        "End" => "End",
+
+        "BackSpace" => "BS",
+        "Delete" => "Del",
+
+        "Page_Up" => "PageUp",
+        "Page_Down" => "PageDown",
+
+        "Escape" => "Esc",
+        "Tab" => "Tab",
+        "ISO_Left_Tab" => "Tab",
+        "Return" => "CR",
+        "Enter" => "CR",
+        "Insert" => "Insert",
+        _ => return None,
+    };
+
+    Some(v)
+}
+
 pub fn convert_key(keyval: gdk::Key, modifiers: gdk::ModifierType) -> Option<String> {
     if let Some(ref keyval_name) = keyval.name() {
-        if let Some(cnvt) = KEYVAL_MAP.get(keyval_name.as_str()).cloned() {
+        if let Some(cnvt) = map_keyval(keyval_name.as_str()) {
             return Some(keyval_to_input_string(cnvt, modifiers));
         }
     }
