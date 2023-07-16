@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.0" />
+  <requires lib="Adw" version="1.0" />
+
+  <template class="ExtTabLine" parent="AdwBin">
+    <child>
+
+      <object class="GtkBox">
+        <property name="orientation">vertical</property>
+
+        <child>
+          <object class="AdwTabBar" id="tab_bar">
+            <property name="view">tab_view</property>
+            <property name="can-focus">false</property>
+            <property name="can-target">false</property>
+          </object>
+        </child>
+
+        <child>
+          <object class="AdwTabView" id="tab_view">
+            <property name="visible">false</property>
+          </object>
+        </child>
+      </object>
+
+    </child>
+  </template>
+</interface>

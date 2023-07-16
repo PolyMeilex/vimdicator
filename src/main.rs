@@ -286,7 +286,7 @@ fn main() -> glib::ExitCode {
                             }
 
                             if flush_state.tabline_changed {
-                                window.update_tabs(&tabline);
+                                window.ext_tabline().update_tabs(&tabline);
                             }
 
                             if let Some(popup) = popup_menu.get() {
