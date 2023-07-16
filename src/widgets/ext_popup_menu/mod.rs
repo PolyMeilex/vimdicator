@@ -54,12 +54,18 @@ mod imp {
     impl ObjectSubclass for ExtPopupMenu {
         const NAME: &'static str = "ExtPopupMenu";
         type Type = super::ExtPopupMenu;
-        type ParentType = adw::Bin;
+        type ParentType = gtk::Popover;
     }
 
     impl ObjectImpl for ExtPopupMenu {
         fn constructed(&self) {
             self.obj().set_widget_name("ext_popup_menu");
+            self.obj().set_focusable(false);
+            self.obj().set_can_focus(false);
+            self.obj().set_autohide(false);
+            self.obj().set_position(gtk::PositionType::Top);
+            self.obj().set_width_request(260);
+            self.obj().set_height_request(300);
 
             let model = model::ExtPopupMenuModel::new(vec![]);
 
@@ -121,12 +127,12 @@ mod imp {
         }
     }
     impl WidgetImpl for ExtPopupMenu {}
-    impl BinImpl for ExtPopupMenu {}
+    impl PopoverImpl for ExtPopupMenu {}
 }
 
 glib::wrapper! {
     pub struct ExtPopupMenu(ObjectSubclass<imp::ExtPopupMenu>)
-        @extends gtk::Widget, adw::Bin;
+        @extends gtk::Widget, gtk::Popover;
 }
 
 impl ExtPopupMenu {

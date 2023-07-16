@@ -98,9 +98,9 @@ fn main() -> glib::ExitCode {
                             }
 
                             if let Some(popup) = popup_menu.get() {
-                                let list = window.ext_popup_menu();
-                                list.set_items(popup.items.clone());
-                                list.select(popup.selected);
+                                let ext_popup_menu = window.ext_popup_menu();
+                                ext_popup_menu.set_items(popup.items.clone());
+                                ext_popup_menu.select(popup.selected);
 
                                 let cell_metrics = grid_widget.cell_metrics();
                                 let (x, y) = cell_metrics.pixel_coords(popup.col, popup.row);
@@ -109,16 +109,14 @@ fn main() -> glib::ExitCode {
                                 let (x, y) =
                                     grid_widget.translate_coordinates(&window, x, y).unwrap();
 
-                                let popover = window.popover();
-                                popover.set_pointing_to(Some(&gdk::Rectangle::new(
+                                ext_popup_menu.set_pointing_to(Some(&gdk::Rectangle::new(
                                     x as _, y as _, w as _, h as _,
                                 )));
 
-                                popover.popup();
+                                ext_popup_menu.popup();
                                 window.focus();
                             } else {
-                                let popover = window.popover();
-                                popover.popdown();
+                                window.ext_popup_menu().popdown();
                             }
 
                             flush_state = FlushState::default();

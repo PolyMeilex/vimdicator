@@ -22,10 +22,9 @@ mod imp {
         pub header_bar: TemplateChild<gtk::HeaderBar>,
         #[template_child]
         pub main_box: TemplateChild<gtk::Box>,
+
         #[template_child]
         pub ext_line_grid: TemplateChild<widgets::ExtLineGrid>,
-        #[template_child]
-        pub popover: TemplateChild<gtk::Popover>,
         #[template_child]
         pub ext_popup_menu: TemplateChild<widgets::ExtPopupMenu>,
         #[template_child]
@@ -108,10 +107,6 @@ impl VimdicatorWindow {
 
     pub fn main_box(&self) -> gtk::Box {
         self.imp().main_box.clone()
-    }
-
-    pub fn popover(&self) -> gtk::Popover {
-        self.imp().popover.clone()
     }
 
     pub fn ext_popup_menu(&self) -> widgets::ExtPopupMenu {
