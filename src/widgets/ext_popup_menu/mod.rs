@@ -1,11 +1,10 @@
 use adw::prelude::*;
 use adw::subclass::prelude::*;
 use gtk::glib;
-use std::{cell::RefCell, rc::Rc};
 
 mod model;
 mod row;
-use row::{PopupMenuListRow, PopupMenuListRowState};
+use row::PopupMenuListRow;
 
 use crate::nvim::event::PopupMenuItem;
 use std::cell::{Cell, OnceCell};
@@ -13,14 +12,17 @@ use std::cell::{Cell, OnceCell};
 mod imp {
     use super::*;
 
-    #[derive(Debug, Default)]
+    #[derive(Debug, Default, gtk::CompositeTemplate)]
+    #[template(
+        resource = "/io/github/polymeilex/vimdicator/widgets/ext_popup_menu/ext_popup_menu.ui"
+    )]
     pub struct ExtPopupMenu {
         pub selected: Cell<Option<usize>>,
         pub selection_model: OnceCell<gtk::SingleSelection>,
         pub items_model: OnceCell<model::ExtPopupMenuModel>,
 
-        list_view: OnceCell<gtk::ListView>,
-        scroll: OnceCell<gtk::ScrolledWindow>,
+        #[template_child]
+        list_view: TemplateChild<gtk::ListView>,
     }
 
     impl ExtPopupMenu {
@@ -35,13 +37,12 @@ mod imp {
             if let Some(selected) = self.selected.get() {
                 selection_model.select_item(selected as u32, true);
 
-                let list_view = self.list_view.get().unwrap();
                 let selected = selected as u32;
 
                 let len = selection_model.n_items();
                 let scrol_to = selected.min(len);
 
-                list_view
+                self.list_view
                     .activate_action("list.scroll-to-item", Some(&scrol_to.to_variant()))
                     .unwrap();
             } else {
@@ -55,17 +56,19 @@ mod imp {
         const NAME: &'static str = "ExtPopupMenu";
         type Type = super::ExtPopupMenu;
         type ParentType = gtk::Popover;
+
+        fn class_init(klass: &mut Self::Class) {
+            klass.bind_template();
+        }
+
+        fn instance_init(obj: &glib::subclass::InitializingObject<Self>) {
+            obj.init_template();
+        }
     }
 
     impl ObjectImpl for ExtPopupMenu {
         fn constructed(&self) {
             self.obj().set_widget_name("ext_popup_menu");
-            self.obj().set_focusable(false);
-            self.obj().set_can_focus(false);
-            self.obj().set_autohide(false);
-            self.obj().set_position(gtk::PositionType::Top);
-            self.obj().set_width_request(260);
-            self.obj().set_height_request(300);
 
             let model = model::ExtPopupMenuModel::new(vec![]);
 
@@ -78,17 +81,12 @@ mod imp {
             self.items_model.set(model).unwrap();
             self.selection_model.set(list_model.clone()).unwrap();
 
-            let list_view = gtk::ListView::builder()
-                .show_separators(false)
-                .single_click_activate(false)
-                .model(&list_model)
-                .build();
+            self.list_view.set_model(Some(&list_model));
 
             let item_factory = gtk::SignalListItemFactory::new();
-            let list_state: Rc<RefCell<PopupMenuListRowState>> = Default::default();
 
             item_factory.connect_setup(move |_, list_item| {
-                list_item.set_child(Some(&PopupMenuListRow::new(&list_state)));
+                list_item.set_child(Some(&PopupMenuListRow::new()));
             });
 
             item_factory.connect_teardown(|_, list_item| {
@@ -115,15 +113,7 @@ mod imp {
                 row.set_row(Option::<&PopupMenuItem>::None);
             });
 
-            list_view.set_factory(Some(&item_factory));
-
-            let scroll = gtk::ScrolledWindow::builder().child(&list_view).build();
-
-            self.list_view.set(list_view).unwrap();
-
-            self.obj().set_child(Some(&scroll));
-
-            self.scroll.set(scroll).unwrap();
+            self.list_view.set_factory(Some(&item_factory));
         }
     }
     impl WidgetImpl for ExtPopupMenu {}

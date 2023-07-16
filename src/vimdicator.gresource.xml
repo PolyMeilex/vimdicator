@@ -3,6 +3,7 @@
   <gresource prefix="/io/github/polymeilex/vimdicator">
     <file preprocess="xml-stripblanks">widgets/window.ui</file>
     <file preprocess="xml-stripblanks">widgets/ext_tab_line/ext_tab_line.ui</file>
+    <file preprocess="xml-stripblanks">widgets/ext_popup_menu/ext_popup_menu.ui</file>
     <file preprocess="xml-stripblanks">gtk/help-overlay.ui</file>
     <file compressed="true">style.css</file>
   </gresource>
