@@ -3,8 +3,6 @@ use std::sync::{Arc, Mutex};
 use nvim_rs::{Neovim, Value};
 
 use async_trait::async_trait;
-use tokio::net::tcp::OwnedWriteHalf;
-use tokio_util::compat::Compat;
 
 use super::event::NvimEvent;
 use gtk::glib;
@@ -29,7 +27,7 @@ impl NvimHadler {
 
 #[async_trait]
 impl nvim_rs::Handler for NvimHadler {
-    type Writer = Compat<OwnedWriteHalf>;
+    type Writer = super::NeovimWriter;
 
     async fn handle_notify(&self, name: String, args: Vec<Value>, nvim: Neovim<Self::Writer>) {
         let event = NvimEvent::parse(name, args, nvim).unwrap();

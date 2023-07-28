@@ -1,4 +1,6 @@
 pub mod api_info;
+use std::process::Stdio;
+
 pub use api_info::NeovimApiInfo;
 
 pub mod handler;
@@ -17,15 +19,19 @@ pub mod ext_tabline;
 pub use ext_tabline::ExtTabline;
 
 use gtk::glib;
-use tokio::{net::tcp::OwnedWriteHalf, sync::mpsc::UnboundedReceiver};
+use tokio::{
+    process::{ChildStdin, Command},
+    sync::mpsc::UnboundedReceiver,
+};
 use tokio_util::compat::{Compat, TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
-type Neovim = nvim_rs::Neovim<Compat<OwnedWriteHalf>>;
+type NeovimWriter = Compat<ChildStdin>;
+type Neovim = nvim_rs::Neovim<NeovimWriter>;
 
 #[derive(Clone, PartialEq)]
 pub struct Tabpage {
     ext: (i8, Vec<u8>),
-    inner: nvim_rs::Tabpage<Compat<OwnedWriteHalf>>,
+    inner: nvim_rs::Tabpage<NeovimWriter>,
 }
 
 impl std::cmp::Eq for Tabpage {}
@@ -115,14 +121,27 @@ pub enum GtkToNvimEvent {
 }
 
 pub async fn run(mut rx: UnboundedReceiver<GtkToNvimEvent>, gtk_tx: glib::Sender<NvimEvent>) {
-    let stream = tokio::net::TcpStream::connect("127.0.0.1:8080")
-        .await
-        .unwrap();
+    let (reader, writer) = {
+        let mut child = Command::new("nvim")
+            .arg("--embed")
+            .stderr(Stdio::inherit())
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .unwrap();
+
+        (child.stdout.take().unwrap(), child.stdin.take().unwrap())
+    };
 
     let handler = NvimHadler::new(gtk_tx);
 
-    let (reader, writer) = stream.into_split();
     let (nvim, io_future) = Neovim::new(reader.compat(), writer.compat_write(), handler);
+
+    // let stream = tokio::net::TcpStream::connect("127.0.0.1:8080")
+    //     .await
+    //     .unwrap();
+    // let (reader, writer) = stream.into_split();
+    // let (nvim, io_future) = Neovim::new(reader.compat(), writer.compat_write(), handler);
 
     let join = tokio::spawn(async move {
         // add callback on session end
