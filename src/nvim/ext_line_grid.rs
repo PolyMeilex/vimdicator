@@ -99,6 +99,7 @@ pub struct ExtLineGrid {
     cursor_position: CursorPosition,
     buffer: Vec<Line>,
     pub style: HashMap<u64, super::Style>,
+    pub default_colors: super::Colors,
 }
 
 #[derive(Debug, Clone)]
@@ -133,6 +134,7 @@ impl ExtLineGrid {
             cursor_position: CursorPosition { column: 0, row: 0 },
             buffer: vec![Line::new(columns); rows],
             style: Default::default(),
+            default_colors: Default::default(),
         }
     }
 

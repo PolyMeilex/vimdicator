@@ -124,6 +124,9 @@ impl PopupMenuItem {
 pub enum RedrawEvent {
     OptionSet(GuiOption),
     ModeInfoSet,
+    DefaultColorsSet {
+        colors: Colors,
+    },
     HighlightAttributesDefine {
         id: u64,
         style: Style,
@@ -233,6 +236,23 @@ impl RedrawEvent {
                 let event = match name {
                     "option_set" => RedrawEvent::OptionSet(GuiOption::parse(event)?),
                     "mode_info_set" => RedrawEvent::ModeInfoSet,
+                    "default_colors_set" => {
+                        let mut event = event.into_iter();
+
+                        let foreground = event.next()?.as_u64()?;
+                        let background = event.next()?.as_u64()?;
+                        let special = event.next()?.as_u64()?;
+                        let _term_foreground = event.next();
+                        let _term_background = event.next();
+
+                        RedrawEvent::DefaultColorsSet {
+                            colors: Colors {
+                                foreground: Some(Color::unpack_color(foreground)),
+                                background: Some(Color::unpack_color(background)),
+                                special: Some(Color::unpack_color(special)),
+                            },
+                        }
+                    }
                     "hl_attr_define" => {
                         let mut event = event.into_iter();
 

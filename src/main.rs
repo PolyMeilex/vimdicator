@@ -69,6 +69,25 @@ fn main() -> glib::ExitCode {
         let mut flush_state = FlushState::default();
         let mut style = HashMap::new();
 
+        let mut default_colors = nvim::Colors {
+            foreground: Some(nvim::Color {
+                r: 1.0,
+                g: 1.0,
+                b: 1.0,
+            }),
+            background: Some(nvim::Color {
+                r: 0.0,
+                g: 0.0,
+                b: 0.0,
+            }),
+            special: Some(nvim::Color {
+                r: 1.0,
+                g: 0.0,
+                b: 0.0,
+            }),
+            // ..Default::default()
+        };
+
         move |event| {
             if let Some(window) = app.active_window() {
                 let window: widgets::VimdicatorWindow = window.downcast().unwrap();
@@ -76,6 +95,7 @@ fn main() -> glib::ExitCode {
                 match event {
                     NvimEvent::Redraw(events) => {
                         let flushed = handle_redraw_event(
+                            &mut default_colors,
                             &mut style,
                             &mut flush_state,
                             &mut grid_map,
@@ -90,6 +110,7 @@ fn main() -> glib::ExitCode {
                             if let Some(grid) = grid_map.get_default() {
                                 let mut grid = grid.clone();
                                 grid.style = style.clone();
+                                grid.default_colors = default_colors.clone();
                                 grid_widget.set_grid(grid);
                             }
 
@@ -140,6 +161,7 @@ struct FlushState {
 }
 
 fn handle_redraw_event(
+    default_colors: &mut nvim::Colors,
     style_map: &mut HashMap<u64, nvim::Style>,
     flush_state: &mut FlushState,
     grids: &mut ExtLineGridMap,
@@ -224,6 +246,10 @@ fn handle_redraw_event(
 
             RedrawEvent::PopupmenuHide => {
                 popup_menu.hide();
+            }
+
+            RedrawEvent::DefaultColorsSet { colors } => {
+                *default_colors = colors.clone();
             }
 
             RedrawEvent::HighlightAttributesDefine { id, style } => {

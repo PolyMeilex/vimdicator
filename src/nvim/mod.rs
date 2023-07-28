@@ -5,7 +5,7 @@ pub mod handler;
 pub use handler::NvimHadler;
 
 pub mod event;
-pub use event::{NvimEvent, RedrawEvent, Style};
+pub use event::{Color, Colors, NvimEvent, RedrawEvent, Style};
 
 pub mod ext_line_grid;
 pub use ext_line_grid::{ExtLineGrid, ExtLineGridMap};
