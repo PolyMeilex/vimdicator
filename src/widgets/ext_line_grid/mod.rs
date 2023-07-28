@@ -8,7 +8,7 @@ use gtk::{
 use std::cell::{OnceCell, RefCell};
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::nvim::GtkToNvimEvent;
+use crate::nvim::{Colors, GtkToNvimEvent};
 
 #[derive(Debug)]
 pub struct CellMetrics {
@@ -148,81 +148,8 @@ mod imp {
 
             let default_colors = grid.default_colors.clone();
 
-            let mut y = 0.0;
-            let mut last_hl = None;
-            for line in grid.buffer().iter() {
-                let mut x = 0.0;
-                for cell in line.columns() {
-                    let line = &cell.text;
-
-                    let s = &line;
-                    let items = pango::itemize(
-                        context,
-                        s,
-                        0,
-                        s.len() as i32,
-                        &pango::AttrList::new(),
-                        None,
-                    );
-                    let mut glyphs = pango::GlyphString::new();
-
-                    for item in items {
-                        let analysis = item.analysis();
-                        let font = analysis.font();
-                        let offset = item.offset() as usize;
-                        let length = item.length() as usize;
-
-                        if let Some(line_str) = s.get(offset..offset + length) {
-                            pango::shape(line_str, analysis, &mut glyphs);
-                        }
-
-                        let ascent = cell_metrics.ascent;
-
-                        let color = if let Some(style) = cell
-                            .highlight_id
-                            .or(last_hl)
-                            .and_then(|id| grid.style.get(&id))
-                        {
-                            // TODO: Optimise this
-                            let color = style.background(&default_colors);
-                            snapshot_in.append_color(
-                                &gdk::RGBA::new(color.r, color.g, color.b, 1.0),
-                                &graphene::Rect::new(
-                                    x,
-                                    y,
-                                    cell_metrics.char_width as f32,
-                                    cell_metrics.line_height as f32,
-                                ),
-                            );
-
-                            let color = style.foreground(&default_colors);
-
-                            gdk::RGBA::new(color.r, color.g, color.b, 1.0)
-                        } else {
-                            gdk::RGBA::new(232.0 / 255.0, 216.0 / 255.0, 176.0 / 255.0, 1.0)
-                        };
-
-                        if cell.highlight_id.is_some() {
-                            last_hl = cell.highlight_id;
-                        }
-
-                        let render_node = gsk::TextNode::new(
-                            &font,
-                            &glyphs,
-                            &color,
-                            &graphene::Point::new(x, y + ascent as f32),
-                        );
-
-                        if let Some(render_node) = render_node {
-                            snapshot_in.append_node(&render_node);
-                        }
-                    }
-
-                    x += cell_metrics.char_width as f32;
-                }
-
-                y += cell_metrics.line_height as f32;
-            }
+            snapshot_bg(grid, cell_metrics, snapshot_in, &default_colors);
+            snapshot_fg(grid, cell_metrics, snapshot_in, &default_colors, context);
 
             let pos = grid.cursor_position();
 
@@ -244,6 +171,146 @@ mod imp {
         }
     }
     impl BinImpl for ExtLineGrid {}
+}
+
+fn snapshot_bg(
+    grid: &crate::nvim::ExtLineGrid,
+    cell_metrics: &CellMetrics,
+    snapshot: &gtk::Snapshot,
+    default_colors: &Colors,
+) {
+    for (y, line) in grid.buffer().iter().enumerate() {
+        let y = y as f32 * cell_metrics.line_height as f32;
+
+        struct RectangleInProggres {
+            x: f32,
+            len: usize,
+            highlight_id: Option<u64>,
+        }
+
+        let mut rectangle_in_proggres = None::<RectangleInProggres>;
+        let mut last_hl = None;
+
+        for (x, cell) in line.columns().iter().enumerate() {
+            let x = x as f32 * cell_metrics.char_width as f32;
+
+            let highlight_id = cell.highlight_id.or(last_hl);
+
+            if let Some(rect) = rectangle_in_proggres.as_mut() {
+                if rect.highlight_id == highlight_id {
+                    rect.len += 1;
+                    continue;
+                } else {
+                    let color = rect
+                        .highlight_id
+                        .and_then(|id| grid.style.get(&id))
+                        .map(|style| style.background(default_colors))
+                        .unwrap_or(default_colors.background.unwrap());
+
+                    snapshot.append_color(
+                        &gdk::RGBA::new(color.r, color.g, color.b, 1.0),
+                        &graphene::Rect::new(
+                            rect.x,
+                            y,
+                            cell_metrics.char_width as f32 * rect.len as f32,
+                            cell_metrics.line_height as f32,
+                        ),
+                    );
+                }
+            }
+
+            rectangle_in_proggres = Some(RectangleInProggres {
+                x,
+                len: 1,
+                highlight_id: cell.highlight_id,
+            });
+
+            if cell.highlight_id.is_some() {
+                last_hl = cell.highlight_id;
+            }
+        }
+
+        if let Some(rect) = rectangle_in_proggres {
+            let color = rect
+                .highlight_id
+                .or(last_hl)
+                .and_then(|id| grid.style.get(&id))
+                .map(|style| style.background(default_colors))
+                .unwrap_or(default_colors.background.unwrap());
+
+            snapshot.append_color(
+                &gdk::RGBA::new(color.r, color.g, color.b, 1.0),
+                &graphene::Rect::new(
+                    rect.x,
+                    y,
+                    cell_metrics.char_width as f32 * rect.len as f32,
+                    cell_metrics.line_height as f32,
+                ),
+            );
+        }
+    }
+}
+
+fn snapshot_fg(
+    grid: &crate::nvim::ExtLineGrid,
+    cell_metrics: &CellMetrics,
+    snapshot: &gtk::Snapshot,
+    default_colors: &Colors,
+    context: &pango::Context,
+) {
+    let mut last_hl = None;
+    for (y, line) in grid.buffer().iter().enumerate() {
+        let y = y as f32 * cell_metrics.line_height as f32;
+
+        for (x, cell) in line.columns().iter().enumerate() {
+            let x = x as f32 * cell_metrics.char_width as f32;
+
+            let line = &cell.text;
+
+            let s = &line;
+            let items =
+                pango::itemize(context, s, 0, s.len() as i32, &pango::AttrList::new(), None);
+            let mut glyphs = pango::GlyphString::new();
+
+            for item in items {
+                let analysis = item.analysis();
+                let font = analysis.font();
+                let offset = item.offset() as usize;
+                let length = item.length() as usize;
+
+                if let Some(line_str) = s.get(offset..offset + length) {
+                    pango::shape(line_str, analysis, &mut glyphs);
+                }
+
+                let ascent = cell_metrics.ascent;
+
+                let color = {
+                    let color = cell
+                        .highlight_id
+                        .or(last_hl)
+                        .and_then(|id| grid.style.get(&id))
+                        .map(|style| style.foreground(default_colors))
+                        .unwrap_or(default_colors.foreground.unwrap());
+                    gdk::RGBA::new(color.r, color.g, color.b, 1.0)
+                };
+
+                if cell.highlight_id.is_some() {
+                    last_hl = cell.highlight_id;
+                }
+
+                let render_node = gsk::TextNode::new(
+                    &font,
+                    &glyphs,
+                    &color,
+                    &graphene::Point::new(x, y + ascent as f32),
+                );
+
+                if let Some(render_node) = render_node {
+                    snapshot.append_node(&render_node);
+                }
+            }
+        }
+    }
 }
 
 glib::wrapper! {
